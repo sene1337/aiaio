@@ -524,6 +524,7 @@ export class UI {
       `<span><span class="sb-key">w</span> hold to work</span>` +
       `<span><span class="sb-key">u</span> install</span>` +
       `<span><span class="sb-key">s</span> subagent (${900}tk)</span>` +
+      `<span><span class="sb-key">c</span> /compact${run.compactCd > 0 ? ` (${Math.ceil(run.compactCd)}s)` : ''}</span>` +
       `<span><span class="sb-key">[ ]</span>/<span class="sb-key">1-9</span> weapons</span>` +
       `<span><span class="sb-key">m</span> mute</span>` +
       `<span class="sb-right">aiaio session-run · ${run.kills} errors resolved · ${run.ctx.compactions}⚡</span>`;
@@ -623,8 +624,17 @@ export class UI {
 
   private renderPrompt(run: Run): void {
     let html: string;
+    let menuMode = false;
     if (run.over) {
       html = `<span class="spin">✻</span> <span class="spin-verb">${run.over.won ? 'session complete' : 'process terminated'}</span> <span class="spin-hint">— recap incoming</span>`;
+    } else if (run.crateMenu) {
+      menuMode = true;
+      html = `<div class="menu-title">⬆ crate — choose one:</div>` + run.crateMenu.options.map((o, i) =>
+        `<div class="menu-opt"><span class="sb-key">${i + 1}</span> ${escapeHtml(o.label)} <span class="dim">— ${escapeHtml(o.desc)}</span></div>`
+      ).join('');
+    } else if (run.summarizing > 0) {
+      const g = ['✂', '✻', '✂', '✽'][Math.floor(this.time * 8) % 4];
+      html = `<span class="spin">${g}</span> <span class="spin-verb">Summarizing conversation…</span> <span class="spin-hint">(heads-down — /compact in progress)</span>`;
     } else {
       const slot = run.weapons[run.selected];
       const ammo = slot.ammo === Infinity ? '∞' : `×${slot.ammo}`;
@@ -634,14 +644,16 @@ export class UI {
       } else if (run.nearStation) {
         bits.push(`<span style="color:#7ee787">hold W — "${escapeHtml(run.queue.tasks[run.nearStation.taskIndex].name)}"</span>`);
       }
-      if (run.nearCrate) bits.push('<span style="color:var(--yellow)">⬆ U to install</span>');
+      if (run.nearCrate) bits.push(`<span style="color:${run.nearCrate.kind === 'model' ? 'var(--blue)' : 'var(--yellow)'}">${run.nearCrate.kind === 'model' ? '◈' : '⬆'} U to install</span>`);
+      if (run.insideWall) bits.push('<span style="color:var(--red)">▓ INSIDE THE FORGETTING — bleeding, weapons spraying</span>');
+      if (run.compactCd <= 0 && run.ctx.used > run.ctx.budget * 0.4) bits.push('<span class="dim">✂ C to /compact</span>');
       html = `<span class="pcaret">&gt;</span> ${slot.def.glyph} ${kebab(slot.def.name)} ${ammo}` +
         (bits.length ? ' · ' + bits.join(' · ') : '') +
         ` <span class="cursor"></span>`;
     }
     if (html !== this.lastPrompt) {
       this.lastPrompt = html;
-      $('turn-hint').innerHTML = `<div class="prompt-box">${html}</div>`;
+      $('turn-hint').innerHTML = `<div class="prompt-box${menuMode ? ' menu' : ''}">${html}</div>`;
     }
   }
 

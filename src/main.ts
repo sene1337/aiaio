@@ -9,6 +9,7 @@ import {
 } from './session';
 import { qa } from './telemetry';
 import { audio } from './audio';
+import { music } from './music';
 
 type ScreenId = 'menu' | 'briefing' | 'match' | 'recap';
 
@@ -141,6 +142,9 @@ function routeAudio(type: string, data: Record<string, unknown>): void {
     case 'model_upgrade': audio.win(false); break;
     case 'subagent_spawn': audio.pickup(); break;
     case 'subagent_corrupted': audio.taskEaten(); break;
+    case 'subagent_eaten': audio.taskEaten(); break;
+    case 'voluntary_compact': audio.update(true); break;
+    case 'crate_choice': audio.select(); break;
     case 'pickup': audio.pickup(); break;
     case 'weapon_select': audio.select(); break;
     case 'death': audio.death(); break;
@@ -171,8 +175,10 @@ function wireKeyboard(): void {
   window.addEventListener('keydown', (e) => {
     held.add(e.key);
     audio.ensure(); // first gesture unlocks the AudioContext
+    music.ensure();
     if (e.key === 'm' || e.key === 'M') {
       const muted = audio.toggleMute();
+      music.setMuted(muted);
       qa.event('mute_toggle', { muted });
       return;
     }
@@ -187,10 +193,15 @@ function wireKeyboard(): void {
       case 'ArrowUp': run.jump(); break;
       case 'u': case 'U': run.installUpdate(); break;
       case 's': case 'S': run.spawnSubagent(); qa.firstUseOf('subagent'); break;
+      case 'c': case 'C': run.voluntaryCompact(); qa.firstUseOf('voluntary_compact'); break;
       case '[': run.cycleWeapon(-1); break;
       case ']': run.cycleWeapon(1); break;
       default:
-        if (/^[1-9]$/.test(k)) run.selectWeapon(parseInt(k, 10) - 1);
+        if (/^[1-9]$/.test(k)) {
+          // numbers drive the crate menu when one is open, weapons otherwise
+          if (run.crateMenu) run.chooseCrateOption(parseInt(k, 10) - 1);
+          else run.selectWeapon(parseInt(k, 10) - 1);
+        }
     }
   });
   window.addEventListener('click', () => audio.ensure());
@@ -224,6 +235,12 @@ function frame(t: number): void {
     }
     // wall proximity heartbeat (self rate-limited)
     if (!run.over && run.avatar.x - run.wallX < 240) audio.wallHeartbeat();
+    // music tension: wall gap + context pressure + inside-the-forgetting
+    const gap = run.avatar.x - run.wallX;
+    const gapT = Math.max(0, Math.min(1, 1 - gap / 800));
+    const ctxT = Math.min(1, run.ctx.used / (run.ctx.budget * run.ctx.threshold));
+    music.tension = run.over ? 0.15 : Math.min(1, gapT * 0.75 + ctxT * 0.35);
+    music.inside = !run.over && run.insideWall;
     if (run.over && !recapShown && !run.bannerActive) {
       recapShown = true;
       const r = run;

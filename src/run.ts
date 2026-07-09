@@ -24,7 +24,15 @@ export const RUN_COST = {
   subagentSpawn: 900, // spinning up a subagent
   subagentDrip: 16,   // tokens/second per living subagent — inference isn't free
   damageSpew: 6,      // tokens injected into YOUR context per point of damage taken
+  movePer10px: 1,     // traversing the transcript is reading — reading is inference
+  emitterSpam: 22,    // tokens/second an overflow-emitter spams into you when near
+  voluntaryCompact: 250, // running /compact costs a summarization pass
 };
+
+/** the wall advances ONLY from token spend: px of forgetting per token burned */
+export const PX_PER_TOKEN = 0.16;
+/** how fast owed wall-advance glides in (px/s) — surges feel like being chased */
+export const WALL_GLIDE = 150;
 
 export interface Banner {
   kind: 'compaction' | 'update' | 'info' | 'turn';
@@ -82,6 +90,20 @@ export interface SubAgent {
   dripAccum: number;
   slot: number; // 0/1 — formation offset
   label: string;
+  /** cached subagents (crate reward) have no upkeep drip — prebaked context */
+  cached: boolean;
+}
+
+/** one selectable reward in a patch-crate's command menu */
+export interface CrateOption {
+  id: 'gamble' | 'cached_sub' | 'tune_context' | 'shield' | 'resupply';
+  label: string;
+  desc: string;
+}
+
+export interface CrateMenu {
+  crate: Crate;
+  options: CrateOption[];
 }
 
 export interface RunOver {
@@ -126,11 +148,18 @@ export class Run {
   log: string[] = [];
 
   wallX: number;
+  /** wall distance owed from token spend; glides in at WALL_GLIDE px/s */
+  wallOwed = 0;
   time = 0;
   kills = 0;
   working = false;
   nearStation: Station | null = null;
   nearCrate: Crate | null = null;
+  crateMenu: CrateMenu | null = null;
+  /** cooldown on the voluntary /compact command */
+  compactCd = 0;
+  /** brief "summarizing…" root after a voluntary compact */
+  summarizing = 0;
   over: RunOver | null = null;
   dirty = 0;
   /** single event stream: main wires this to telemetry + audio + visual fx */
@@ -140,6 +169,7 @@ export class Run {
   private headsDownTimer = 0;
   private touchCooldowns = new Map<Enemy, number>();
   private wallWarned = false;
+  private moveAccum = 0;
 
   constructor(setup: RunSetup) {
     this.loadout = setup.loadout;
@@ -268,8 +298,16 @@ export class Run {
   get bannerActive(): boolean { return this.banners.length > 0; }
 
   private spendTokens(base: number): void {
-    const cost = Math.max(1, Math.round(base * this.avatar.tokenCostMult));
-    if (spend(this.ctx, cost)) this.compact();
+    this.burn(Math.max(1, Math.round(base * this.avatar.tokenCostMult)));
+  }
+
+  /**
+   * THE economy chokepoint: every token burned anywhere becomes wall distance.
+   * The wall of forgetting only moves because you (or your processes) spent.
+   */
+  private burn(tokens: number): void {
+    this.wallOwed += tokens * PX_PER_TOKEN;
+    if (spend(this.ctx, tokens)) this.compact();
     this.dirty++;
   }
 
@@ -285,8 +323,7 @@ export class Run {
       this.pushLog(`⌨ caught heads-down by ${source} (+25% damage)`);
     }
     // errors spam your context: every hit injects token spew (stack traces are long)
-    const spew = Math.round(d * RUN_COST.damageSpew);
-    if (spend(this.ctx, spew)) this.compact();
+    this.burn(Math.round(d * RUN_COST.damageSpew));
     if (this.avatar.shield > 0) {
       const absorbed = Math.min(this.avatar.shield, d);
       this.avatar.shield -= absorbed;
@@ -308,8 +345,8 @@ export class Run {
     if (this.avatar.shield > 0) { lost.push(`shield buffer (${this.avatar.shield}) released`); this.avatar.shield = 0; }
     lost.push(...amnesia(this.queue, rng, 1 + this.ctx.compactions * 0.5, this.ctx.compactions));
     const leap = 240 + this.ctx.compactions * 60;
-    this.wallX += leap;
-    lost.push(`the wall of forgetting leapt ${leap}px closer`);
+    this.wallOwed += leap; // it glides in — you get to watch it coming
+    lost.push(`the wall of forgetting surged ${leap}px closer`);
     drainAfterCompaction(this.ctx, rng);
     this.pushBanner({
       kind: 'compaction', ttl: 3.6,
@@ -376,7 +413,13 @@ export class Run {
     this.emit('fire', { weapon: slot.def.id, ammoLeft: slot.ammo === Infinity ? -1 : slot.ammo });
 
     const a = this.avatar;
-    const jitter = a.aimJitter > 0 ? this.rng.range(-a.aimJitter, a.aimJitter) * 4 : 0;
+    let jitter = a.aimJitter > 0 ? this.rng.range(-a.aimJitter, a.aimJitter) * 4 : 0;
+    // inside the forgetting, your aim is as corrupted as your memory
+    const inWall = this.insideWall;
+    if (inWall) {
+      jitter += this.rng.range(-65, 65);
+      if (this.rng.chance(0.3)) this.pushLog('▓ weapons spraying — targeting data is corrupted in here');
+    }
 
     if (slot.def.behavior === 'support') {
       const recent = this.recentDamageTotal();
@@ -395,7 +438,7 @@ export class Run {
       return;
     }
     if (slot.def.behavior === 'hitscan') {
-      const err = this.rng.range(-40, 40) * (this.rng.chance(0.35) ? 1 : 0.25) + jitter;
+      const err = this.rng.range(-40, 40) * (this.rng.chance(0.35) ? 1 : 0.25) * (inWall ? 3 : 1) + jitter;
       const y2 = a.y - 10 + err;
       let hitX = a.x + a.facing * 900;
       for (let d = 10; d < 900; d += 4) {
@@ -411,7 +454,8 @@ export class Run {
 
     const mk = (vx: number, vy: number): Projectile => ({
       x: a.x + a.facing * 14, y: a.y - 12,
-      vx: vx * a.facing + jitter, vy,
+      vx: vx * a.facing + jitter + (inWall ? this.rng.range(-50, 50) : 0),
+      vy: vy + (inWall ? this.rng.range(-45, 45) : 0),
       owner: 0, weaponId: slot.def.id,
       driftAx: slot.def.behavior === 'drift' ? this.rng.range(-60, 60) : 0,
       fuseTime: slot.def.behavior === 'fuse' ? 1.0 : -1,
@@ -432,11 +476,11 @@ export class Run {
   }
 
   installUpdate(): void {
-    if (this.over || !this.nearCrate || this.nearCrate.used) return;
-    this.nearCrate.used = true;
-    this.spendTokens(RUN_COST.update);
+    if (this.over || !this.nearCrate || this.nearCrate.used || this.crateMenu) return;
     const a = this.avatar;
     if (this.nearCrate.kind === 'model') {
+      this.nearCrate.used = true;
+      this.spendTokens(RUN_COST.update);
       // NEW MODEL RELEASED — the one unambiguously good upgrade in an agent's life
       a.model++;
       const extra = 3200;
@@ -455,38 +499,120 @@ export class Run {
       this.emit('model_upgrade', { model: a.model });
       return;
     }
-    const target: UpdateTarget = {
-      aimJitter: a.aimJitter, damageMult: a.damageMult, tokenCostMult: a.tokenCostMult,
-      compactionThreshold: this.ctx.threshold, shield: a.shield, unlockWeapon: null,
-    };
-    const result = rollUpdate(target, this.rng.fork('crate' + this.nearCrate.x), this.loadout.updateRiskSkew);
-    a.aimJitter = target.aimJitter; a.damageMult = target.damageMult; a.tokenCostMult = target.tokenCostMult;
-    this.ctx.threshold = target.compactionThreshold; a.shield = target.shield;
-    if (target.unlockWeapon && !this.weapons.some((w) => w.def.id === target.unlockWeapon)) {
-      this.weapons.push({
-        def: WEAPONS[target.unlockWeapon], ammo: 3, statRoll: 1.1,
-        sourceLine: `unlocked by ${result.version}`, cooldownLeft: 0,
-      });
+    // patch crates open a command menu: the gamble is always on the table, plus two picks
+    this.openCrateMenu(this.nearCrate);
+  }
+
+  private openCrateMenu(crate: Crate): void {
+    const pool: CrateOption[] = [
+      { id: 'cached_sub', label: '/restore cached-subagent', desc: 'no upkeep drip — prebaked context (still corruptible)' },
+      { id: 'tune_context', label: '/tune context-manager', desc: 'compaction threshold +5% — overflow later' },
+      { id: 'shield', label: '/patch shield-buffer', desc: '+30 shield' },
+      { id: 'resupply', label: '/restock error-log', desc: '+2 ammo on every finite weapon' },
+    ];
+    const rng = this.rng.fork('cratemenu' + crate.x);
+    const picks: CrateOption[] = [
+      { id: 'gamble', label: '/install random-patch', desc: 'the classic gamble: buff OR nerf, patch notes included' },
+    ];
+    while (picks.length < 3) {
+      const c = pool[rng.int(0, pool.length - 1)];
+      if (!picks.some((p) => p.id === c.id)) picks.push(c);
     }
-    this.pushBanner({ kind: 'update', ttl: 3.2, title: `⬆ INSTALLED ${result.version}`, lines: result.notes });
-    this.pushLog(`⬆ installed ${result.version} (${result.netBuff ? 'net buff' : 'ouch'})`);
-    this.emit('update_install', { version: result.version, netBuff: result.netBuff });
+    this.crateMenu = { crate, options: picks };
+    this.pushLog('⬆ crate opened — choose with 1/2/3');
+    this.dirty++;
+  }
+
+  chooseCrateOption(i: number): void {
+    if (!this.crateMenu || this.over) return;
+    const opt = this.crateMenu.options[i];
+    if (!opt) return;
+    const crate = this.crateMenu.crate;
+    this.crateMenu = null;
+    crate.used = true;
+    this.spendTokens(RUN_COST.update);
+    const a = this.avatar;
+    switch (opt.id) {
+      case 'gamble': {
+        const target: UpdateTarget = {
+          aimJitter: a.aimJitter, damageMult: a.damageMult, tokenCostMult: a.tokenCostMult,
+          compactionThreshold: this.ctx.threshold, shield: a.shield, unlockWeapon: null,
+        };
+        const result = rollUpdate(target, this.rng.fork('crate' + crate.x), this.loadout.updateRiskSkew);
+        a.aimJitter = target.aimJitter; a.damageMult = target.damageMult; a.tokenCostMult = target.tokenCostMult;
+        this.ctx.threshold = target.compactionThreshold; a.shield = target.shield;
+        if (target.unlockWeapon && !this.weapons.some((w) => w.def.id === target.unlockWeapon)) {
+          this.weapons.push({
+            def: WEAPONS[target.unlockWeapon], ammo: 3, statRoll: 1.1,
+            sourceLine: `unlocked by ${result.version}`, cooldownLeft: 0,
+          });
+        }
+        this.pushBanner({ kind: 'update', ttl: 3.2, title: `⬆ INSTALLED ${result.version}`, lines: result.notes });
+        this.pushLog(`⬆ installed ${result.version} (${result.netBuff ? 'net buff' : 'ouch'})`);
+        this.emit('update_install', { version: result.version, netBuff: result.netBuff });
+        break;
+      }
+      case 'cached_sub':
+        this.spawnSubagent(true);
+        break;
+      case 'tune_context':
+        this.ctx.threshold = Math.min(0.92, this.ctx.threshold + 0.05);
+        this.pushLog(`⬆ context manager tuned — overflow now at ${Math.round(this.ctx.threshold * 100)}%`);
+        break;
+      case 'shield':
+        a.shield += 30;
+        this.pushLog('⬆ shield buffer patched: +30');
+        break;
+      case 'resupply':
+        for (const w of this.weapons) if (w.ammo !== Infinity) w.ammo += 2;
+        this.pushLog('⬆ error log restocked — +2 ammo across the arsenal');
+        break;
+    }
+    this.emit('crate_choice', { choice: opt.id });
   }
 
   /** S: spawn a lower-model subagent — 900tk up front, then it drips tokens while alive */
-  spawnSubagent(): void {
+  spawnSubagent(cached = false): void {
     if (this.over) return;
     const alive = this.subagents.length;
     if (alive >= 2) { this.pushLog('🤖 subagent limit reached (2 concurrent — rate limits)'); return; }
-    this.spendTokens(RUN_COST.subagentSpawn);
+    if (!cached) this.spendTokens(RUN_COST.subagentSpawn);
     this.subagents.push({
       x: this.avatar.x - 20, y: this.avatar.y - 46,
       hp: 20, corrupted: false, corruptedAt: 0,
-      zapCd: 1, dripAccum: 0, slot: alive,
-      label: `sub-${this.rng.int(100, 999)}`,
+      zapCd: 1, dripAccum: 0, slot: alive, cached,
+      label: `${cached ? 'cache' : 'sub'}-${this.rng.int(100, 999)}`,
     });
-    this.pushLog('🤖 subagent spawned — weaker model, burns tokens while it lives');
-    this.emit('subagent_spawn', { alive: alive + 1 });
+    this.pushLog(cached
+      ? '🤖 cached subagent restored — prebaked context, no upkeep drip'
+      : '🤖 subagent spawned — weaker model, burns tokens while it lives');
+    this.emit('subagent_spawn', { alive: alive + 1, cached });
+  }
+
+  /** C: voluntary /compact — clean summary, no wall surge, no amnesia. cooldown 20s. */
+  voluntaryCompact(): void {
+    if (this.over || this.summarizing > 0) return;
+    if (this.compactCd > 0) { this.pushLog(`✂ /compact on cooldown (${Math.ceil(this.compactCd)}s)`); return; }
+    if (contextFrac(this.ctx) < 0.25) { this.pushLog('✂ /compact: context nearly empty — nothing worth summarizing'); return; }
+    this.compactCd = 20;
+    this.summarizing = 1.4;
+    this.avatar.headsDown = true; // eyes on the summary, not the sky
+    this.headsDownTimer = 1.6;
+    const before = this.ctx.compactions;
+    this.burn(RUN_COST.voluntaryCompact); // the summarization pass itself costs tokens…
+    if (this.ctx.compactions > before) {
+      // …and if you ran it too late, it tips you over: involuntary compaction. compact early.
+      this.pushLog('✂ /compact ran too late — the summary pass itself overflowed the window');
+      return;
+    }
+    this.ctx.used = Math.round(this.ctx.budget * 0.18);
+    this.pushBanner({
+      kind: 'info', ttl: 2.4,
+      title: '✂ /compact — conversation summarized cleanly',
+      lines: ['meter drained · nothing forgotten · the wall did not surge', 'compact early, compact often.'],
+    });
+    this.pushLog('✂ /compact — clean summary, breathing room restored');
+    this.emit('voluntary_compact', {});
   }
 
   private corruptSubagent(sa: SubAgent, cause: string): void {
@@ -505,11 +631,13 @@ export class Run {
   private stepSubagents(dt: number): void {
     const a = this.avatar;
     for (const sa of this.subagents) {
-      // upkeep: inference isn't free
-      sa.dripAccum += dt;
-      if (sa.dripAccum >= 1) {
-        sa.dripAccum -= 1;
-        if (spend(this.ctx, RUN_COST.subagentDrip)) this.compact();
+      // upkeep: inference isn't free (cached subs are prebaked — no drip)
+      if (!sa.cached) {
+        sa.dripAccum += dt;
+        if (sa.dripAccum >= 1) {
+          sa.dripAccum -= 1;
+          this.burn(RUN_COST.subagentDrip);
+        }
       }
       if (sa.corrupted) {
         // rogue: chase and shoot the player; gets OOM-killed after 18s
@@ -537,8 +665,7 @@ export class Run {
         const ty = a.y - 46 - sa.slot * 10 + Math.sin(this.time * 2.4 + sa.slot * 2) * 5;
         sa.x += (tx - sa.x) * Math.min(1, 4 * dt);
         sa.y += (ty - sa.y) * Math.min(1, 4 * dt);
-        // corruption vectors: ghost contact, or falling into the wall
-        if (sa.x < this.wallX) { this.corruptSubagent(sa, 'the wall of forgetting'); continue; }
+        // corruption vector: ghost contact (the wall doesn't corrupt subs — it EATS them)
         const ghost = this.enemies.find((e) =>
           !e.dead && e.def.kind === 'hallucination_ghost' && Math.hypot(e.x - sa.x, e.y - sa.y) < 32);
         if (ghost) { this.corruptSubagent(sa, 'a hallucination-ghost'); continue; }
@@ -597,6 +724,8 @@ export class Run {
     this.particles = this.particles.filter((pt) => pt.life > 0);
     for (const w of this.weapons) if (w.cooldownLeft > 0) w.cooldownLeft -= dt;
     if (this.over) return;
+    this.compactCd = Math.max(0, this.compactCd - dt);
+    this.summarizing = Math.max(0, this.summarizing - dt);
 
     this.stepAvatar(dt, input);
     this.stepWall(dt);
@@ -610,6 +739,11 @@ export class Run {
       return Math.abs(s.x - this.avatar.x) < 36 && !t.done && !t.forgotten && s.x > this.wallX;
     }) ?? null;
     this.nearCrate = this.crates.find((c) => !c.used && Math.abs(c.x - this.avatar.x) < 30) ?? null;
+    // walking away from an open crate menu closes it
+    if (this.crateMenu && (this.crateMenu.crate.used || Math.abs(this.crateMenu.crate.x - this.avatar.x) > 60)) {
+      this.crateMenu = null;
+      this.dirty++;
+    }
 
     // win: process exit at the right edge
     if (this.avatar.x > this.terrain.width - 50) this.finish(true, 'exit');
@@ -618,8 +752,8 @@ export class Run {
   private stepAvatar(dt: number, input: RunInput): void {
     const a = this.avatar;
 
-    // working at a station: rooted + heads-down
-    this.working = !!(input.work && this.nearStation && a.onGround);
+    // working at a station: rooted + heads-down (not while /compact summarizes)
+    this.working = !!(input.work && this.nearStation && a.onGround && this.summarizing <= 0);
     if (this.working) {
       a.headsDown = true;
       this.headsDownTimer = 0.8;
@@ -642,10 +776,12 @@ export class Run {
       if (this.headsDownTimer <= 0) a.headsDown = false;
     }
 
-    // movement
-    const dir = this.working ? 0 : (input.right ? 1 : 0) - (input.left ? 1 : 0);
+    // movement (rooted while working or mid-/compact summarization)
+    const rooted = this.working || this.summarizing > 0;
+    const dir = rooted ? 0 : (input.right ? 1 : 0) - (input.left ? 1 : 0);
     if (dir !== 0) a.facing = dir as 1 | -1;
     a.vx = dir * 150;
+    const prevX = a.x;
     const newX = Math.max(16, Math.min(this.terrain.width - 16, a.x + a.vx * dt));
     const surfNew = this.terrain.surfaceAt(newX);
     if (a.onGround && surfNew < a.y - 24) {
@@ -653,6 +789,13 @@ export class Run {
     } else {
       a.x = newX;
       if (a.onGround && surfNew < a.y + 2) a.y = surfNew - 8; // walk up gentle slopes
+    }
+
+    // traversing the transcript is reading — reading is inference (tiny token trickle)
+    this.moveAccum += Math.abs(a.x - prevX);
+    while (this.moveAccum >= 10) {
+      this.moveAccum -= 10;
+      this.burn(RUN_COST.movePer10px);
     }
 
     // gravity
@@ -669,14 +812,11 @@ export class Run {
   }
 
   private stepWall(dt: number): void {
-    // base creep + context pressure + overflow emitters + rubber-band
-    const pressure = contextFrac(this.ctx) / this.ctx.threshold;
-    let speed = 15 + pressure * 16;
-    const emitterNear = this.enemies.some((e) =>
-      !e.dead && e.def.kind === 'overflow_emitter' && Math.abs(e.x - this.avatar.x) < 700);
-    if (emitterNear) speed *= 1.6;
-    if (this.avatar.x - this.wallX > 950) speed *= 1.7; // don't let it fall boringly far behind
-    this.wallX += speed * dt;
+    // action-driven: the wall ONLY advances on owed distance from token burn.
+    // no idle creep, no rubber-band — your token bill is the storm.
+    const step = Math.min(this.wallOwed, WALL_GLIDE * dt);
+    this.wallX += step;
+    this.wallOwed -= step;
 
     // the wall eats undone tasks
     for (const s of this.stations) {
@@ -693,7 +833,15 @@ export class Run {
         this.emit('task_eaten', { task: t.name, at: Math.round(this.time) });
       }
     }
-    // wall proximity warning + damage inside it
+    // lower models don't survive the forgetting — the wall eats subagents whole
+    for (const sa of this.subagents) {
+      if (sa.hp > 0 && sa.x < this.wallX) {
+        sa.hp = 0;
+        this.pushLog(`▓ the wall ate ${sa.label} — lower models don't survive the forgetting`);
+        this.emit('subagent_eaten', { corrupted: sa.corrupted });
+      }
+    }
+    // wall proximity warning + being INSIDE it: survivable, but you bleed and spray
     const gap = this.avatar.x - this.wallX;
     if (gap < 220 && !this.wallWarned) {
       this.wallWarned = true;
@@ -701,10 +849,15 @@ export class Run {
     }
     if (gap > 300) this.wallWarned = false;
     if (gap < 0) {
-      this.avatar.hp = Math.max(0, this.avatar.hp - 20 * dt);
+      this.avatar.hp = Math.max(0, this.avatar.hp - 9 * dt);
       this.dirty++;
       if (this.avatar.hp <= 0) this.finish(false, 'wall');
     }
+  }
+
+  /** inside the corrupted zone your aim is as degraded as your memory */
+  get insideWall(): boolean {
+    return this.avatar.x < this.wallX;
   }
 
   private enemyAt(x: number, y: number, r: number): Enemy | null {
@@ -823,8 +976,13 @@ export class Run {
           break;
         case 'overflow_emitter':
           if (e.cooldown <= 0) {
-            e.cooldown = 0.9;
+            e.cooldown = 1.0;
             this.spawnParticles(e.x, e.y - 14, 4, e.def.color);
+            if (dist < 500) {
+              // it spams your context — which moves the wall, because everything does
+              this.burn(RUN_COST.emitterSpam);
+              if (this.rng.chance(0.12)) this.pushLog('📈 overflow-emitter is spamming your context — kill it');
+            }
           }
           break;
         case 'recovery_sprite':
@@ -978,10 +1136,11 @@ export class Run {
       const d = Math.hypot(sa.x - x, sa.y - y);
       if (d < radius && damage > 0) sa.hp -= Math.round(damage * 0.5 * Math.max(0.3, 1 - d / radius));
     }
-    // context nuke: in run mode it erases enemies AND floods your own meter
+    // context nuke: erases enemies AND floods your own meter — under the
+    // action-driven wall, that flood is a ~650px surge. deal with the devil.
     if (weaponId === 'context_nuke') {
-      this.spendTokens(this.ctx.budget * 0.25);
-      this.pushLog('💥 context nuke — glorious, and your own context meter felt it');
+      this.burn(Math.round(this.ctx.budget * 0.25));
+      this.pushLog('💥 context nuke — glorious. your own context felt it. so will the wall.');
     }
     // self splash
     const dSelf = Math.hypot(this.avatar.x - x, this.avatar.y - 6 - y);

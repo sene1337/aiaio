@@ -43,21 +43,36 @@ sessions + random generation).
 
 ### The systems
 
-- **The wall of forgetting** — creeps rightward always; speeds up with your
-  context pressure, near living `overflow-emitter`s, and rubber-bands if you
-  sprint too far ahead. Tasks it passes are *forgotten* (garbled, unrecoverable
-  this run). Standing inside it drains you. **Compaction** (crossing your context
-  threshold) makes it *leap* — plus the usual amnesia: shield gone, task progress
-  rewound, and from your 3rd compaction even *completed* tasks can un-ship.
+- **The wall of forgetting is action-driven** — it does NOT creep on a timer.
+  Every token you burn becomes wall distance (0.16px/token): firing, working,
+  subagent upkeep, damage spew, even walking (reading the transcript is
+  inference — 1tk/10px). Stand perfectly still and it stands still with you.
+  Your token bill is the storm. `overflow-emitter`s spam tokens *into your
+  meter* while you're near — which moves the wall, because everything does.
+  Tasks it passes are *forgotten* (garbled, unrecoverable). It **eats subagents
+  whole**; you it merely ruins: inside the zone you bleed 9hp/s and your weapons
+  spray wildly — but you can dive in (unclaimed crates in there still work).
+  **Involuntary compaction** (crossing your threshold) surges it 240px+ — plus
+  amnesia: shield gone, progress rewound, and from your 3rd compaction even
+  *completed* tasks can un-ship.
+- **`/compact` (C)** — voluntary, anywhere, 20s cooldown: drains your meter
+  *cleanly* — no surge, nothing forgotten — but the summarization pass costs
+  250tk and roots you heads-down for a beat. Run it too close to the threshold
+  and the pass itself tips you over. Compact early, compact often.
 - **Context economy** — firing and working cost tokens. The meter is literally
   distance: pressure = wall speed. The context-window-nuke erases half a screen
   of errors and floods a quarter of your own meter. Choose violence carefully.
   **Getting hit injects error-spew into your context** (stack traces are long) —
   damage accelerates your own compaction.
-- **Upgrades** — ⬆ patch crates are risk rolls (buff OR nerf, patch-note comedy).
-  The rare ◈ **MODEL UPGRADE** crate is the one unambiguously good day in an
-  agent's life: +context budget, higher compaction threshold, shield refill, and
-  your title bar ticks to vN.
+- **Upgrades** — ⬆ patch crates open a 3-option command menu: the classic random
+  gamble is always option 1, plus two seeded picks from `/restore
+  cached-subagent` (no upkeep drip), `/tune context-manager` (+5% threshold),
+  `/patch shield-buffer`, `/restock error-log`. The rare ◈ **MODEL UPGRADE**
+  crate stays guaranteed-good: +context budget, higher threshold, shield refill,
+  vN title-bar tick.
+- **Music** — a generative ambient score (pure WebAudio): warm pad + pentatonic
+  plucks when safe, morphing darker/sparser/more detuned as the wall closes,
+  down to drone-and-static inside the forgetting.
 - **Handicap** — low-stability sessions (yours was rough) grant starting shield
   and a damage bonus, with the "why" quoting your real numbers.
 
