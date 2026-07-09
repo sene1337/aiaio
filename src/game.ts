@@ -57,6 +57,8 @@ export interface Player {
   recentDamage: number[]; // damage taken, one bucket per own turn (newest last)
   movesLeft: number;
   updateOffer: number;    // turns the current offer stays valid (0 = none)
+  /** true while heads-down in work: shots that land before your next turn hit +25% harder */
+  headsDown: boolean;
   // provenance
   loadout: AgentLoadout;
   startBuff: StartingBuff | null;
@@ -167,7 +169,7 @@ export class Game {
       weapons, selected: 0,
       aimJitter: 0, damageMult, tokenCostMult: 1,
       hardening: loadout.hardening, stability: loadout.stability,
-      recentDamage: [0], movesLeft: 0, updateOffer: 0,
+      recentDamage: [0], movesLeft: 0, updateOffer: 0, headsDown: false,
       loadout, startBuff, updatesInstalled: [],
       stats: { shotsFired: 0, damageDealt: 0, workActions: 0, compactions: 0 },
     };
@@ -202,6 +204,7 @@ export class Game {
     const p = this.current;
     this.turnClock = 0;
     p.movesLeft = 24;
+    p.headsDown = false; // survived the opponent's turn — head back up
     p.recentDamage.push(0);
     if (p.recentDamage.length > 4) p.recentDamage.shift();
     for (const w of p.weapons) if (w.cooldownLeft > 0) w.cooldownLeft--;
@@ -324,6 +327,7 @@ export class Game {
     if (!this.canAct()) return;
     const p = this.current;
     p.stats.workActions++;
+    p.headsDown = true; // heads-down in the task: exposed until your next turn
     this.spendTokens(p, TOKEN_COST.work);
     const line = workTask(p.queue);
     this.pushLog(`⌨ ${p.name}: ${line}`);
@@ -488,7 +492,7 @@ export class Game {
     for (const w of p.weapons) if (w.cooldownLeft > 0) { w.cooldownLeft = 0; cooled++; }
     if (cooled > 0) lost.push(`${cooled} weapon cooldown${cooled > 1 ? 's' : ''} forgotten (silver lining?)`);
     const severity = 1 + p.ctx.compactions * 0.5;
-    lost.push(...amnesia(p.queue, rng, severity));
+    lost.push(...amnesia(p.queue, rng, severity, p.ctx.compactions));
     drainAfterCompaction(p.ctx, rng);
     p.stats.compactions++;
     this.pushBanner({
@@ -554,6 +558,10 @@ export class Game {
 
   private applyDamage(t: Player, dmg: number, owner: number): void {
     if (dmg <= 0) return;
+    if (owner !== t.index && t.headsDown) {
+      dmg = Math.round(dmg * 1.25);
+      this.pushLog(`⌨ ${t.name} was heads-down in a task — caught off guard (+25% damage)`);
+    }
     let remaining = dmg;
     if (t.shield > 0) {
       const absorbed = Math.min(t.shield, remaining);

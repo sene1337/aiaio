@@ -68,10 +68,23 @@ export function work(q: TaskQueue): string {
 /**
  * Compaction amnesia against the queue: rewind progress on the current task
  * and possibly forget which task was being worked (jump to a random one).
+ * From the 3rd compaction in a match, cruelty escalates: a COMPLETED task can
+ * flip back to needing one re-verify unit ("did I actually ship that?").
  * Returns human-readable lines describing what was lost.
  */
-export function amnesia(q: TaskQueue, rng: Rng, severity: number): string[] {
+export function amnesia(q: TaskQueue, rng: Rng, severity: number, priorCompactions: number): string[] {
   const lines: string[] = [];
+  if (priorCompactions >= 2) {
+    const doneTasks = q.tasks.filter((t) => t.done);
+    const pUnship = Math.min(0.9, 0.5 + (priorCompactions - 2) * 0.15);
+    if (doneTasks.length > 0 && rng.chance(pUnship)) {
+      const t = rng.pick(doneTasks);
+      t.done = false;
+      t.progress = t.workUnits - 1; // one unit of re-verification needed
+      t.forgotten = true;
+      lines.push(`completed task "${t.name}" un-verified — did we actually ship that?`);
+    }
+  }
   const t = q.tasks[q.current];
   if (t && !t.done && t.progress > 0) {
     const lost = Math.min(t.progress, Math.max(1, Math.round(severity * 2)));

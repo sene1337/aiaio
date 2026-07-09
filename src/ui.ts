@@ -256,6 +256,7 @@ export class UI {
         ${p.isCpu ? '<span class="badge">CPU</span>' : ''}
         <span class="badge">stability ${p.stability}</span>
         ${p.shield > 0 ? `<span class="badge" style="color:#50b4ff">🛡 ${p.shield}</span>` : ''}
+        ${p.headsDown ? '<span class="badge" style="color:var(--red)">⌨ heads-down</span>' : ''}
         ${p.updateOffer > 0 ? '<span class="badge" style="color:var(--amber)">⬆ update!</span>' : ''}
       </div>
       <div class="bar"><div class="fill" style="width:${hpFrac * 100}%;background:${hpFrac > 0.35 ? p.color : 'var(--red)'}"></div></div>

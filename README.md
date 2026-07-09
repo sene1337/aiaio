@@ -39,7 +39,7 @@ handicap grants. After the match, the recap cites the card's real numbers.
 | ← / → | adjust barrel angle |
 | ↑ / ↓ | adjust power |
 | **Space** | FIRE (combat action — ends turn) |
-| **W** | WORK the current task (safe, advances your queue, skips your shot — ends turn) |
+| **W** | WORK the current task (advances your queue, skips your shot, leaves you heads-down — ends turn) |
 | **U** | install an offered ⬆ UPDATE (risk roll — ends turn) |
 | 1–9 or [ / ] | select weapon |
 | A / D | move along the terrain (costs tokens + limited steps, doesn't end turn) |
@@ -47,12 +47,16 @@ handicap grants. After the match, the recap cites the card's real numbers.
 ### The systems
 
 - **Task queue** — each agent has 3–5 tasks needing N work turns. Both queues are
-  visible in the HUD: it's a race. Working is safe-looking but you don't shoot.
+  visible in the HUD: it's a race. Working advances you but leaves you **heads-down**:
+  until your next turn, shots that hit you deal +25% damage (a ⌨ badge shows the
+  window — to both players).
 - **Context meter** — every action costs tokens (firing > working > moving). Cross
   your compaction threshold (red tick on the meter) and **⚡ COMPACTION** fires: a
   glitchy amnesia event — shield lost, aim solution discarded, weapon cooldowns
   wiped, and your task progress rewinds or you forget which task you were on. The
-  banner "summarizes" what was lost, badly.
+  banner "summarizes" what was lost, badly. Cruelty escalates: from your **3rd
+  compaction** in a match, a *completed* task can flip back to needing one
+  re-verify unit — "did we actually ship that?"
 - **Update gamble** — "⬆ UPDATE AVAILABLE" appears at random. Spend your turn to
   install: a risk roll that buffs or nerfs aim, damage, token costs, compaction
   threshold, or shield — or unlocks a chaos weapon — announced as patch notes.

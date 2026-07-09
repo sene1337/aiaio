@@ -43,6 +43,7 @@ export function chooseAction(game: Game, p: Player): AiAction {
   if (allDone(p.queue)) workScore = -1; // nothing left to work
   let fightScore = 0.35 + (1 - enemyHp) * 0.5 + enemyTasks * 0.45;
   if (recent > 20) fightScore += 0.2; // they're shooting me — shoot back
+  if (enemy.headsDown) fightScore += 0.15; // they're heads-down in a task — punish the +25% window
   // avoid expensive actions when hovering under the compaction threshold
   const ctxPressure = contextFrac(p.ctx) / p.ctx.threshold;
   if (ctxPressure > 0.85) workScore += 0.15; // work is cheaper than most weapons
