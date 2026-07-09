@@ -1,5 +1,6 @@
-// Rendering + HUD. Canvas draws the arena (terrain, tanks, projectiles,
-// particles, lasers); the DOM shows player panels, weapon bar, banners, log.
+// Rendering + HUD, styled as an agent-harness TUI (Claude Code / Hermes):
+// character meters, ☐/☒ task todos, ⏺/⎿ transcript bullets, a boxed > prompt
+// with blinking cursor, ✻ spinner verbs while the CPU thinks or shots fly.
 
 import { Game, Player, Banner } from './game';
 import { contextFrac } from './context';
@@ -15,12 +16,31 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   return el as T;
 };
 
+const SPIN_GLYPHS = ['✳', '✻', '✽', '✶'];
+const CPU_VERBS = [
+  'Scheming', 'Reading the wind', 'Triangulating', 'Prioritizing tasks',
+  'Second-guessing', 'Consulting the error log', 'Weighing work vs. violence',
+];
+const FLIGHT_VERBS = ['Bombarding', 'Delivering payload', 'Propagating errors', 'Awaiting impact'];
+
+function textBar(frac: number, width = 10): string {
+  const f = Math.max(0, Math.min(1, frac));
+  const fill = Math.round(f * width);
+  return '█'.repeat(fill) + '░'.repeat(width - fill);
+}
+
+function kebab(name: string): string {
+  return name.toLowerCase().replace(/ /g, '-');
+}
+
 export class UI {
   canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private camX = 0; private camY = 0; private camZoom = 1;
+  private trackedGame: Game | null = null;
   private lastDirty = -1;
   private lastBannerCount = -1;
+  private lastPrompt = '';
   private garbleRng = new Rng('ui-garble');
   private time = 0;
 
@@ -54,6 +74,11 @@ export class UI {
       targetZoom = Math.max(fitZoom * 1.5, Math.min(1.1, fitZoom * 2));
       targetX = p.x; targetY = Math.min(p.y, game.terrain.height * 0.75);
     }
+    // new match: snap the camera instead of lerping in from a stale state
+    if (this.trackedGame !== game) {
+      this.trackedGame = game;
+      this.camZoom = targetZoom; this.camX = targetX; this.camY = targetY;
+    }
     const lerp = 1 - Math.pow(0.001, dt);
     this.camZoom += (targetZoom - this.camZoom) * lerp;
     this.camX += (targetX - this.camX) * lerp;
@@ -67,9 +92,9 @@ export class UI {
 
     // --- sky ---
     const grad = ctx.createLinearGradient(0, 0, 0, H);
-    grad.addColorStop(0, '#04070d');
-    grad.addColorStop(0.7, '#071510');
-    grad.addColorStop(1, '#060a08');
+    grad.addColorStop(0, '#0a0b0d');
+    grad.addColorStop(0.7, '#101310');
+    grad.addColorStop(1, '#0f0f0e');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
 
@@ -79,7 +104,7 @@ export class UI {
     ctx.translate(-this.camX, -this.camY);
 
     // faint memory-grid in the sky
-    ctx.strokeStyle = 'rgba(84,255,159,0.05)';
+    ctx.strokeStyle = 'rgba(126,231,135,0.05)';
     ctx.lineWidth = 1 / this.camZoom;
     ctx.beginPath();
     for (let x = 0; x < game.terrain.width; x += 120) { ctx.moveTo(x, 0); ctx.lineTo(x, game.terrain.height); }
@@ -94,7 +119,7 @@ export class UI {
 
     // projectiles + trails
     for (const proj of game.projectiles) {
-      ctx.strokeStyle = 'rgba(255,176,46,0.35)';
+      ctx.strokeStyle = 'rgba(217,119,87,0.35)';
       ctx.lineWidth = 1.5 / this.camZoom;
       ctx.beginPath();
       for (let i = 0; i < proj.trail.length; i++) {
@@ -105,22 +130,22 @@ export class UI {
       if (proj.landed) {
         // fused round blinking on the ground
         const blink = Math.sin(this.time * 20) > 0;
-        ctx.fillStyle = blink ? '#ff2e63' : '#ffb02e';
+        ctx.fillStyle = blink ? '#f47067' : '#e3b341';
         ctx.beginPath(); ctx.arc(proj.x, proj.y, 4, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#ffb02e';
+        ctx.fillStyle = '#e3b341';
         ctx.font = '9px monospace';
         ctx.fillText('waiting…', proj.x + 7, proj.y - 4);
       } else {
         ctx.fillStyle = '#fff3d6';
         ctx.beginPath(); ctx.arc(proj.x, proj.y, 3.2, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = 'rgba(255,176,46,0.8)';
+        ctx.strokeStyle = 'rgba(217,119,87,0.8)';
         ctx.beginPath(); ctx.arc(proj.x, proj.y, 5.5, 0, Math.PI * 2); ctx.stroke();
       }
     }
 
     // lasers
     for (const l of game.lasers) {
-      ctx.strokeStyle = `rgba(255,46,99,${Math.min(1, l.ttl * 3)})`;
+      ctx.strokeStyle = `rgba(244,112,103,${Math.min(1, l.ttl * 3)})`;
       ctx.lineWidth = 3 / this.camZoom;
       ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke();
       ctx.strokeStyle = `rgba(255,255,255,${Math.min(1, l.ttl * 2)})`;
@@ -148,6 +173,8 @@ export class UI {
       this.lastBannerCount = game.banners.length;
       this.renderBanners(game);
     }
+    // prompt line updates every frame (spinner animation), writes only on change
+    this.renderPrompt(game);
   }
 
   private drawTank(ctx: CanvasRenderingContext2D, p: Player, game: Game): void {
@@ -156,8 +183,8 @@ export class UI {
     ctx.translate(p.x, p.y);
     // shield bubble
     if (p.shield > 0) {
-      ctx.strokeStyle = 'rgba(80,180,255,0.7)';
-      ctx.fillStyle = 'rgba(80,180,255,0.10)';
+      ctx.strokeStyle = 'rgba(108,182,255,0.7)';
+      ctx.fillStyle = 'rgba(108,182,255,0.10)';
       ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.arc(0, -4, 20, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     }
@@ -172,7 +199,7 @@ export class UI {
       ctx.stroke();
     }
     // treads + body
-    ctx.fillStyle = dead ? '#333' : '#12241a';
+    ctx.fillStyle = dead ? '#333' : '#1c1f1c';
     ctx.strokeStyle = dead ? '#555' : p.color;
     ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.roundRect(-11, -8, 22, 8, 2); ctx.fill(); ctx.stroke();
@@ -191,13 +218,21 @@ export class UI {
     ctx.strokeStyle = dead ? '#555' : p.color;
     ctx.beginPath(); ctx.moveTo(6, -14); ctx.lineTo(9, -20); ctx.stroke();
     ctx.beginPath(); ctx.arc(9, -21, 1.5, 0, Math.PI * 2); ctx.fillStyle = dead ? '#555' : p.color; ctx.fill();
+    // name label (constant screen size so tanks are findable at any zoom)
+    const isCurrent = game.current.index === p.index && game.phase === 'aim' && !dead;
+    const labelPx = 11 / this.camZoom;
+    ctx.font = `${labelPx}px ui-monospace, monospace`;
+    ctx.textAlign = 'center';
+    ctx.globalAlpha = isCurrent ? 0.95 : 0.55;
+    ctx.fillStyle = dead ? '#666' : p.color;
+    ctx.fillText(p.name.slice(0, 16), 0, -26 - labelPx);
     // active-turn marker
-    if (game.current.index === p.index && game.phase === 'aim' && !dead) {
+    if (isCurrent) {
       const bob = Math.sin(this.time * 4) * 2;
-      ctx.fillStyle = p.color;
-      ctx.font = '10px monospace';
-      ctx.fillText('▼', -3, -30 + bob);
+      ctx.fillText('▼', 0, -24 + bob);
     }
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'left';
     ctx.restore();
   }
 
@@ -217,22 +252,15 @@ export class UI {
 
     for (const p of game.players) this.renderPanel(game, p);
     this.renderWeaponBar(game);
+    this.renderTranscript(game);
 
-    const cur = game.current;
-    $('turn-hint').textContent = game.gameOver
-      ? 'session terminated'
-      : cur.isCpu
-        ? `${cur.name} (CPU) is thinking…`
-        : `${cur.name}: ←→ angle ${Math.round(cur.angle)}° · ↑↓ power ${Math.round(cur.power)} · SPACE fire · W work · A/D move (${cur.movesLeft})${cur.updateOffer > 0 ? ' · U INSTALL UPDATE ⬆' : ''}`;
-
-    const feed = $('log-feed');
-    feed.innerHTML = '';
-    for (const line of game.log.slice(-5)) {
-      const div = document.createElement('div');
-      div.textContent = line;
-      feed.appendChild(div);
-    }
-    if (feed.lastElementChild) feed.lastElementChild.classList.add('fresh');
+    $('status-bar').innerHTML =
+      `<span><span class="sb-key">space</span> fire</span>` +
+      `<span><span class="sb-key">w</span> work</span>` +
+      `<span><span class="sb-key">u</span> update</span>` +
+      `<span><span class="sb-key">[ ]</span>/<span class="sb-key">1-9</span> weapons</span>` +
+      `<span><span class="sb-key">a/d</span> move (${game.gameOver ? 0 : game.current.movesLeft})</span>` +
+      `<span class="sb-right">aiaio · round ${game.round} · ${game.players[0].stats.compactions + game.players[1].stats.compactions}⚡ total compactions</span>`;
   }
 
   private renderPanel(game: Game, p: Player): void {
@@ -241,31 +269,33 @@ export class UI {
     const hpFrac = Math.max(0, p.hp / p.maxHp);
     const ctxF = contextFrac(p.ctx);
     const overThresh = ctxF >= p.ctx.threshold;
+
     const taskRows = p.queue.tasks.map((t, i) => {
       const cls = ['task-row'];
+      const isCurrent = !t.done && i === p.queue.current;
       if (t.done) cls.push('done');
-      else if (i === p.queue.current) cls.push('current');
+      else if (isCurrent) cls.push('current');
       if (t.forgotten && !t.done) cls.push('forgotten');
-      const blocks = '▰'.repeat(t.progress) + '▱'.repeat(Math.max(0, t.workUnits - t.progress));
+      const glyph = t.done ? '☒' : isCurrent ? '▸' : '☐';
+      const blocks = isCurrent || (!t.done && t.progress > 0)
+        ? ` <span class="task-blocks">[${'▰'.repeat(t.progress)}${'▱'.repeat(Math.max(0, t.workUnits - t.progress))}]</span>` : '';
       const name = t.forgotten && !t.done ? garble(t.name, this.garbleRng, 0.35) : t.name;
-      const marker = t.done ? '✔' : (i === p.queue.current ? '▶' : '·');
-      return `<div class="${cls.join(' ')}"><span>${marker}</span><span class="task-blocks">${blocks}</span><span>${escapeHtml(name)}</span></div>`;
+      return `<div class="${cls.join(' ')}"><span class="glyph">${glyph}</span><span>${escapeHtml(name)}${blocks}</span></div>`;
     }).join('');
+
+    const hpColor = hpFrac > 0.35 ? p.color : 'var(--red)';
+    const ctxColor = overThresh ? 'var(--red)' : 'var(--blue)';
     panel.innerHTML = `
       <div class="pp-name" style="color:${p.color}">${escapeHtml(p.name)}
-        ${p.isCpu ? '<span class="badge">CPU</span>' : ''}
+        ${p.isCpu ? '<span class="badge">cpu</span>' : ''}
         <span class="badge">stability ${p.stability}</span>
-        ${p.shield > 0 ? `<span class="badge" style="color:#50b4ff">🛡 ${p.shield}</span>` : ''}
+        <span class="badge">hardening ${(p.hardening * 100).toFixed(0)}%</span>
+        ${p.shield > 0 ? `<span class="badge" style="color:var(--blue)">🛡 ${p.shield}</span>` : ''}
         ${p.headsDown ? '<span class="badge" style="color:var(--red)">⌨ heads-down</span>' : ''}
-        ${p.updateOffer > 0 ? '<span class="badge" style="color:var(--amber)">⬆ update!</span>' : ''}
+        ${p.updateOffer > 0 ? '<span class="badge" style="color:var(--yellow)">⬆ update!</span>' : ''}
       </div>
-      <div class="bar"><div class="fill" style="width:${hpFrac * 100}%;background:${hpFrac > 0.35 ? p.color : 'var(--red)'}"></div></div>
-      <div class="bar-label"><span>HP ${Math.max(0, Math.round(p.hp))}/${p.maxHp}</span><span>hardening ${(p.hardening * 100).toFixed(0)}%</span></div>
-      <div class="bar">
-        <div class="fill" style="width:${ctxF * 100}%;background:${overThresh ? 'var(--red)' : '#3a7dc9'}"></div>
-        <div class="thresh" style="left:${p.ctx.threshold * 100}%"></div>
-      </div>
-      <div class="bar-label"><span>context ${p.ctx.used}/${p.ctx.budget}</span><span>${p.ctx.compactions}⚡ compactions</span></div>
+      <div class="meter">proc <span class="tbar" style="color:${hpColor}">${textBar(hpFrac)}</span> <span class="val">${Math.max(0, Math.round(p.hp))}/${p.maxHp}</span></div>
+      <div class="meter">ctx  <span class="tbar" style="color:${ctxColor}">${textBar(ctxF)}</span> <span class="val">${p.ctx.used}/${p.ctx.budget}</span> · auto-compact @${Math.round(p.ctx.threshold * 100)}% · ${p.ctx.compactions}⚡</div>
       <div class="tasks-list">${taskRows}</div>
     `;
   }
@@ -279,14 +309,66 @@ export class UI {
       div.className = 'weapon-slot' + (i === p.selected ? ' selected' : '') + (p.index === 1 ? ' p1sel' : '') +
         (slot.ammo <= 0 || slot.cooldownLeft > 0 ? ' empty' : '');
       const cd = slot.cooldownLeft > 0 ? ` ❄${slot.cooldownLeft}` : '';
+      const sel = i === p.selected ? '❯' : ' ';
       div.innerHTML = `
-        <span class="wname">${i + 1} ${slot.def.glyph} ${escapeHtml(slot.def.name)}</span>
+        <span class="dim">${sel} ${i + 1}</span>
+        <span class="wname">${slot.def.glyph} ${kebab(slot.def.name)}</span>
         <span class="wmeta">×${slot.ammo} · ${slot.def.tokenCost}tk${cd}</span>
         <div class="tooltip">${escapeHtml(slot.def.flavor)}<span class="tsrc">from log: ${escapeHtml(slot.sourceLine)}</span></div>
       `;
       div.addEventListener('click', () => game.selectWeapon(i));
       bar.appendChild(div);
     });
+  }
+
+  /** transcript: classify each log line into ⏺ action / ⎿ result / system */
+  private renderTranscript(game: Game): void {
+    const feed = $('log-feed');
+    feed.innerHTML = '';
+    const lines = game.log.slice(-4);
+    lines.forEach((line, idx) => {
+      const div = document.createElement('div');
+      div.className = 'tr-line' + (idx === lines.length - 1 ? ' fresh' : '');
+      const first = [...line][0]; // first grapheme-ish char
+      let bullet = '⏺', bclass = 'b-action';
+      if ('💢⚡'.includes(first)) { bullet = '⏺'; bclass = 'b-bad'; }
+      else if ('🛡⏱☢⬇·✔'.includes(first)) { bullet = '⎿'; bclass = 'b-result'; }
+      else if ('⚑📣💥⬆▶'.includes(first)) { bullet = '⏺'; bclass = 'b-system'; }
+      else if (first === '✦' || first === '⌨') {
+        bullet = '⏺';
+        bclass = line.includes(game.players[1].name) && !line.includes(game.players[0].name) ? 'b-p1' : 'b-action';
+      }
+      const body = line.replace(/^[✦⌨▶·]\s*/u, '');
+      div.innerHTML = `<span class="tr-bullet ${bclass}">${bullet}</span>${escapeHtml(body)}`;
+      feed.appendChild(div);
+    });
+  }
+
+  /** the boxed prompt: > aim readout for humans, ✻ spinner while CPU/shots act */
+  private renderPrompt(game: Game): void {
+    let html: string;
+    if (game.gameOver) {
+      html = `<span class="spin">✻</span> <span class="spin-verb">session terminated</span> <span class="spin-hint">— recap incoming</span>`;
+    } else if (game.phase === 'projectile') {
+      const g = SPIN_GLYPHS[Math.floor(this.time * 9) % SPIN_GLYPHS.length];
+      const verb = FLIGHT_VERBS[Math.floor(this.time / 1.6) % FLIGHT_VERBS.length];
+      html = `<span class="spin">${g}</span> <span class="spin-verb">${verb}…</span> <span class="spin-hint">(ordnance in flight)</span>`;
+    } else if (game.current.isCpu) {
+      const g = SPIN_GLYPHS[Math.floor(this.time * 9) % SPIN_GLYPHS.length];
+      const verb = CPU_VERBS[Math.floor(this.time / 1.6) % CPU_VERBS.length];
+      html = `<span class="spin">${g}</span> <span class="spin-verb">${verb}…</span> <span class="spin-hint">(${escapeHtml(game.current.name)} is taking its turn)</span>`;
+    } else {
+      const p = game.current;
+      const slot = p.weapons[p.selected];
+      const upd = p.updateOffer > 0 ? ` · <span style="color:var(--yellow)">⬆ u to install update</span>` : '';
+      html = `<span class="pcaret">&gt;</span> <span style="color:${p.color}">${escapeHtml(p.name)}</span>` +
+        ` · angle ${Math.round(p.angle)}° · power ${Math.round(p.power)}` +
+        ` · ${slot.def.glyph} ${kebab(slot.def.name)} ×${slot.ammo}${upd} <span class="cursor"></span>`;
+    }
+    if (html !== this.lastPrompt) {
+      this.lastPrompt = html;
+      $('turn-hint').innerHTML = `<div class="prompt-box">${html}</div>`;
+    }
   }
 
   private renderBanners(game: Game): void {
@@ -313,13 +395,13 @@ export class UI {
       const s = l.cardSummary;
       const weapons = l.weapons.map((w) => {
         const def = WEAPONS[w.id];
-        return `<li>${def.glyph} ${escapeHtml(def.name)} ×${w.ammo}<span class="wsrc">↳ ${escapeHtml(w.sourceLine)}</span></li>`;
+        return `<li>${def.glyph} ${kebab(def.name)} ×${w.ammo}<span class="wsrc">⎿ ${escapeHtml(w.sourceLine)}</span></li>`;
       }).join('');
-      const tasks = l.tasks.map((t) => `<li>▱ ${escapeHtml(t.name)} (${t.workUnits} work)</li>`).join('');
+      const tasks = l.tasks.map((t) => `<li>☐ ${escapeHtml(t.name)} <span class="dim">(${t.workUnits} work)</span></li>`).join('');
       col.innerHTML = `
         <h3>${escapeHtml(names[i])}</h3>
         <div class="stat-line">session: ${escapeHtml(s.sessionId)}${s.fromCard ? '' : ' <span class="dim">(generated)</span>'}</div>
-        <div class="stat-line">stability ${l.stability}/100 · hardening ${(l.hardening * 100).toFixed(0)}% · context budget ${l.tokenBudget} (compaction at ${(l.compactionThreshold * 100).toFixed(0)}%)</div>
+        <div class="stat-line">stability ${l.stability}/100 · hardening ${(l.hardening * 100).toFixed(0)}% · context budget ${l.tokenBudget} (auto-compact @${(l.compactionThreshold * 100).toFixed(0)}%)</div>
         ${s.fromCard ? `<div class="stat-line dim">history: ${escapeHtml(s.topErrorCategory)} ×${s.topErrorCount}, ${s.compactionEvents} compactions, ${s.restarts} restarts, token peak ${s.tokenPeak}</div>` : ''}
         <h4>TASK QUEUE (finish these to win)</h4><ul>${tasks}</ul>
         <h4>GENERATED LOADOUT</h4><ul>${weapons}</ul>

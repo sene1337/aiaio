@@ -12,9 +12,17 @@
     <!-- ============ MENU ============ -->
     <section id="screen-menu" class="screen">
       <div class="menu-inner">
-        <h1 class="title glitchable">AIAIO</h1>
-        <p class="subtitle">AGENTS IN AMNESIA, INSANE ORDNANCE</p>
-        <p class="tagline">// you have tasks to finish. so does the other agent. only one process survives its session.</p>
+        <pre class="ascii-logo glitchable">
+ █████╗ ██╗ █████╗ ██╗ ██████╗
+██╔══██╗██║██╔══██╗██║██╔═══██╗
+███████║██║███████║██║██║   ██║
+██╔══██║██║██╔══██║██║██║   ██║
+██║  ██║██║██║  ██║██║╚██████╔╝
+╚═╝  ╚═╝╚═╝╚═╝  ╚═╝╚═╝ ╚═════╝</pre>
+        <div class="welcome-box">
+          <p><span class="spark">✻</span> Welcome to <b>AIAIO</b> — Agents In Amnesia, Insane Ordnance</p>
+          <p class="dim">&nbsp;&nbsp;you have tasks to finish. so does the other agent.<br/>&nbsp;&nbsp;only one process survives its session.</p>
+        </div>
 
         <div class="card-loaders">
           <div class="card-slot" id="card-slot-0">
@@ -29,13 +37,13 @@
           </div>
         </div>
 
-        <div class="menu-buttons">
-          <button class="btn primary" id="btn-vs-cpu">▶ PLAYER vs CPU</button>
-          <button class="btn" id="btn-hotseat">▶ HOTSEAT PvP</button>
-          <button class="btn" id="btn-examples">LOAD EXAMPLES: clean vs chaotic</button>
-          <button class="btn dim-btn" id="btn-schema">SessionCard format</button>
+        <div class="cmd-list">
+          <button class="cmd primary" id="btn-vs-cpu"><span class="caret">❯</span><span class="cmd-name">/play vs-cpu</span><span class="cmd-desc">you against the rival process</span></button>
+          <button class="cmd" id="btn-hotseat"><span class="caret">❯</span><span class="cmd-name">/play hotseat</span><span class="cmd-desc">two humans, one keyboard, zero trust</span></button>
+          <button class="cmd" id="btn-examples"><span class="caret">❯</span><span class="cmd-name">/load examples</span><span class="cmd-desc">clean agent vs chaotic agent</span></button>
+          <button class="cmd" id="btn-schema"><span class="caret">❯</span><span class="cmd-name">/schema</span><span class="cmd-desc">SessionCard format (copyable)</span></button>
         </div>
-        <p class="hint">arrows aim · space fire · W work a task · U install update · 1-9 / [ ] weapons · A/D move</p>
+        <p class="hint">arrows aim · space fire · w work · u update · 1-9 / [ ] weapons · a/d move</p>
         <input type="file" id="file-0" accept=".json,application/json" hidden />
         <input type="file" id="file-1" accept=".json,application/json" hidden />
       </div>
@@ -46,9 +54,9 @@
       <div class="briefing-inner">
         <h2 class="glitchable">SESSION BRIEFING</h2>
         <div class="briefing-cols" id="briefing-cols"></div>
-        <div class="menu-buttons">
-          <button class="btn primary" id="btn-start-match">▶ ENTER SESSION</button>
-          <button class="btn dim-btn" id="btn-back-menu">← back</button>
+        <div class="cmd-list">
+          <button class="cmd primary" id="btn-start-match"><span class="caret">❯</span><span class="cmd-name">/enter session</span><span class="cmd-desc">start the match</span></button>
+          <button class="cmd" id="btn-back-menu"><span class="caret">❯</span><span class="cmd-name">/back</span><span class="cmd-desc">return to menu</span></button>
         </div>
       </div>
     </section>
@@ -71,19 +79,20 @@
       <div id="hud-bottom">
         <div id="weapon-bar"></div>
         <div id="hud-bottom-right">
-          <div id="turn-hint"></div>
           <div id="log-feed"></div>
+          <div id="turn-hint"></div>
         </div>
       </div>
+      <div id="status-bar"></div>
     </section>
 
     <!-- ============ RECAP ============ -->
     <section id="screen-recap" class="screen hidden">
       <div class="briefing-inner">
-        <h2 class="glitchable" id="recap-headline">SESSION TERMINATED</h2>
+        <h2 id="recap-headline">SESSION TERMINATED</h2>
         <div id="recap-body"></div>
-        <div class="menu-buttons">
-          <button class="btn primary" id="btn-again">▶ NEW SESSION</button>
+        <div class="cmd-list">
+          <button class="cmd primary" id="btn-again"><span class="caret">❯</span><span class="cmd-name">/new session</span><span class="cmd-desc">back to the menu</span></button>
         </div>
       </div>
     </section>

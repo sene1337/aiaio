@@ -124,8 +124,8 @@ export class Game {
 
     const buffs = startingBuffs(la, lb, this.rng.fork('handicap'));
     this.players = [
-      this.makePlayer(0, setup.names[0], '#54ff9f', setup.cpu[0], la, buffs[0]),
-      this.makePlayer(1, setup.names[1], '#ffb02e', setup.cpu[1], lb, buffs[1]),
+      this.makePlayer(0, setup.names[0], '#7ee787', setup.cpu[0], la, buffs[0]),
+      this.makePlayer(1, setup.names[1], '#d97757', setup.cpu[1], lb, buffs[1]),
     ];
     for (const p of this.players) {
       if (p.startBuff) this.pushLog(`⚑ handicap [${p.name}]: ${p.startBuff.why}`);
@@ -595,7 +595,7 @@ export class Game {
 
   private spawnParticles(x: number, y: number, radius: number): void {
     const chars = ['E', 'R', 'R', '0', '1', '▓', '░', '█', '!', '?', 'x'];
-    const colors = ['#ff5d3b', '#ffb02e', '#54ff9f', '#ff2e63'];
+    const colors = ['#f47067', '#e3b341', '#7ee787', '#d97757'];
     const n = Math.min(60, Math.round(radius * 0.7));
     const rng = this.rng.fork('particles' + this.particles.length);
     for (let i = 0; i < n; i++) {

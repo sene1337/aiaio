@@ -68,10 +68,10 @@ export class Terrain {
         const p = (y * this.width + x) * 4;
         const depth = (y - surfaceY);
         if (depth < 3) {
-          d[p] = 80; d[p + 1] = 255; d[p + 2] = 140; d[p + 3] = 255; // phosphor top edge
+          d[p] = 126; d[p + 1] = 231; d[p + 2] = 135; d[p + 3] = 255; // phosphor top edge
         } else {
-          const band = Math.floor(y / 14) % 2 === 0 ? 6 : 0; // faint memory-row banding
-          d[p] = 18 + band; d[p + 1] = 46 + band; d[p + 2] = 30 + band; d[p + 3] = 255;
+          const band = Math.floor(y / 14) % 2 === 0 ? 5 : 0; // faint memory-row banding
+          d[p] = 24 + band; d[p + 1] = 42 + band; d[p + 2] = 30 + band; d[p + 3] = 255;
         }
       }
     }
@@ -85,7 +85,7 @@ export class Terrain {
       const x = speckleRng.int(0, this.width - 1);
       const y = speckleRng.int(0, this.height - 1);
       if (this.solidAt(x, y) && this.solidAt(x, y - 8)) {
-        this.ctx.fillStyle = speckleRng.chance(0.7) ? 'rgba(60,140,90,0.35)' : 'rgba(255,176,32,0.22)';
+        this.ctx.fillStyle = speckleRng.chance(0.7) ? 'rgba(90,150,100,0.35)' : 'rgba(217,119,87,0.25)';
         this.ctx.fillText(speckleRng.pick(glyphs), x, y);
       }
     }
