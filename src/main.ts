@@ -138,6 +138,9 @@ function routeAudio(type: string, data: Record<string, unknown>): void {
     case 'task_done': audio.taskDone(); break;
     case 'task_eaten': audio.taskEaten(); break;
     case 'update_install': audio.update(data.netBuff === true); break;
+    case 'model_upgrade': audio.win(false); break;
+    case 'subagent_spawn': audio.pickup(); break;
+    case 'subagent_corrupted': audio.taskEaten(); break;
     case 'pickup': audio.pickup(); break;
     case 'weapon_select': audio.select(); break;
     case 'death': audio.death(); break;
@@ -183,6 +186,7 @@ function wireKeyboard(): void {
       case ' ': run.fire(); break;
       case 'ArrowUp': run.jump(); break;
       case 'u': case 'U': run.installUpdate(); break;
+      case 's': case 'S': run.spawnSubagent(); qa.firstUseOf('subagent'); break;
       case '[': run.cycleWeapon(-1); break;
       case ']': run.cycleWeapon(1); break;
       default:

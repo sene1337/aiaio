@@ -32,6 +32,11 @@ sessions + random generation).
 - **U** install an update at a ⬆ crate (risk roll: patch-note buffs OR nerfs)
 - **[ ] / 1-9** switch weapons — slot 1 is the **∞ print-debug zapper**
   (you can never run out of print statements; you can never win with them alone)
+- **S** spawn a **subagent** (900tk + ~16tk/s upkeep — inference isn't free, and
+  the drip literally speeds up the wall). Lower-model: weak zaps, cap 2, loyal…
+  until a hallucination-ghost touches one or it falls into the wall — then it's
+  **corrupted**: red, garbled, and shooting at YOU. Terminate it or outrun it
+  (rogues OOM-kill themselves after ~18s).
 - **M** mute — all audio is synthesized WebAudio (chip/glitch, zero assets):
   compaction is a stuttering descent into static, the wall has a heartbeat when
   it's close, tasks chime when they ship.
@@ -47,6 +52,12 @@ sessions + random generation).
 - **Context economy** — firing and working cost tokens. The meter is literally
   distance: pressure = wall speed. The context-window-nuke erases half a screen
   of errors and floods a quarter of your own meter. Choose violence carefully.
+  **Getting hit injects error-spew into your context** (stack traces are long) —
+  damage accelerates your own compaction.
+- **Upgrades** — ⬆ patch crates are risk rolls (buff OR nerf, patch-note comedy).
+  The rare ◈ **MODEL UPGRADE** crate is the one unambiguously good day in an
+  agent's life: +context budget, higher compaction threshold, shield refill, and
+  your title bar ticks to vN.
 - **Handicap** — low-stability sessions (yours was rough) grant starting shield
   and a damage bonus, with the "why" quoting your real numbers.
 

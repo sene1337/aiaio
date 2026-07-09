@@ -64,6 +64,7 @@ export class UI {
       case 'damage': this.hitFlashTtl = 0.3; this.shakeMag = Math.min(14, this.shakeMag + 3); break;
       case 'compaction': this.glitchTtl = 1.0; this.shakeMag = Math.min(16, this.shakeMag + 9); break;
       case 'task_eaten': this.glitchTtl = Math.max(this.glitchTtl, 0.5); break;
+      case 'subagent_corrupted': this.glitchTtl = Math.max(this.glitchTtl, 0.35); break;
       case 'death': this.glitchTtl = 1.4; this.shakeMag = 16; break;
     }
   }
@@ -159,8 +160,9 @@ export class UI {
       this.drawEnemy(ctx, e);
     }
 
-    // the agent
+    // the agent + its subagents
     this.drawAvatar(ctx, run);
+    this.drawSubagents(ctx, run);
 
     // projectiles
     for (const proj of run.projectiles) {
@@ -340,21 +342,30 @@ export class UI {
     ctx.textAlign = 'left';
   }
 
-  private drawCrate(ctx: CanvasRenderingContext2D, run: Run, cr: { x: number; y: number; used: boolean }): void {
+  private drawCrate(ctx: CanvasRenderingContext2D, run: Run, cr: { x: number; y: number; used: boolean; kind: 'patch' | 'model' }): void {
     const y = run.terrain.surfaceAt(cr.x);
+    const color = cr.kind === 'model' ? '#6cb6ff' : '#e3b341';
+    const glyph = cr.kind === 'model' ? '◈' : '⬆';
     ctx.globalAlpha = cr.used ? 0.3 : 1;
     ctx.fillStyle = '#161615';
-    ctx.strokeStyle = '#e3b341';
+    ctx.strokeStyle = color;
     ctx.lineWidth = 1.5;
     ctx.fillRect(cr.x - 9, y - 18, 18, 18);
     ctx.strokeRect(cr.x - 9, y - 18, 18, 18);
-    ctx.fillStyle = '#e3b341';
+    ctx.fillStyle = color;
     ctx.font = '11px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('⬆', cr.x, y - 5);
+    ctx.fillText(glyph, cr.x, y - 5);
+    if (!cr.used && cr.kind === 'model') {
+      // the good crate advertises itself
+      ctx.globalAlpha = 0.5 + 0.4 * Math.abs(Math.sin(this.time * 3));
+      ctx.font = `${10 / this.camZoom}px ui-monospace, monospace`;
+      ctx.fillText('new model!', cr.x, y - 40);
+      ctx.globalAlpha = cr.used ? 0.3 : 1;
+    }
     if (!cr.used && run.nearCrate === cr) {
       ctx.font = `${11 / this.camZoom}px ui-monospace, monospace`;
-      ctx.fillText('[U to install update]', cr.x, y - 28);
+      ctx.fillText(cr.kind === 'model' ? '[U — upgrade the model]' : '[U to install update]', cr.x, y - 28);
     }
     ctx.globalAlpha = 1;
     ctx.textAlign = 'left';
@@ -389,6 +400,7 @@ export class UI {
     ctx.restore();
   }
 
+  /** the agent: a little walking terminal window with a >_ face */
   private drawAvatar(ctx: CanvasRenderingContext2D, run: Run): void {
     const a = run.avatar;
     const dead = a.hp <= 0;
@@ -398,52 +410,94 @@ export class UI {
       ctx.strokeStyle = 'rgba(108,182,255,0.7)';
       ctx.fillStyle = 'rgba(108,182,255,0.10)';
       ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(0, -6, 19, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, -12, 22, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     }
     const color = dead ? '#555' : '#7ee787';
-    // barrel points where you're facing
+    const moving = Math.abs(a.vx) > 5 && a.onGround;
+
+    // glyph legs, scuttling when moving
     if (!dead) {
       ctx.strokeStyle = color;
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 1.5;
+      const phase = moving ? Math.sin(a.x * 0.25) * 3 : 0;
       ctx.beginPath();
-      ctx.moveTo(0, -8);
-      ctx.lineTo(a.facing * 15, -10);
+      ctx.moveTo(-6, -3); ctx.lineTo(-7 - phase, 0);
+      ctx.moveTo(6, -3); ctx.lineTo(7 + phase, 0);
       ctx.stroke();
+    }
+
+    // terminal window body
+    ctx.fillStyle = dead ? '#222' : '#0c120e';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(-13, -22, 26, 19, 2); ctx.fill(); ctx.stroke();
+    // title bar
+    ctx.fillStyle = a.headsDown && !dead ? 'rgba(244,112,103,0.35)' : dead ? '#333' : 'rgba(126,231,135,0.22)';
+    ctx.fillRect(-12, -21, 24, 5);
+    // traffic-light dots + model tag in the title bar
+    ctx.fillStyle = dead ? '#555' : '#f47067'; ctx.fillRect(-11, -19.5, 2, 2);
+    ctx.fillStyle = dead ? '#555' : '#e3b341'; ctx.fillRect(-8, -19.5, 2, 2);
+    ctx.font = '5px monospace';
+    ctx.fillStyle = dead ? '#666' : color;
+    ctx.textAlign = 'right';
+    ctx.fillText(`v${a.model}`, 11, -17);
+    ctx.textAlign = 'left';
+    // the face: a prompt
+    ctx.font = '9px monospace';
+    ctx.fillStyle = dead ? '#777' : color;
+    if (dead) {
+      ctx.fillText('x_x', -7, -7);
+    } else if (run.working) {
+      // typing furiously
+      const dots = '▖▘▝▗'[Math.floor(this.time * 8) % 4];
+      ctx.fillText(`>${dots}`, a.facing === 1 ? -6 : -4, -7);
+    } else {
+      const cursor = Math.sin(this.time * 4) > 0 ? '_' : ' ';
+      ctx.fillText(a.facing === 1 ? `>${cursor}` : `${cursor}<`, a.facing === 1 ? -6 : -4, -7);
+    }
+    // antenna off the window corner
+    if (!dead) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(9, -22); ctx.lineTo(12, -28); ctx.stroke();
+      ctx.beginPath(); ctx.arc(12, -29, 1.5, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
       if (this.muzzleTtl > 0) {
         ctx.fillStyle = `rgba(255,243,214,${this.muzzleTtl / 0.09})`;
         ctx.font = '12px monospace';
-        ctx.fillText(a.facing === 1 ? '»' : '«', a.facing * 18 - 4, -6);
+        ctx.fillText(a.facing === 1 ? '»' : '«', a.facing * 16 - 4, -10);
       }
     }
-    // body + dome + face
-    ctx.fillStyle = dead ? '#333' : '#1c1f1c';
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.roundRect(-10, -10, 20, 10, 2); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.arc(0, -11, 6, Math.PI, 0); ctx.fill(); ctx.stroke();
-    if (!dead) {
-      ctx.fillStyle = color;
-      if (run.working) { // focused face while working
-        ctx.fillRect(-4, -13, 3, 1.5);
-        ctx.fillRect(1, -13, 3, 1.5);
-      } else {
-        ctx.fillRect(-3.5, -14, 2, 2);
-        ctx.fillRect(1.5, -14, 2, 2);
-      }
-    }
-    // antenna
-    ctx.strokeStyle = color;
-    ctx.beginPath(); ctx.moveTo(5, -16); ctx.lineTo(8, -22); ctx.stroke();
-    ctx.beginPath(); ctx.arc(8, -23, 1.5, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
     // heads-down indicator
     if (a.headsDown && !dead) {
       ctx.fillStyle = '#f47067';
       ctx.font = `${10 / this.camZoom}px ui-monospace, monospace`;
       ctx.textAlign = 'center';
-      ctx.fillText('⌨ heads-down', 0, -34);
+      ctx.fillText('⌨ heads-down', 0, -38);
       ctx.textAlign = 'left';
     }
     ctx.restore();
+  }
+
+  private drawSubagents(ctx: CanvasRenderingContext2D, run: Run): void {
+    for (const sa of run.subagents) {
+      ctx.save();
+      ctx.translate(sa.x, sa.y);
+      const color = sa.corrupted ? '#f47067' : '#7ee787';
+      ctx.fillStyle = '#0c120e';
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.roundRect(-7, -7, 14, 12, 1.5); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = color;
+      ctx.font = '8px monospace';
+      ctx.textAlign = 'center';
+      const spin = '✳✻✽✶'[Math.floor(this.time * 6) % 4];
+      ctx.fillText(sa.corrupted ? '☓' : spin, 0, 2);
+      ctx.font = `${9 / this.camZoom}px ui-monospace, monospace`;
+      ctx.globalAlpha = 0.7;
+      ctx.fillText(sa.corrupted ? garble(sa.label, this.garbleRng, 0.4) : sa.label, 0, -11);
+      ctx.restore();
+      ctx.textAlign = 'left';
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -469,6 +523,7 @@ export class UI {
       `<span><span class="sb-key">space</span> fire</span>` +
       `<span><span class="sb-key">w</span> hold to work</span>` +
       `<span><span class="sb-key">u</span> install</span>` +
+      `<span><span class="sb-key">s</span> subagent (${900}tk)</span>` +
       `<span><span class="sb-key">[ ]</span>/<span class="sb-key">1-9</span> weapons</span>` +
       `<span><span class="sb-key">m</span> mute</span>` +
       `<span class="sb-right">aiaio session-run · ${run.kills} errors resolved · ${run.ctx.compactions}⚡</span>`;
@@ -494,9 +549,11 @@ export class UI {
       return `<div class="${cls.join(' ')}"><span class="glyph">${glyph}</span><span>${escapeHtml(name)}${blocks}</span></div>`;
     }).join('');
     panel.innerHTML = `
-      <div class="pp-name" style="color:#7ee787">${escapeHtml(run.name)}
+      <div class="pp-name" style="color:#7ee787">${escapeHtml(run.name)} <span class="badge">v${a.model}</span>
         <span class="badge">stability ${run.loadout.stability}</span>
         ${a.shield > 0 ? `<span class="badge" style="color:var(--blue)">🛡 ${Math.round(a.shield)}</span>` : ''}
+        ${run.subagents.filter((s) => !s.corrupted).length > 0 ? `<span class="badge" style="color:#7ee787">✳ subs ×${run.subagents.filter((s) => !s.corrupted).length}</span>` : ''}
+        ${run.subagents.some((s) => s.corrupted) ? `<span class="badge" style="color:var(--red)">☓ ROGUE ×${run.subagents.filter((s) => s.corrupted).length}</span>` : ''}
         ${a.headsDown ? '<span class="badge" style="color:var(--red)">⌨ heads-down</span>' : ''}
       </div>
       <div class="meter">proc <span class="tbar" style="color:${hpFrac > 0.35 ? '#7ee787' : 'var(--red)'}">${textBar(hpFrac)}</span> <span class="val">${Math.max(0, Math.round(a.hp))}/${a.maxHp}</span></div>

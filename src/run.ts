@@ -21,6 +21,9 @@ export const RUN_COST = {
   fireDivisor: 6,   // weapon tokenCost / this = per-shot cost in run mode
   workTick: 60,     // one work tick at a station
   update: 40,       // installing an update from a crate
+  subagentSpawn: 900, // spinning up a subagent
+  subagentDrip: 16,   // tokens/second per living subagent — inference isn't free
+  damageSpew: 6,      // tokens injected into YOUR context per point of damage taken
 };
 
 export interface Banner {
@@ -50,6 +53,8 @@ export interface Avatar {
   onGround: boolean;
   facing: 1 | -1;
   hp: number; maxHp: number; shield: number;
+  /** model generation — ◈ crates increment it (bigger context, higher threshold) */
+  model: number;
   /** heads-down while working (+25% damage taken) */
   headsDown: boolean;
   // build knobs (updates mutate these)
@@ -65,7 +70,19 @@ export interface Station {
   workAccum: number;
 }
 
-export interface Crate { x: number; y: number; used: boolean }
+export interface Crate { x: number; y: number; used: boolean; kind: 'patch' | 'model' }
+
+/** a spawned lower-model helper: weak, expensive, and corruptible */
+export interface SubAgent {
+  x: number; y: number;
+  hp: number;
+  corrupted: boolean;
+  corruptedAt: number; // run time when it turned (rogue processes get OOM-killed eventually)
+  zapCd: number;
+  dripAccum: number;
+  slot: number; // 0/1 — formation offset
+  label: string;
+}
 
 export interface RunOver {
   won: boolean;
@@ -101,6 +118,7 @@ export class Run {
   enemies: Enemy[] = [];
   stations: Station[] = [];
   crates: Crate[] = [];
+  subagents: SubAgent[] = [];
   projectiles: Projectile[] = []; // owner 0 = player, 1 = enemies
   particles: Particle[] = [];
   lasers: LaserBeam[] = [];
@@ -142,7 +160,7 @@ export class Run {
     this.avatar = {
       x: startX, y: this.terrain.surfaceAt(startX) - 8, vx: 0, vy: 0,
       onGround: true, facing: 1,
-      hp: 100, maxHp: 100, shield: 0,
+      hp: 100, maxHp: 100, shield: 0, model: 1,
       headsDown: false,
       aimJitter: 0, damageMult: 1, tokenCostMult: 1,
       hardening: this.loadout.hardening,
@@ -226,12 +244,15 @@ export class Run {
         `recoveries: ${recoveries} on record`));
     }
 
-    // update crates from restarts + model_switches
+    // patch crates from restarts + model_switches (risk rolls)
     const crateN = Math.max(1, Math.min(4, Math.floor((this.card.restarts ?? 0) + (this.card.model_switches ?? 0))));
     for (let i = 0; i < crateN; i++) {
       const x = Math.round(width * rng.range(0.2, 0.88));
-      this.crates.push({ x, y: this.terrain.surfaceAt(x) - 10, used: false });
+      this.crates.push({ x, y: this.terrain.surfaceAt(x) - 10, used: false, kind: 'patch' });
     }
+    // one ◈ MODEL UPGRADE crate mid-to-late level — the "new model released" moment
+    const mx = Math.round(width * rng.range(0.5, 0.78));
+    this.crates.push({ x: mx, y: this.terrain.surfaceAt(mx) - 10, used: false, kind: 'model' });
   }
 
   // -------------------------------------------------------------------------
@@ -263,6 +284,9 @@ export class Run {
       d = Math.round(d * 1.25);
       this.pushLog(`⌨ caught heads-down by ${source} (+25% damage)`);
     }
+    // errors spam your context: every hit injects token spew (stack traces are long)
+    const spew = Math.round(d * RUN_COST.damageSpew);
+    if (spend(this.ctx, spew)) this.compact();
     if (this.avatar.shield > 0) {
       const absorbed = Math.min(this.avatar.shield, d);
       this.avatar.shield -= absorbed;
@@ -412,6 +436,25 @@ export class Run {
     this.nearCrate.used = true;
     this.spendTokens(RUN_COST.update);
     const a = this.avatar;
+    if (this.nearCrate.kind === 'model') {
+      // NEW MODEL RELEASED — the one unambiguously good upgrade in an agent's life
+      a.model++;
+      const extra = 3200;
+      this.ctx.budget += extra;
+      this.ctx.threshold = Math.min(0.92, this.ctx.threshold + 0.05);
+      a.shield += 25;
+      this.pushBanner({
+        kind: 'update', ttl: 3.6,
+        title: `◈ NEW MODEL RELEASED — now running v${a.model}`,
+        lines: [
+          `context window enlarged: +${extra} budget, compaction threshold raised`,
+          '+25 shield · you remember more. you are not necessarily smarter.',
+        ],
+      });
+      this.pushLog(`◈ model upgrade — v${a.model}, +${extra} context`);
+      this.emit('model_upgrade', { model: a.model });
+      return;
+    }
     const target: UpdateTarget = {
       aimJitter: a.aimJitter, damageMult: a.damageMult, tokenCostMult: a.tokenCostMult,
       compactionThreshold: this.ctx.threshold, shield: a.shield, unlockWeapon: null,
@@ -428,6 +471,114 @@ export class Run {
     this.pushBanner({ kind: 'update', ttl: 3.2, title: `⬆ INSTALLED ${result.version}`, lines: result.notes });
     this.pushLog(`⬆ installed ${result.version} (${result.netBuff ? 'net buff' : 'ouch'})`);
     this.emit('update_install', { version: result.version, netBuff: result.netBuff });
+  }
+
+  /** S: spawn a lower-model subagent — 900tk up front, then it drips tokens while alive */
+  spawnSubagent(): void {
+    if (this.over) return;
+    const alive = this.subagents.length;
+    if (alive >= 2) { this.pushLog('🤖 subagent limit reached (2 concurrent — rate limits)'); return; }
+    this.spendTokens(RUN_COST.subagentSpawn);
+    this.subagents.push({
+      x: this.avatar.x - 20, y: this.avatar.y - 46,
+      hp: 20, corrupted: false, corruptedAt: 0,
+      zapCd: 1, dripAccum: 0, slot: alive,
+      label: `sub-${this.rng.int(100, 999)}`,
+    });
+    this.pushLog('🤖 subagent spawned — weaker model, burns tokens while it lives');
+    this.emit('subagent_spawn', { alive: alive + 1 });
+  }
+
+  private corruptSubagent(sa: SubAgent, cause: string): void {
+    if (sa.corrupted) return;
+    sa.corrupted = true;
+    sa.corruptedAt = this.time;
+    this.pushLog(`👻 ${sa.label} was corrupted by ${cause} — it works for the errors now`);
+    this.pushBanner({
+      kind: 'compaction', ttl: 2.6,
+      title: `⚠ SUBAGENT CORRUPTED — ${sa.label}`,
+      lines: [`cause: ${cause}`, 'it is now targeting YOU. terminate it or outrun it.'],
+    });
+    this.emit('subagent_corrupted', { cause });
+  }
+
+  private stepSubagents(dt: number): void {
+    const a = this.avatar;
+    for (const sa of this.subagents) {
+      // upkeep: inference isn't free
+      sa.dripAccum += dt;
+      if (sa.dripAccum >= 1) {
+        sa.dripAccum -= 1;
+        if (spend(this.ctx, RUN_COST.subagentDrip)) this.compact();
+      }
+      if (sa.corrupted) {
+        // rogue: chase and shoot the player; gets OOM-killed after 18s
+        if (this.time - sa.corruptedAt > 18) {
+          sa.hp = 0;
+          this.pushLog(`✔ rogue ${sa.label} hit its memory limit and got OOM-killed`);
+          continue;
+        }
+        const dx = a.x - sa.x, dy = (a.y - 30) - sa.y;
+        const len = Math.hypot(dx, dy) || 1;
+        sa.x += (dx / len) * 55 * dt;
+        sa.y += (dy / len) * 55 * dt + Math.sin(this.time * 3) * 8 * dt;
+        sa.zapCd -= dt;
+        if (sa.zapCd <= 0 && len < 460) {
+          sa.zapCd = 2.0;
+          this.projectiles.push({
+            x: sa.x, y: sa.y, vx: (dx / len) * 300, vy: (dy / len) * 300,
+            owner: 1, weaponId: 'subagent_zap', driftAx: 0, fuseTime: -1,
+            landed: false, bomblet: true, trail: [], age: 0,
+          });
+        }
+      } else {
+        // loyal: hover in formation, zap the nearest error
+        const tx = a.x - 24 - sa.slot * 26;
+        const ty = a.y - 46 - sa.slot * 10 + Math.sin(this.time * 2.4 + sa.slot * 2) * 5;
+        sa.x += (tx - sa.x) * Math.min(1, 4 * dt);
+        sa.y += (ty - sa.y) * Math.min(1, 4 * dt);
+        // corruption vectors: ghost contact, or falling into the wall
+        if (sa.x < this.wallX) { this.corruptSubagent(sa, 'the wall of forgetting'); continue; }
+        const ghost = this.enemies.find((e) =>
+          !e.dead && e.def.kind === 'hallucination_ghost' && Math.hypot(e.x - sa.x, e.y - sa.y) < 32);
+        if (ghost) { this.corruptSubagent(sa, 'a hallucination-ghost'); continue; }
+        sa.zapCd -= dt;
+        if (sa.zapCd <= 0) {
+          let best: Enemy | null = null; let bestD = 400;
+          for (const e of this.enemies) {
+            if (e.dead || e.def.friendly) continue;
+            const d = Math.hypot(e.x - sa.x, e.y - sa.y);
+            if (d < bestD) { bestD = d; best = e; }
+          }
+          if (best) {
+            sa.zapCd = 1.7;
+            const dx = best.x - sa.x, dy = best.y - sa.y;
+            const len = Math.hypot(dx, dy) || 1;
+            this.projectiles.push({
+              x: sa.x, y: sa.y, vx: (dx / len) * 320, vy: (dy / len) * 320,
+              owner: 0, weaponId: 'subagent_zap', driftAx: 0, fuseTime: -1,
+              landed: false, bomblet: true, trail: [], age: 0,
+            });
+          }
+        }
+      }
+    }
+    for (const sa of this.subagents) {
+      if (sa.hp <= 0) {
+        this.spawnParticles(sa.x, sa.y, 10, sa.corrupted ? '#f47067' : '#7ee787');
+        this.emit('subagent_died', { corrupted: sa.corrupted });
+      }
+    }
+    this.subagents = this.subagents.filter((sa) => sa.hp > 0);
+  }
+
+  /** a corrupted subagent near a point (player shots / explosions can hit them) */
+  private corruptedSubAt(x: number, y: number, r: number): SubAgent | null {
+    for (const sa of this.subagents) {
+      if (!sa.corrupted) continue;
+      if (Math.hypot(sa.x - x, sa.y - y) < r * 2) return sa;
+    }
+    return null;
   }
 
   // -------------------------------------------------------------------------
@@ -450,6 +601,7 @@ export class Run {
     this.stepAvatar(dt, input);
     this.stepWall(dt);
     this.stepEnemies(dt);
+    this.stepSubagents(dt);
     this.stepProjectiles(dt);
 
     // proximity
@@ -717,10 +869,17 @@ export class Run {
         for (let i = 0; i < steps && !done; i++) {
           // enemy shots collide with the avatar; player shots pass through it
           const r = stepProjectile(p, PHYS_DT, 0, this.terrain, p.owner === 1 ? bodies : []);
-          // player shots: manual enemy collision
+          // player shots: manual enemy collision (and corrupted subagents)
           if (p.owner === 0) {
             const hit = this.enemyAt(p.x, p.y, 12);
             if (hit) { this.detonate(p, spawned, hit); done = true; break; }
+            const rogue = this.corruptedSubAt(p.x, p.y, 12);
+            if (rogue) {
+              rogue.hp -= 10;
+              this.spawnParticles(p.x, p.y, 6, '#f47067');
+              if (rogue.hp <= 0) this.pushLog(`✔ terminated rogue ${rogue.label}. it knew too much (about you).`);
+              done = true; break;
+            }
           }
           if (r.kind === 'impact') {
             if (p.fuseTime > 0 && r.hitTank === null) {
@@ -742,7 +901,13 @@ export class Run {
 
   private detonate(p: Projectile, spawnInto: Projectile[], directEnemy: Enemy | null = null, hitAvatar = false): void {
     if (p.owner === 1) {
-      // enemy ordnance
+      // enemy ordnance (including rogue subagent zaps)
+      if (p.weaponId === 'subagent_zap') {
+        this.spawnParticles(p.x, p.y, 5, '#f47067');
+        const d = Math.hypot(this.avatar.x - p.x, this.avatar.y - 6 - p.y);
+        if (hitAvatar || d < 16) this.damageAvatar(6, 'your own rogue subagent');
+        return;
+      }
       const isBolt = p.weaponId === 'tool_bolt';
       const radius = isBolt ? 10 : 44;
       this.terrain.carve(p.x, p.y, isBolt ? 6 : 26);
@@ -765,6 +930,16 @@ export class Run {
       return;
     }
     // player ordnance
+    if (p.weaponId === 'subagent_zap') {
+      // loyal subagent zap: small, precise, no terrain damage
+      this.spawnParticles(p.x, p.y, 5, '#7ee787');
+      if (directEnemy) this.damageEnemy(directEnemy, 5, true);
+      else {
+        const near = this.enemyAt(p.x, p.y, 12);
+        if (near) this.damageEnemy(near, 5, false);
+      }
+      return;
+    }
     const def = WEAPONS[p.weaponId as WeaponId] ?? WEAPONS.debug_zap;
     const slot = this.weapons.find((w) => w.def.id === def.id);
     const statRoll = slot?.statRoll ?? 1;
@@ -797,6 +972,11 @@ export class Run {
       if (d < radius + 12) {
         this.damageEnemy(e, Math.round(damage * Math.max(0.3, 1 - d / (radius + 12)) * dmgMult), false);
       }
+    }
+    // explosions also clip rogue subagents (and clumsy splash can hit loyal ones)
+    for (const sa of this.subagents) {
+      const d = Math.hypot(sa.x - x, sa.y - y);
+      if (d < radius && damage > 0) sa.hp -= Math.round(damage * 0.5 * Math.max(0.3, 1 - d / radius));
     }
     // context nuke: in run mode it erases enemies AND floods your own meter
     if (weaponId === 'context_nuke') {
