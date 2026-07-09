@@ -74,8 +74,15 @@ function main() {
         usedNames.add(slug);
         let file = `${slug}.json`;
         writeFileSync(join(outDir, file), JSON.stringify(card, null, 2) + '\n');
-        // if this card has been agent-enriched (see docs/ENRICH.md), the gallery gets that version
-        if (existsSync(join(outDir, `${slug}.enriched.json`))) file = `${slug}.enriched.json`;
+        // if this session has been agent-enriched (see docs/ENRICH.md), the gallery
+        // gets that version — matched by session stem, since the content hash
+        // suffix changes whenever the log grows
+        const stem = slug.replace(/-[0-9a-f]{8}(-2)*$/, '');
+        const enriched = readdirSync(outDir)
+          .filter((f) => f.startsWith(stem) && f.endsWith('.enriched.json'))
+          .sort()
+          .pop();
+        if (enriched) file = enriched;
         index.push({
           file,
           session_id: card.session_id,
