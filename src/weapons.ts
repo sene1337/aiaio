@@ -2,6 +2,7 @@
 // behavior, token cost, and a log-flavor tooltip.
 
 export type WeaponId =
+  | 'debug_zap'
   | 'timeout_mortar'
   | 'hallucination_missile'
   | 'regression_cluster'
@@ -36,6 +37,11 @@ export interface WeaponDef {
 }
 
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
+  debug_zap: {
+    id: 'debug_zap', name: 'Print-Debug Zapper', glyph: '»',
+    behavior: 'ballistic', tokenCost: 90, damage: 9, radius: 14, cooldown: 0,
+    flavor: "console.log('pew') — infinite ammo, mild insight. you can never run out of print statements.",
+  },
   timeout_mortar: {
     id: 'timeout_mortar', name: 'Timeout Mortar', glyph: '⏱',
     behavior: 'fuse', tokenCost: 300, damage: 26, radius: 58, cooldown: 0,
@@ -84,6 +90,6 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 };
 
 export const WEAPON_ORDER: WeaponId[] = [
-  'timeout_mortar', 'hallucination_missile', 'regression_cluster', 'restart_thrash',
+  'debug_zap', 'timeout_mortar', 'hallucination_missile', 'regression_cluster', 'restart_thrash',
   'false_positive_laser', 'context_nuke', 'recovery_shield', 'distraction_barrage', 'unknown_error',
 ];

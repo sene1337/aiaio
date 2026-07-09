@@ -41,7 +41,7 @@ const CATEGORIES = [
   { category: 'tool_error', re: /tool (call|use)? ?(fail|error|denied)|permission denied|MCP error|EPERM|EACCES/i },
 ];
 
-function classifyLine(text) {
+export function classifyLine(text) {
   for (const c of CATEGORIES) {
     if (c.re.test(text)) return c.category;
   }
@@ -64,7 +64,7 @@ const REDACTIONS = [
   /\b[0-9a-f]{32,}\b/gi,                                 // long hex blobs (hashes, keys)
 ];
 
-function redact(text) {
+export function redact(text) {
   let out = String(text);
   for (const re of REDACTIONS) {
     out = out.replace(re, (...args) => {
@@ -93,7 +93,7 @@ function fnv1a(str) {
 // input collection
 // ---------------------------------------------------------------------------
 
-function collectFiles(path, depth = 0) {
+export function collectFiles(path, depth = 0) {
   const st = statSync(path);
   if (st.isFile()) return [path];
   if (!st.isDirectory() || depth > 3) return [];
@@ -114,7 +114,7 @@ function collectFiles(path, depth = 0) {
 // aggregation
 // ---------------------------------------------------------------------------
 
-function extract(files) {
+export function extract(files) {
   const agg = {
     messages: 0,
     tokenPeak: 0,
@@ -205,7 +205,7 @@ function extract(files) {
   return agg;
 }
 
-function buildCard(inputName, files, agg) {
+export function buildCard(inputName, files, agg) {
   const contentHash = fnv1a(files.map((f) => basename(f)).join('|') + ':' + agg.messages + ':' + agg.tokenPeak);
   const errorTotal = [...agg.errors.values()].reduce((s, e) => s + e.count, 0);
   const stability = Math.max(5, Math.min(95, Math.round(
@@ -277,4 +277,7 @@ function main() {
   }
 }
 
-main();
+// run the CLI only when invoked directly (scan-sessions.mjs imports this module)
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}

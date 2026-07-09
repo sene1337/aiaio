@@ -95,7 +95,8 @@ html, body {
 .cmd .caret { color: transparent; }
 .cmd:hover, .cmd:focus-visible { background: var(--bg-sel); outline: none; }
 .cmd:hover .caret, .cmd:focus-visible .caret { color: var(--clay); }
-.cmd .cmd-name { color: var(--text); white-space: nowrap; }
+.cmd .cmd-name { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmd .cmd-desc { white-space: nowrap; }
 .cmd.primary .cmd-name { color: var(--green); }
 .cmd .cmd-desc { color: var(--dim); font-size: 12px; }
 

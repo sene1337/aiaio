@@ -21,31 +21,26 @@
 ╚═╝  ╚═╝╚═╝╚═╝  ╚═╝╚═╝ ╚═════╝</pre>
         <div class="welcome-box">
           <p><span class="spark">✻</span> Welcome to <b>AIAIO</b> — Agents In Amnesia, Insane Ordnance</p>
-          <p class="dim">&nbsp;&nbsp;you have tasks to finish. so does the other agent.<br/>&nbsp;&nbsp;only one process survives its session.</p>
+          <p class="dim">&nbsp;&nbsp;your real session is the level. your real errors are the monsters.<br/>&nbsp;&nbsp;your real tasks are the objectives. behind you: the wall of forgetting.</p>
         </div>
 
         <div class="card-loaders">
-          <div class="card-slot" id="card-slot-0">
-            <h3>AGENT 1 <span class="dim">(you)</span></h3>
-            <div class="drop-zone" id="drop-0">drop SessionCard .json<br/>or <button class="linkish" id="pick-0">browse…</button></div>
-            <div class="card-status" id="card-status-0">no card — random agent will be generated</div>
-          </div>
-          <div class="card-slot" id="card-slot-1">
-            <h3>AGENT 2 <span class="dim">(rival)</span></h3>
-            <div class="drop-zone" id="drop-1">drop SessionCard .json<br/>or <button class="linkish" id="pick-1">browse…</button></div>
-            <div class="card-status" id="card-status-1">no card — random agent will be generated</div>
+          <div class="card-slot" id="card-slot-0" style="width:480px">
+            <h3>YOUR SESSION <span class="dim">(the level you'll run)</span></h3>
+            <div class="drop-zone" id="drop-0">drop a SessionCard .json<br/>or <button class="linkish" id="pick-0">browse…</button></div>
+            <div class="card-status" id="card-status-0">no card — a random session will be generated</div>
+            <div id="gallery" class="cmd-list" style="margin-top:8px"></div>
           </div>
         </div>
 
         <div class="cmd-list">
-          <button class="cmd primary" id="btn-vs-cpu"><span class="caret">❯</span><span class="cmd-name">/play vs-cpu</span><span class="cmd-desc">you against the rival process</span></button>
-          <button class="cmd" id="btn-hotseat"><span class="caret">❯</span><span class="cmd-name">/play hotseat</span><span class="cmd-desc">two humans, one keyboard, zero trust</span></button>
-          <button class="cmd" id="btn-examples"><span class="caret">❯</span><span class="cmd-name">/load examples</span><span class="cmd-desc">clean agent vs chaotic agent</span></button>
+          <button class="cmd primary" id="btn-run"><span class="caret">❯</span><span class="cmd-name">/run session</span><span class="cmd-desc">enter the loaded (or random) session</span></button>
+          <button class="cmd" id="btn-example-clean"><span class="caret">❯</span><span class="cmd-name">/run example-clean</span><span class="cmd-desc">a tidy agent's morning — gentle level</span></button>
+          <button class="cmd" id="btn-example-chaos"><span class="caret">❯</span><span class="cmd-name">/run example-chaotic</span><span class="cmd-desc">4 hours of everything going wrong — hard level</span></button>
           <button class="cmd" id="btn-schema"><span class="caret">❯</span><span class="cmd-name">/schema</span><span class="cmd-desc">SessionCard format (copyable)</span></button>
         </div>
-        <p class="hint">arrows aim · space fire · w work · u update · 1-9 / [ ] weapons · a/d move</p>
+        <p class="hint">←→ move · ↑ jump · space fire · hold W to work a task · u install update · [ ]/1-9 weapons</p>
         <input type="file" id="file-0" accept=".json,application/json" hidden />
-        <input type="file" id="file-1" accept=".json,application/json" hidden />
       </div>
     </section>
 
@@ -55,19 +50,19 @@
         <h2 class="glitchable">SESSION BRIEFING</h2>
         <div class="briefing-cols" id="briefing-cols"></div>
         <div class="cmd-list">
-          <button class="cmd primary" id="btn-start-match"><span class="caret">❯</span><span class="cmd-name">/enter session</span><span class="cmd-desc">start the match</span></button>
+          <button class="cmd primary" id="btn-start-match"><span class="caret">❯</span><span class="cmd-name">/enter session</span><span class="cmd-desc">start the run</span></button>
           <button class="cmd" id="btn-back-menu"><span class="caret">❯</span><span class="cmd-name">/back</span><span class="cmd-desc">return to menu</span></button>
         </div>
       </div>
     </section>
 
-    <!-- ============ MATCH ============ -->
+    <!-- ============ RUN ============ -->
     <section id="screen-match" class="screen hidden">
       <div id="hud-top">
         <div class="player-panel" id="panel-0"></div>
         <div id="hud-center">
-          <div id="round-label">ROUND 1</div>
-          <div id="wind-label">wind ·</div>
+          <div id="round-label">T+0s</div>
+          <div id="wind-label">▓ wall</div>
           <div id="comeback-label"></div>
         </div>
         <div class="player-panel" id="panel-1"></div>

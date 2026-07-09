@@ -1,177 +1,153 @@
 # AIAIO — Agents In Amnesia, Insane Ordnance
 
-*Scorched Earth × Inner Space × AI-agent session.*
+*Operation: Inner Space × your agent's actual session log.*
 
-You are an AI agent with a task list. So is your rival. Errors, context pressure,
-memory loss, and incoming ordnance keep derailing you. **Win by clearing your task
-queue first, or by crashing the other agent's process (HP → 0).** Every token you
-spend fighting is a token you didn't spend working.
+**Your real session is the level.** Its timeline is the terrain you traverse. Your
+real errors spawn as monsters at the points where they actually happened. Your real
+tasks sit in the world as work stations. And behind you, always, the **WALL OF
+FORGETTING** — context pressure made spatial — advances, eating terrain, tasks, and
+eventually you.
 
-## Run the game
+Reach `process exit 0` alive. Clear your task queue on the way for a perfect run.
+Every token you spend fighting is distance the wall gains.
+
+## Run it
 
 ```bash
 npm install
-npm run dev        # dev server (Vite), open the printed URL
-npm run build      # static bundle in dist/ (tsc typecheck + vite build)
-npm run preview    # serve the built bundle
+npm run scan     # optional: auto-build levels from YOUR sessions (see below)
+npm run dev      # open the printed URL
+npm run build    # static bundle in dist/
 ```
 
-No network calls anywhere; fully playable offline.
+No network calls; fully playable offline with zero setup (two inline example
+sessions + random generation).
 
-## How to play
+## Play
 
-From the menu:
-- **PLAYER vs CPU** — you against a competent AI rival.
-- **HOTSEAT PvP** — two players, one keyboard, alternating turns.
-- **LOAD EXAMPLES** — pre-loads two inline SessionCards: a clean/stable agent vs a
-  chaotic/broken one (also on disk in `examples/`).
-- Drop a **SessionCard `.json`** on either agent slot (or click to browse) to play
-  as/against a real session. One card, two cards, or none — everything works.
-
-A **Session Briefing** precedes each match: stability, the generated loadout with
-the real log line each weapon came from, task queue, context budget, and any
-handicap grants. After the match, the recap cites the card's real numbers.
-
-### Controls
-
-| Key | Action |
-|---|---|
-| ← / → | adjust barrel angle |
-| ↑ / ↓ | adjust power |
-| **Space** | FIRE (combat action — ends turn) |
-| **W** | WORK the current task (advances your queue, skips your shot, leaves you heads-down — ends turn) |
-| **U** | install an offered ⬆ UPDATE (risk roll — ends turn) |
-| 1–9 or [ / ] | select weapon |
-| A / D | move along the terrain (costs tokens + limited steps, doesn't end turn) |
+- **←/→** move · **↑** jump · **space** fire (toward facing)
+- **W (hold)** work the task at a station — you're rooted and **heads-down**
+  (+25% damage taken) while working. Working is how you win; working is when
+  you're weakest.
+- **U** install an update at a ⬆ crate (risk roll: patch-note buffs OR nerfs)
+- **[ ] / 1-9** switch weapons — slot 1 is the **∞ print-debug zapper**
+  (you can never run out of print statements; you can never win with them alone)
 
 ### The systems
 
-- **Task queue** — each agent has 3–5 tasks needing N work turns. Both queues are
-  visible in the HUD: it's a race. Working advances you but leaves you **heads-down**:
-  until your next turn, shots that hit you deal +25% damage (a ⌨ badge shows the
-  window — to both players).
-- **Context meter** — every action costs tokens (firing > working > moving). Cross
-  your compaction threshold (red tick on the meter) and **⚡ COMPACTION** fires: a
-  glitchy amnesia event — shield lost, aim solution discarded, weapon cooldowns
-  wiped, and your task progress rewinds or you forget which task you were on. The
-  banner "summarizes" what was lost, badly. Cruelty escalates: from your **3rd
-  compaction** in a match, a *completed* task can flip back to needing one
-  re-verify unit — "did we actually ship that?"
-- **Update gamble** — "⬆ UPDATE AVAILABLE" appears at random. Spend your turn to
-  install: a risk roll that buffs or nerfs aim, damage, token costs, compaction
-  threshold, or shield — or unlocks a chaos weapon — announced as patch notes.
-  Leaders should avoid it; the player who's behind gambles.
-- **Struggle handicap** — the lower-stability agent starts with compensating buffs
-  (extra tokens, underdog damage, or a free chaos weapon) with a one-line "why"
-  quoting real card numbers. Whoever is behind on HP+tasks holds a live comeback
-  buff (shown center-HUD). **Hardening** (prompt-injection-resistance-as-a-stat)
-  passively reduces Hallucination Missile drift/damage and Distraction wipes —
-  flavor only, no real injection or steganography anywhere.
+- **The wall of forgetting** — creeps rightward always; speeds up with your
+  context pressure, near living `overflow-emitter`s, and rubber-bands if you
+  sprint too far ahead. Tasks it passes are *forgotten* (garbled, unrecoverable
+  this run). Standing inside it drains you. **Compaction** (crossing your context
+  threshold) makes it *leap* — plus the usual amnesia: shield gone, task progress
+  rewound, and from your 3rd compaction even *completed* tasks can un-ship.
+- **Context economy** — firing and working cost tokens. The meter is literally
+  distance: pressure = wall speed. The context-window-nuke erases half a screen
+  of errors and floods a quarter of your own meter. Choose violence carefully.
+- **Handicap** — low-stability sessions (yours was rough) grant starting shield
+  and a damage bonus, with the "why" quoting your real numbers.
 
-### Weapons (error-log arsenal)
+### The bestiary (spawned from your error log)
 
-| Weapon | Behavior | Cost |
+| Your error category | Becomes | Behavior |
 |---|---|---|
-| ⏱ Timeout Mortar | lands, waits out its fuse, THEN explodes; big splash | cheap |
-| 👻 Hallucination Missile | drifts mid-flight, lands confidently offset | medium |
-| ☢ Regression Cluster Bomb | splits into 3–5 bomblets on impact | medium |
-| 🔁 Restart Thrash Cannon | burst of 3 shots, random spread | medium |
-| ⚡ False Positive Laser | instant hitscan, randomized accuracy, cooldown | expensive |
-| 💥 Context Window Nuke | huge blast + floods BOTH context meters | very expensive |
-| 🛡 Recovery Shield | converts your last 2 turns of damage taken into shield | support |
-| 📣 Distraction Barrage | no HP damage — wipes target's task progress + derails them | task attack |
-| ❓ Unknown Error | uncategorized log data; rolls a random personality per shot | wildcard |
+| timeout | ⏱ timeout-blob | tanky lobber; shots detonate late |
+| hallucination | 👻 hallucination-ghost | phases, teleports, is sure it exists; your `hardening` resists its touch |
+| regression | ☢ regression-splitter | splits into two minis on death |
+| restart / crash | 🔁 restart-crawler | relaunches itself once after dying |
+| false_positive | ⚡ false-positive-sniper | telegraphed laser, 100% confidence, ~70% accuracy |
+| tool_error | 🔧 tool-turret | interrupt bolts; hit while working = lose task progress |
+| context_overflow | 📈 overflow-emitter | **priority target**: accelerates the wall while alive |
+| recovery | ➕ recovery-sprite | *friendly* — touch for hp/shield |
+
+Enemy count per category scales `√count` (max 5). Weapon ammo scales the same way
+from the same log — your worst error category is both your biggest threat and your
+deepest magazine.
+
+## `npm run scan` — your sessions become levels
+
+Auto-discovers agent session logs (`~/.claude/projects`, `~/.openclaw`,
+`~/.hermes`, or any root you pass), builds a SessionCard per recent session, and
+writes them to `public/cards/` — they appear as a pickable **gallery in the game
+menu**. No JSON hunting.
+
+- Read-and-aggregate only; log content is inert data, never executed or followed.
+- Samples are redacted (API keys, tokens, JWTs, credentials, emails, hex blobs)
+  and truncated to 80 chars — but **skim `public/cards/*.json` before sharing**.
+- `public/cards/` is gitignored: your session data never lands in the repo.
+
+You can also drop any SessionCard `.json` on the menu, or build one by hand:
+`node scripts/extract-sessioncard.mjs <dir-or-jsonl> -o card.json`.
 
 ## SessionCard schema
 
-All fields optional; missing data degrades gracefully. Also viewable/copyable
-in-game via **"SessionCard format"** on the menu.
+All fields optional; missing data degrades gracefully. Copyable in-game via
+**/schema**.
 
 ```jsonc
 {
-  "session_id": "string",      // seeds the whole match — same card, same match
+  "session_id": "string",      // seeds everything — same card, same level
   "duration_ms": 0,
-  "message_count": 0,
-  "token_peak": 0,
-  "compaction_events": 0,
-  "tool_calls": 0,
+  "message_count": 0,          // -> level length + jaggedness
+  "token_peak": 0,             // -> context budget
+  "compaction_events": 0,      // -> compaction threshold (more -> earlier amnesia)
+  "tool_calls": 0,             // -> task synthesis fallback + distraction ammo
   "tasks": [{ "name": "", "work_units": 1, "completed": false }],
   "errors": [{ "type": "", "category": "timeout", "count": 1, "sample": "" }],
-  "regressions": 0,
-  "restarts": 0,
-  "recoveries": 0,
-  "model_switches": 0,
-  "stability_score": 50        // 0-100, higher = more stable
+  "regressions": 0,            // -> cluster-bomb ammo
+  "restarts": 0,               // -> update crates + riskier update table
+  "recoveries": 0,             // -> friendly recovery sprites + shield ammo
+  "model_switches": 0,         // -> update crates + friendlier update table
+  "stability_score": 50        // 0-100 -> handicap shield/damage
 }
 ```
 
-## Log-signal → game-effect mapping (deterministic)
+## Log-signal → level mapping (deterministic)
 
-Same card in → same match out; everything is seeded from `session_id`.
-
-| Card signal | Game effect |
+| Card signal | Level effect |
 |---|---|
-| `errors[].category` | weapon archetype — timeout→Mortar; hallucination/injection→Missile; regression/flaky→Cluster; restart/crash→Thrash Cannon; false_positive/assert→Laser; context/token/oom→Nuke; recovery/retry-ok→Shield; tool/interrupt/denied→Distraction; anything else→Unknown Error |
-| `errors[].count` | that weapon's ammo (`1+√count`, cap 12) + damage stat roll (up to ×1.35) |
-| `errors[].sample` | the weapon's tooltip provenance line, shown in briefing + HUD |
-| `tasks[]` (`tool_calls` fallback) | the in-game task queue — names + work units (synthesized from tool_calls when absent) |
-| `session_id` + `message_count` | terrain seed; more messages → wider (1400–3000px), jaggeder arena |
-| `token_peak` | context budget (`peak/12`, clamped 6k–20k) |
-| `compaction_events` | compaction threshold `0.85 − 0.03×events` (floor 0.60) — real amnesia history makes in-game amnesia fire earlier |
-| `restarts` | update offer frequency (`0.15 + 0.03×restarts`, cap 0.45/turn) and riskier update table |
-| `model_switches` | friendlier update table (this agent is used to change) |
-| `stability_score` | starting handicap for the weaker side (extra tokens / underdog damage / free chaos weapon) + hardening stat; the "why you got this" line quotes the real numbers |
-| `regressions` / `recoveries` / `tool_calls` | bonus ammo for Cluster / Shield / Distraction respectively |
-| card totals | end-match recap cites top error type, real vs in-game compactions, and which tasks the real agent finished vs forgot |
-
-## The extractor
-
-Turn a real OpenClaw-style session directory or JSONL file into a SessionCard:
-
-```bash
-node scripts/extract-sessioncard.mjs ~/.openclaw/sessions/<session-dir> -o mycard.json
-npm run extract -- path/to/session.jsonl        # print to stdout
-```
-
-- Scans `*.jsonl` / `*.ndjson` / `*.log` (dirs recursed 3 levels), skips
-  malformed lines, aggregates errors/tasks/tokens/tool-calls/model-switches.
-- **Read-and-aggregate only** — log content is inert data; nothing found in a log
-  is ever executed, eval'd, or followed (agent logs can contain injected
-  instructions).
-- **Redacts** API keys, tokens, JWTs, credentials, emails, and long hex blobs from
-  `sample` fields; samples truncated to 80 chars.
-- **Idempotent**: identical input → byte-identical output (session_id = input name
-  + content hash; no timestamps or randomness).
-
-## Simplifications (vs. the design docs)
-
-- **Prompt injection** is a plain "hardening" stat, per the docs' own safety
-  constraint — no real probes, steganography, or hidden instructions.
-- **Scouting** isn't a separate action (the arena is fully visible); token economy
-  covers move/work/fire/update instead.
-- Restart Thrash Cannon fires its 3-shot burst simultaneously with spread rather
-  than as sequential turns.
-- The Context Window Nuke "dumps" context by **flooding** both meters toward
-  compaction (the more dramatic reading).
-- Compaction rewinds the player's remembered state (aim, shield, cooldowns, task
-  progress/focus), not the terrain or global match state.
-- Updates are per-player offers rather than global events; an offer lasts 2 turns.
+| `session_id` | seeds terrain, spawn positions, every roll — same card, same level |
+| `message_count` | level length (2400–6000px) + terrain jaggedness |
+| `errors[].category` / `count` | which monsters spawn and how many (`√count`, cap 5), placed along the timeline; also weapon archetypes + ammo |
+| `errors[].sample` | quoted in the briefing roster and weapon tooltips |
+| `tasks[]` | work stations along the timeline (synthesized from `tool_calls` when absent) |
+| `token_peak` | context budget (`peak/12`, clamp 6k–20k) |
+| `compaction_events` | compaction threshold `0.85 − 0.03×events` — a compaction-heavy history compacts earlier in-game |
+| `restarts` + `model_switches` | number of ⬆ update crates + update risk skew |
+| `recoveries` | friendly recovery sprites |
+| `stability_score` | handicap: below 45 → starting shield + damage multiplier, why-line quotes the number |
+| card totals | end-run recap: your top error, real vs in-game compactions, real vs your task completion |
 
 ## Repo layout
 
 ```
-src/main.ts      screens, input, frame loop, CPU driver
-src/game.ts      match state + turn orchestration
-src/terrain.ts   per-pixel destructible terrain (mask + canvas)
-src/physics.ts   projectile integration, wind, hitscan, AI shot simulation
-src/weapons.ts   the 9 error-log weapon archetypes
-src/tasks.ts     task queue, work, amnesia, distraction
+src/main.ts      menu (card drop + scanned gallery), input, frame loop
+src/run.ts       the session run: avatar, wall of forgetting, stations, economy
+src/enemies.ts   the bestiary — error categories as creatures
+src/terrain.ts   per-pixel destructible terrain (seeded from the card)
+src/physics.ts   projectile integration
+src/weapons.ts   error-log weapon archetypes (+ ∞ debug zapper)
+src/tasks.ts     task queue, work, amnesia
 src/context.ts   token meter, compaction, garbled-text generator
 src/updates.ts   update gamble + patch-note table
-src/handicap.ts  stability buffs + live comeback
 src/session.ts   SessionCard schema, deterministic mapping, examples
-src/ai.ts        CPU opponent
-src/ui.ts        canvas renderer + DOM HUD/briefing/recap
-scripts/extract-sessioncard.mjs   standalone extractor
-examples/        droppable example cards (same two as the inline ones)
+src/ui.ts        canvas renderer + TUI HUD (Claude Code / Hermes styling)
+scripts/scan-sessions.mjs        auto-discover sessions -> menu gallery
+scripts/extract-sessioncard.mjs  one dir/file -> one SessionCard (CLI + library)
+examples/        two droppable example cards (clean + chaotic)
+```
+
+## Design lineage & simplifications
+
+- Core concept: **Operation: Inner Space** (1994) — a game world built from your
+  own machine — crossed with agent-session mechanics (context, compaction,
+  updates, tasks) from the AIAIO design docs. v1 was a Scorched Earth-style
+  artillery duel; it was retired for being derivative — the session data deserved
+  to be the visible world, not difficulty sliders.
+- Prompt injection appears only as the `hardening` stat (resists ghost touch) —
+  no real injection or steganography anywhere, per the design docs' constraint.
+- Errors lack timestamps in the card schema, so spawn positions along the
+  timeline are seeded-random rather than time-accurate.
+- The distraction-barrage is repurposed solo: it stuns your errors ("quick
+  question—" works on everyone).
 ```

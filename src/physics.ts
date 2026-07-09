@@ -28,21 +28,6 @@ export interface Projectile {
   age: number;
 }
 
-export function makeProjectile(
-  x: number, y: number, angleDeg: number, power: number, owner: number, weaponId: string,
-): Projectile {
-  const rad = (angleDeg * Math.PI) / 180;
-  const speed = 90 + power * 6.4; // power 0..100
-  return {
-    x, y,
-    vx: Math.cos(rad) * speed,
-    vy: -Math.sin(rad) * speed,
-    owner, weaponId,
-    driftAx: 0, fuseTime: -1, landed: false, bomblet: false,
-    trail: [], age: 0,
-  };
-}
-
 export interface TankBody { x: number; y: number; radius: number; index: number; alive: boolean }
 
 export type StepResult =
@@ -90,40 +75,3 @@ export function stepProjectile(
   return { kind: 'flying' };
 }
 
-/**
- * Headless simulation of a plain ballistic shot — used by the CPU to aim.
- * Returns the landing point, or null if the shot leaves the arena.
- */
-export function simulateShot(
-  fromX: number, fromY: number, angleDeg: number, power: number,
-  wind: number, terrain: Terrain, tanks: TankBody[], ownerIndex: number,
-): { x: number; y: number; hitTank: number | null } | null {
-  const p = makeProjectile(fromX, fromY, angleDeg, power, ownerIndex, 'sim');
-  for (let i = 0; i < 30 / PHYS_DT; i++) {
-    const r = stepProjectile(p, PHYS_DT, wind, terrain, tanks);
-    if (r.kind === 'impact') return { x: r.x, y: r.y, hitTank: r.hitTank };
-    if (r.kind === 'lost') return null;
-  }
-  return null;
-}
-
-/** Ray-march a hitscan laser until it hits terrain, a tank, or leaves the arena. */
-export function traceLaser(
-  fromX: number, fromY: number, angleDeg: number,
-  terrain: Terrain, tanks: TankBody[], ownerIndex: number,
-): { x: number; y: number; hitTank: number | null } {
-  const rad = (angleDeg * Math.PI) / 180;
-  const dx = Math.cos(rad), dy = -Math.sin(rad);
-  let x = fromX, y = fromY;
-  for (let i = 0; i < 4000; i++) {
-    x += dx; y += dy;
-    for (const t of tanks) {
-      if (!t.alive || t.index === ownerIndex) continue;
-      const ddx = x - t.x, ddy = y - t.y;
-      if (ddx * ddx + ddy * ddy < t.radius * t.radius) return { x, y, hitTank: t.index };
-    }
-    if (terrain.solidAt(x, y)) return { x, y, hitTank: null };
-    if (x < -100 || x > terrain.width + 100 || y < -800 || y > terrain.height + 50) break;
-  }
-  return { x, y, hitTank: null };
-}

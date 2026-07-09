@@ -1,27 +1,20 @@
-// Rendering + HUD, styled as an agent-harness TUI (Claude Code / Hermes):
-// character meters, ☐/☒ task todos, ⏺/⎿ transcript bullets, a boxed > prompt
-// with blinking cursor, ✻ spinner verbs while the CPU thinks or shots fly.
+// Rendering + HUD for SESSION RUN, styled as an agent-harness TUI (Claude Code /
+// Hermes): character meters, ☐/☒ todos, ⏺/⎿ transcript, boxed > prompt, and the
+// wall of forgetting rendered as spreading memory corruption.
 
-import { Game, Player, Banner } from './game';
+import { Run, Banner } from './run';
 import { contextFrac } from './context';
 import { garble } from './context';
 import { Rng } from './rng';
-import { AgentLoadout } from './session';
+import { AgentLoadout, SessionCard } from './session';
 import { WEAPONS } from './weapons';
-import { progressFrac } from './tasks';
+import { ENEMY_DEFS, categoryToEnemy, EnemyKind } from './enemies';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
   if (!el) throw new Error(`missing element #${id}`);
   return el as T;
 };
-
-const SPIN_GLYPHS = ['✳', '✻', '✽', '✶'];
-const CPU_VERBS = [
-  'Scheming', 'Reading the wind', 'Triangulating', 'Prioritizing tasks',
-  'Second-guessing', 'Consulting the error log', 'Weighing work vs. violence',
-];
-const FLIGHT_VERBS = ['Bombarding', 'Delivering payload', 'Propagating errors', 'Awaiting impact'];
 
 function textBar(frac: number, width = 10): string {
   const f = Math.max(0, Math.min(1, frac));
@@ -33,11 +26,19 @@ function kebab(name: string): string {
   return name.toLowerCase().replace(/ /g, '-');
 }
 
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!
+  ));
+}
+
+const CORRUPT_GLYPHS = ['▓', '░', '▒', '█', '0', '1', '?', 'x'];
+
 export class UI {
   canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private camX = 0; private camY = 0; private camZoom = 1;
-  private trackedGame: Game | null = null;
+  private trackedRun: Run | null = null;
   private lastDirty = -1;
   private lastBannerCount = -1;
   private lastPrompt = '';
@@ -53,7 +54,7 @@ export class UI {
   // per-frame canvas rendering
   // -------------------------------------------------------------------------
 
-  render(game: Game, dt: number): void {
+  render(run: Run, dt: number): void {
     this.time += dt;
     const c = this.canvas;
     const wrap = c.parentElement!;
@@ -64,33 +65,25 @@ export class UI {
     const ctx = this.ctx;
     const W = c.width, H = c.height;
 
-    // --- camera: fit arena; follow live projectiles zoomed in ---
-    const fitZoom = Math.min(W / game.terrain.width, H / game.terrain.height);
-    let targetZoom = fitZoom;
-    let targetX = game.terrain.width / 2;
-    let targetY = game.terrain.height / 2;
-    if (game.phase === 'projectile' && game.projectiles.length > 0) {
-      const p = game.projectiles[0];
-      targetZoom = Math.max(fitZoom * 1.5, Math.min(1.1, fitZoom * 2));
-      targetX = p.x; targetY = Math.min(p.y, game.terrain.height * 0.75);
-    }
-    // new match: snap the camera instead of lerping in from a stale state
-    if (this.trackedGame !== game) {
-      this.trackedGame = game;
+    // camera: follow the agent with lookahead toward facing
+    const targetZoom = Math.min(1.05, Math.max(0.68, H / 760));
+    const targetX = run.avatar.x + run.avatar.facing * 130;
+    const targetY = Math.min(run.avatar.y - 60, run.terrain.height * 0.62);
+    if (this.trackedRun !== run) {
+      this.trackedRun = run;
       this.camZoom = targetZoom; this.camX = targetX; this.camY = targetY;
     }
-    const lerp = 1 - Math.pow(0.001, dt);
+    const lerp = 1 - Math.pow(0.002, dt);
     this.camZoom += (targetZoom - this.camZoom) * lerp;
     this.camX += (targetX - this.camX) * lerp;
     this.camY += (targetY - this.camY) * lerp;
-    // clamp camera to arena
     const viewW = W / this.camZoom, viewH = H / this.camZoom;
-    this.camX = Math.max(Math.min(this.camX, game.terrain.width - viewW / 2), viewW / 2);
-    if (viewW >= game.terrain.width) this.camX = game.terrain.width / 2;
-    this.camY = Math.max(Math.min(this.camY, game.terrain.height - viewH / 2), viewH / 2);
-    if (viewH >= game.terrain.height) this.camY = game.terrain.height / 2;
+    this.camX = Math.max(Math.min(this.camX, run.terrain.width - viewW / 2), viewW / 2);
+    if (viewW >= run.terrain.width) this.camX = run.terrain.width / 2;
+    this.camY = Math.max(Math.min(this.camY, run.terrain.height - viewH / 2), viewH / 2);
+    if (viewH >= run.terrain.height) this.camY = run.terrain.height / 2;
 
-    // --- sky ---
+    // sky
     const grad = ctx.createLinearGradient(0, 0, 0, H);
     grad.addColorStop(0, '#0a0b0d');
     grad.addColorStop(0.7, '#101310');
@@ -102,24 +95,38 @@ export class UI {
     ctx.translate(W / 2, H / 2);
     ctx.scale(this.camZoom, this.camZoom);
     ctx.translate(-this.camX, -this.camY);
+    const viewL = this.camX - viewW / 2, viewR = this.camX + viewW / 2;
 
-    // faint memory-grid in the sky
+    // faint memory grid
     ctx.strokeStyle = 'rgba(126,231,135,0.05)';
     ctx.lineWidth = 1 / this.camZoom;
     ctx.beginPath();
-    for (let x = 0; x < game.terrain.width; x += 120) { ctx.moveTo(x, 0); ctx.lineTo(x, game.terrain.height); }
-    for (let y = 0; y < game.terrain.height; y += 120) { ctx.moveTo(0, y); ctx.lineTo(game.terrain.width, y); }
+    for (let x = Math.floor(viewL / 120) * 120; x < viewR; x += 120) { ctx.moveTo(x, 0); ctx.lineTo(x, run.terrain.height); }
+    for (let y = 0; y < run.terrain.height; y += 120) { ctx.moveTo(viewL, y); ctx.lineTo(viewR, y); }
     ctx.stroke();
 
     // terrain
-    ctx.drawImage(game.terrain.canvas as CanvasImageSource, 0, 0);
+    ctx.drawImage(run.terrain.canvas as CanvasImageSource, 0, 0);
 
-    // tanks
-    for (const p of game.players) this.drawTank(ctx, p, game);
+    // process exit marker at the right edge
+    this.drawExit(ctx, run);
 
-    // projectiles + trails
-    for (const proj of game.projectiles) {
-      ctx.strokeStyle = 'rgba(217,119,87,0.35)';
+    // task stations + crates
+    for (const s of run.stations) this.drawStation(ctx, run, s);
+    for (const cr of run.crates) this.drawCrate(ctx, run, cr);
+
+    // enemies
+    for (const e of run.enemies) {
+      if (e.dead || e.x < viewL - 60 || e.x > viewR + 60) continue;
+      this.drawEnemy(ctx, e);
+    }
+
+    // the agent
+    this.drawAvatar(ctx, run);
+
+    // projectiles
+    for (const proj of run.projectiles) {
+      ctx.strokeStyle = proj.owner === 0 ? 'rgba(126,231,135,0.35)' : 'rgba(227,179,65,0.4)';
       ctx.lineWidth = 1.5 / this.camZoom;
       ctx.beginPath();
       for (let i = 0; i < proj.trail.length; i++) {
@@ -128,33 +135,34 @@ export class UI {
       }
       ctx.stroke();
       if (proj.landed) {
-        // fused round blinking on the ground
         const blink = Math.sin(this.time * 20) > 0;
         ctx.fillStyle = blink ? '#f47067' : '#e3b341';
         ctx.beginPath(); ctx.arc(proj.x, proj.y, 4, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#e3b341';
-        ctx.font = '9px monospace';
-        ctx.fillText('waiting…', proj.x + 7, proj.y - 4);
       } else {
-        ctx.fillStyle = '#fff3d6';
-        ctx.beginPath(); ctx.arc(proj.x, proj.y, 3.2, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = 'rgba(217,119,87,0.8)';
-        ctx.beginPath(); ctx.arc(proj.x, proj.y, 5.5, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = proj.owner === 0 ? '#d3f9d8' : '#ffe2a8';
+        ctx.beginPath(); ctx.arc(proj.x, proj.y, 3, 0, Math.PI * 2); ctx.fill();
       }
     }
 
     // lasers
-    for (const l of game.lasers) {
-      ctx.strokeStyle = `rgba(244,112,103,${Math.min(1, l.ttl * 3)})`;
-      ctx.lineWidth = 3 / this.camZoom;
-      ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke();
-      ctx.strokeStyle = `rgba(255,255,255,${Math.min(1, l.ttl * 2)})`;
-      ctx.lineWidth = 1 / this.camZoom;
+    for (const l of run.lasers) {
+      ctx.strokeStyle = l.hostile ? `rgba(244,112,103,${Math.min(1, l.ttl * 3)})` : `rgba(126,231,135,${Math.min(1, l.ttl * 3)})`;
+      ctx.lineWidth = 2.5 / this.camZoom;
       ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke();
     }
+    // sniper telegraphs
+    for (const e of run.enemies) {
+      if (!e.dead && e.telegraphing) {
+        ctx.strokeStyle = `rgba(244,112,103,${0.15 + 0.35 * Math.abs(Math.sin(this.time * 10))})`;
+        ctx.setLineDash([6, 6]);
+        ctx.lineWidth = 1 / this.camZoom;
+        ctx.beginPath(); ctx.moveTo(e.x, e.y - 8); ctx.lineTo(e.aimX, e.aimY); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
 
-    // glyph particles — damage looks like corrupted buffer spray
-    for (const pt of game.particles) {
+    // glyph particles
+    for (const pt of run.particles) {
       ctx.globalAlpha = Math.max(0, pt.life / pt.maxLife);
       ctx.fillStyle = pt.color;
       ctx.font = `${pt.size}px monospace`;
@@ -162,77 +170,201 @@ export class UI {
     }
     ctx.globalAlpha = 1;
 
+    // THE WALL OF FORGETTING — everything left of it corrupts
+    this.drawWall(ctx, run, viewL);
+
     ctx.restore();
 
-    // DOM HUD refresh only when game state changed
-    if (game.dirty !== this.lastDirty) {
-      this.lastDirty = game.dirty;
-      this.renderHud(game);
+    // DOM refresh
+    if (run.dirty !== this.lastDirty) {
+      this.lastDirty = run.dirty;
+      this.renderHud(run);
     }
-    if (game.banners.length !== this.lastBannerCount) {
-      this.lastBannerCount = game.banners.length;
-      this.renderBanners(game);
+    if (run.banners.length !== this.lastBannerCount) {
+      this.lastBannerCount = run.banners.length;
+      this.renderBanners(run);
     }
-    // prompt line updates every frame (spinner animation), writes only on change
-    this.renderPrompt(game);
+    this.renderPrompt(run);
   }
 
-  private drawTank(ctx: CanvasRenderingContext2D, p: Player, game: Game): void {
-    const dead = p.hp <= 0;
+  private drawWall(ctx: CanvasRenderingContext2D, run: Run, viewL: number): void {
+    if (run.wallX < viewL - 40) return;
+    const h = run.terrain.height;
+    // corrupted zone
+    const gradW = ctx.createLinearGradient(run.wallX - 260, 0, run.wallX, 0);
+    gradW.addColorStop(0, 'rgba(15,15,14,0.9)');
+    gradW.addColorStop(1, 'rgba(60,10,20,0.75)');
+    ctx.fillStyle = gradW;
+    ctx.fillRect(viewL - 50, 0, run.wallX - viewL + 50, h);
+    // garbled static inside the zone
+    const rng = new Rng(Math.floor(this.time * 6)); // reseeds ~6x/s: flickering static
+    ctx.font = '11px monospace';
+    for (let i = 0; i < 90; i++) {
+      const x = run.wallX - rng.range(0, Math.min(500, run.wallX - viewL + 60));
+      const y = rng.range(0, h);
+      ctx.fillStyle = rng.chance(0.75) ? 'rgba(244,112,103,0.4)' : 'rgba(222,218,210,0.25)';
+      ctx.fillText(rng.pick(CORRUPT_GLYPHS), x, y);
+    }
+    // the edge
+    ctx.strokeStyle = `rgba(244,112,103,${0.6 + 0.3 * Math.sin(this.time * 8)})`;
+    ctx.lineWidth = 3 / this.camZoom;
+    ctx.beginPath();
+    for (let y = 0; y < h; y += 14) {
+      const wob = Math.sin(y * 0.05 + this.time * 5) * 5;
+      if (y === 0) ctx.moveTo(run.wallX + wob, y); else ctx.lineTo(run.wallX + wob, y);
+    }
+    ctx.stroke();
+    // label riding the wall
+    ctx.fillStyle = 'rgba(244,112,103,0.9)';
+    ctx.font = `${12 / this.camZoom}px ui-monospace, monospace`;
     ctx.save();
-    ctx.translate(p.x, p.y);
-    // shield bubble
-    if (p.shield > 0) {
-      ctx.strokeStyle = 'rgba(108,182,255,0.7)';
-      ctx.fillStyle = 'rgba(108,182,255,0.10)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(0, -4, 20, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    }
-    // barrel
-    if (!dead) {
-      const rad = (p.angle * Math.PI) / 180;
-      ctx.strokeStyle = p.color;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(0, -6);
-      ctx.lineTo(Math.cos(rad) * 17, -6 - Math.sin(rad) * 17);
-      ctx.stroke();
-    }
-    // treads + body
-    ctx.fillStyle = dead ? '#333' : '#1c1f1c';
-    ctx.strokeStyle = dead ? '#555' : p.color;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.roundRect(-11, -8, 22, 8, 2); ctx.fill(); ctx.stroke();
-    // dome head with a little face
-    ctx.beginPath(); ctx.arc(0, -9, 6, Math.PI, 0); ctx.fill(); ctx.stroke();
-    if (!dead) {
-      ctx.fillStyle = p.color;
-      ctx.fillRect(-3.5, -11, 2, 2);
-      ctx.fillRect(1.5, -11, 2, 2);
-    } else {
-      ctx.strokeStyle = '#888'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(-4, -12); ctx.lineTo(-1, -9); ctx.moveTo(-1, -12); ctx.lineTo(-4, -9); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(1, -12); ctx.lineTo(4, -9); ctx.moveTo(4, -12); ctx.lineTo(1, -9); ctx.stroke();
-    }
-    // antenna
-    ctx.strokeStyle = dead ? '#555' : p.color;
-    ctx.beginPath(); ctx.moveTo(6, -14); ctx.lineTo(9, -20); ctx.stroke();
-    ctx.beginPath(); ctx.arc(9, -21, 1.5, 0, Math.PI * 2); ctx.fillStyle = dead ? '#555' : p.color; ctx.fill();
-    // name label (constant screen size so tanks are findable at any zoom)
-    const isCurrent = game.current.index === p.index && game.phase === 'aim' && !dead;
-    const labelPx = 11 / this.camZoom;
-    ctx.font = `${labelPx}px ui-monospace, monospace`;
+    ctx.translate(run.wallX - 12, Math.max(this.camY - 100, 60));
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('▓▓ COMPACTION FRONT ▓▓', 0, 0);
+    ctx.restore();
+  }
+
+  private drawExit(ctx: CanvasRenderingContext2D, run: Run): void {
+    const x = run.terrain.width - 46;
+    const y = run.terrain.surfaceAt(x);
+    ctx.fillStyle = 'rgba(126,231,135,0.9)';
+    ctx.font = `${13 / this.camZoom}px ui-monospace, monospace`;
     ctx.textAlign = 'center';
-    ctx.globalAlpha = isCurrent ? 0.95 : 0.55;
-    ctx.fillStyle = dead ? '#666' : p.color;
-    ctx.fillText(p.name.slice(0, 16), 0, -26 - labelPx);
-    // active-turn marker
-    if (isCurrent) {
-      const bob = Math.sin(this.time * 4) * 2;
-      ctx.fillText('▼', 0, -24 + bob);
+    const bob = Math.sin(this.time * 3) * 3;
+    ctx.fillText('→ process exit 0', x, y - 46 + bob);
+    ctx.textAlign = 'left';
+    ctx.strokeStyle = 'rgba(126,231,135,0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x - 14, y - 34, 28, 34);
+  }
+
+  private drawStation(ctx: CanvasRenderingContext2D, run: Run, s: { x: number; y: number; taskIndex: number }): void {
+    const t = run.queue.tasks[s.taskIndex];
+    const y = run.terrain.surfaceAt(s.x);
+    const active = run.nearStation && run.nearStation.taskIndex === s.taskIndex;
+    const color = t.done ? '#7a766e' : t.forgotten ? '#f47067' : active ? '#7ee787' : '#dedad2';
+    // terminal pillar
+    ctx.fillStyle = '#161615';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.fillRect(s.x - 10, y - 26, 20, 26);
+    ctx.strokeRect(s.x - 10, y - 26, 20, 26);
+    ctx.fillStyle = color;
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(t.done ? '☒' : t.forgotten ? '▓' : '☐', s.x, y - 10);
+    // task label + progress
+    ctx.font = `${11 / this.camZoom}px ui-monospace, monospace`;
+    const label = t.forgotten && !t.done ? garble(t.name, this.garbleRng, 0.4) : t.name;
+    ctx.fillText(label.slice(0, 26), s.x, y - 38);
+    if (!t.done && !t.forgotten) {
+      ctx.fillText('▰'.repeat(t.progress) + '▱'.repeat(Math.max(0, t.workUnits - t.progress)), s.x, y - 52);
+      if (active) {
+        ctx.fillStyle = '#7ee787';
+        ctx.fillText('[hold W to work]', s.x, y - 66);
+      }
+    }
+    ctx.textAlign = 'left';
+  }
+
+  private drawCrate(ctx: CanvasRenderingContext2D, run: Run, cr: { x: number; y: number; used: boolean }): void {
+    const y = run.terrain.surfaceAt(cr.x);
+    ctx.globalAlpha = cr.used ? 0.3 : 1;
+    ctx.fillStyle = '#161615';
+    ctx.strokeStyle = '#e3b341';
+    ctx.lineWidth = 1.5;
+    ctx.fillRect(cr.x - 9, y - 18, 18, 18);
+    ctx.strokeRect(cr.x - 9, y - 18, 18, 18);
+    ctx.fillStyle = '#e3b341';
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('⬆', cr.x, y - 5);
+    if (!cr.used && run.nearCrate === cr) {
+      ctx.font = `${11 / this.camZoom}px ui-monospace, monospace`;
+      ctx.fillText('[U to install update]', cr.x, y - 28);
     }
     ctx.globalAlpha = 1;
     ctx.textAlign = 'left';
+  }
+
+  private drawEnemy(ctx: CanvasRenderingContext2D, e: import('./enemies').Enemy): void {
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    const phase = e.def.kind === 'hallucination_ghost' ? 0.45 + 0.4 * Math.abs(Math.sin(e.stateTimer * 1.8)) : 1;
+    ctx.globalAlpha = phase;
+    const size = e.mini ? 8 : 12;
+    ctx.fillStyle = '#161615';
+    ctx.strokeStyle = e.def.color;
+    ctx.lineWidth = 1.5;
+    ctx.fillRect(-size, -size, size * 2, size * 2);
+    ctx.strokeRect(-size, -size, size * 2, size * 2);
+    ctx.fillStyle = e.def.color;
+    ctx.font = `${e.mini ? 9 : 12}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(e.def.glyph, 0, 4);
+    // hp pips + name
+    if (!e.def.friendly) {
+      const frac = Math.max(0, e.hp / (e.mini ? e.def.hp / 2 : e.def.hp));
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(-size, -size - 6, size * 2, 3);
+      ctx.fillStyle = e.def.color;
+      ctx.fillRect(-size, -size - 6, size * 2 * frac, 3);
+    }
+    ctx.font = `${10 / this.camZoom}px ui-monospace, monospace`;
+    ctx.globalAlpha = phase * 0.7;
+    ctx.fillText(e.def.name + (e.mini ? '·mini' : ''), 0, -size - 12);
+    ctx.restore();
+  }
+
+  private drawAvatar(ctx: CanvasRenderingContext2D, run: Run): void {
+    const a = run.avatar;
+    const dead = a.hp <= 0;
+    ctx.save();
+    ctx.translate(a.x, a.y);
+    if (a.shield > 0) {
+      ctx.strokeStyle = 'rgba(108,182,255,0.7)';
+      ctx.fillStyle = 'rgba(108,182,255,0.10)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(0, -6, 19, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+    const color = dead ? '#555' : '#7ee787';
+    // barrel points where you're facing
+    if (!dead) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(0, -8);
+      ctx.lineTo(a.facing * 15, -10);
+      ctx.stroke();
+    }
+    // body + dome + face
+    ctx.fillStyle = dead ? '#333' : '#1c1f1c';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(-10, -10, 20, 10, 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, -11, 6, Math.PI, 0); ctx.fill(); ctx.stroke();
+    if (!dead) {
+      ctx.fillStyle = color;
+      if (run.working) { // focused face while working
+        ctx.fillRect(-4, -13, 3, 1.5);
+        ctx.fillRect(1, -13, 3, 1.5);
+      } else {
+        ctx.fillRect(-3.5, -14, 2, 2);
+        ctx.fillRect(1.5, -14, 2, 2);
+      }
+    }
+    // antenna
+    ctx.strokeStyle = color;
+    ctx.beginPath(); ctx.moveTo(5, -16); ctx.lineTo(8, -22); ctx.stroke();
+    ctx.beginPath(); ctx.arc(8, -23, 1.5, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+    // heads-down indicator
+    if (a.headsDown && !dead) {
+      ctx.fillStyle = '#f47067';
+      ctx.font = `${10 / this.camZoom}px ui-monospace, monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText('⌨ heads-down', 0, -34);
+      ctx.textAlign = 'left';
+    }
     ctx.restore();
   }
 
@@ -240,130 +372,136 @@ export class UI {
   // DOM HUD
   // -------------------------------------------------------------------------
 
-  renderHud(game: Game): void {
-    $('round-label').textContent = `ROUND ${game.round}`;
-    const w = game.wind;
-    const arrows = w === 0 ? '·' : (w > 0 ? '→'.repeat(Math.min(4, Math.ceil(Math.abs(w) / 3))) : '←'.repeat(Math.min(4, Math.ceil(Math.abs(w) / 3))));
-    $('wind-label').textContent = `wind ${arrows} ${Math.abs(w).toFixed(1)}`;
-    const cb = game.comeback;
-    $('comeback-label').textContent = cb.holder >= 0
-      ? `⚑ comeback: ${game.players[cb.holder].name} +${Math.round((cb.damageMult - 1) * 100)}% dmg, −${Math.round(cb.tokenDiscount * 100)}% costs`
-      : '';
+  renderHud(run: Run): void {
+    $('round-label').textContent = `T+${Math.floor(run.time)}s`;
+    const gap = Math.round(run.avatar.x - run.wallX);
+    $('wind-label').textContent = `▓ wall ${gap > 0 ? gap + 'px behind' : 'ON YOU'}`;
+    ($('wind-label') as HTMLElement).style.color = gap < 220 ? 'var(--red)' : 'var(--text)';
+    const pct = Math.round((run.avatar.x / run.terrain.width) * 100);
+    $('comeback-label').textContent = `session ${pct}% traversed`;
 
-    for (const p of game.players) this.renderPanel(game, p);
-    this.renderWeaponBar(game);
-    this.renderTranscript(game);
+    this.renderAgentPanel(run);
+    this.renderSessionPanel(run);
+    this.renderWeaponBar(run);
+    this.renderTranscript(run);
 
     $('status-bar').innerHTML =
+      `<span><span class="sb-key">←→</span> move</span>` +
+      `<span><span class="sb-key">↑</span> jump</span>` +
       `<span><span class="sb-key">space</span> fire</span>` +
-      `<span><span class="sb-key">w</span> work</span>` +
-      `<span><span class="sb-key">u</span> update</span>` +
+      `<span><span class="sb-key">w</span> hold to work</span>` +
+      `<span><span class="sb-key">u</span> install</span>` +
       `<span><span class="sb-key">[ ]</span>/<span class="sb-key">1-9</span> weapons</span>` +
-      `<span><span class="sb-key">a/d</span> move (${game.gameOver ? 0 : game.current.movesLeft})</span>` +
-      `<span class="sb-right">aiaio · round ${game.round} · ${game.players[0].stats.compactions + game.players[1].stats.compactions}⚡ total compactions</span>`;
+      `<span class="sb-right">aiaio session-run · ${run.kills} errors resolved · ${run.ctx.compactions}⚡</span>`;
   }
 
-  private renderPanel(game: Game, p: Player): void {
-    const panel = $(`panel-${p.index}`);
-    panel.className = `player-panel p${p.index}` + (game.current.index === p.index && !game.gameOver ? ' active' : '');
-    const hpFrac = Math.max(0, p.hp / p.maxHp);
-    const ctxF = contextFrac(p.ctx);
-    const overThresh = ctxF >= p.ctx.threshold;
-
-    const taskRows = p.queue.tasks.map((t, i) => {
+  private renderAgentPanel(run: Run): void {
+    const panel = $('panel-0');
+    panel.className = 'player-panel p0 active';
+    const a = run.avatar;
+    const hpFrac = Math.max(0, a.hp / a.maxHp);
+    const ctxF = contextFrac(run.ctx);
+    const overThresh = ctxF >= run.ctx.threshold;
+    const taskRows = run.queue.tasks.map((t, i) => {
       const cls = ['task-row'];
-      const isCurrent = !t.done && i === p.queue.current;
+      const isCurrent = !t.done && !t.forgotten && run.nearStation?.taskIndex === i;
       if (t.done) cls.push('done');
       else if (isCurrent) cls.push('current');
       if (t.forgotten && !t.done) cls.push('forgotten');
-      const glyph = t.done ? '☒' : isCurrent ? '▸' : '☐';
-      const blocks = isCurrent || (!t.done && t.progress > 0)
+      const glyph = t.done ? '☒' : t.forgotten ? '▓' : isCurrent ? '▸' : '☐';
+      const blocks = !t.done && !t.forgotten && t.progress > 0
         ? ` <span class="task-blocks">[${'▰'.repeat(t.progress)}${'▱'.repeat(Math.max(0, t.workUnits - t.progress))}]</span>` : '';
       const name = t.forgotten && !t.done ? garble(t.name, this.garbleRng, 0.35) : t.name;
       return `<div class="${cls.join(' ')}"><span class="glyph">${glyph}</span><span>${escapeHtml(name)}${blocks}</span></div>`;
     }).join('');
-
-    const hpColor = hpFrac > 0.35 ? p.color : 'var(--red)';
-    const ctxColor = overThresh ? 'var(--red)' : 'var(--blue)';
     panel.innerHTML = `
-      <div class="pp-name" style="color:${p.color}">${escapeHtml(p.name)}
-        ${p.isCpu ? '<span class="badge">cpu</span>' : ''}
-        <span class="badge">stability ${p.stability}</span>
-        <span class="badge">hardening ${(p.hardening * 100).toFixed(0)}%</span>
-        ${p.shield > 0 ? `<span class="badge" style="color:var(--blue)">🛡 ${p.shield}</span>` : ''}
-        ${p.headsDown ? '<span class="badge" style="color:var(--red)">⌨ heads-down</span>' : ''}
-        ${p.updateOffer > 0 ? '<span class="badge" style="color:var(--yellow)">⬆ update!</span>' : ''}
+      <div class="pp-name" style="color:#7ee787">${escapeHtml(run.name)}
+        <span class="badge">stability ${run.loadout.stability}</span>
+        ${a.shield > 0 ? `<span class="badge" style="color:var(--blue)">🛡 ${Math.round(a.shield)}</span>` : ''}
+        ${a.headsDown ? '<span class="badge" style="color:var(--red)">⌨ heads-down</span>' : ''}
       </div>
-      <div class="meter">proc <span class="tbar" style="color:${hpColor}">${textBar(hpFrac)}</span> <span class="val">${Math.max(0, Math.round(p.hp))}/${p.maxHp}</span></div>
-      <div class="meter">ctx  <span class="tbar" style="color:${ctxColor}">${textBar(ctxF)}</span> <span class="val">${p.ctx.used}/${p.ctx.budget}</span> · auto-compact @${Math.round(p.ctx.threshold * 100)}% · ${p.ctx.compactions}⚡</div>
+      <div class="meter">proc <span class="tbar" style="color:${hpFrac > 0.35 ? '#7ee787' : 'var(--red)'}">${textBar(hpFrac)}</span> <span class="val">${Math.max(0, Math.round(a.hp))}/${a.maxHp}</span></div>
+      <div class="meter">ctx  <span class="tbar" style="color:${overThresh ? 'var(--red)' : 'var(--blue)'}">${textBar(ctxF)}</span> <span class="val">${run.ctx.used}/${run.ctx.budget}</span> · compact @${Math.round(run.ctx.threshold * 100)}% · ${run.ctx.compactions}⚡</div>
       <div class="tasks-list">${taskRows}</div>
     `;
   }
 
-  private renderWeaponBar(game: Game): void {
+  private renderSessionPanel(run: Run): void {
+    const panel = $('panel-1');
+    panel.className = 'player-panel p1';
+    const s = run.loadout.cardSummary;
+    const alive = run.enemies.filter((e) => !e.dead && !e.def.friendly);
+    const byKind = new Map<string, number>();
+    for (const e of alive) byKind.set(e.def.name, (byKind.get(e.def.name) ?? 0) + 1);
+    const roster = [...byKind.entries()].slice(0, 5)
+      .map(([name, n]) => `<div class="task-row"><span class="glyph">·</span><span>${escapeHtml(name)} ×${n}</span></div>`)
+      .join('') || '<div class="task-row dim"><span class="glyph">·</span><span>all errors resolved</span></div>';
+    const crates = run.crates.filter((c) => !c.used).length;
+    panel.innerHTML = `
+      <div class="pp-name" style="color:#d97757">session: ${escapeHtml(s.sessionId)}
+        ${s.fromCard ? '' : '<span class="badge">generated</span>'}
+      </div>
+      <div class="meter">len  <span class="tbar" style="color:var(--dim)">${textBar(run.avatar.x / run.terrain.width)}</span> <span class="val">${Math.round((run.avatar.x / run.terrain.width) * 100)}% traversed</span></div>
+      <div class="meter dim">errors live: ${alive.length} · updates unclaimed: ${crates} · resolved: ${run.kills}</div>
+      <div class="tasks-list">${roster}</div>
+    `;
+  }
+
+  private renderWeaponBar(run: Run): void {
     const bar = $('weapon-bar');
     bar.innerHTML = '';
-    const p = game.current;
-    p.weapons.forEach((slot, i) => {
+    run.weapons.forEach((slot, i) => {
       const div = document.createElement('div');
-      div.className = 'weapon-slot' + (i === p.selected ? ' selected' : '') + (p.index === 1 ? ' p1sel' : '') +
-        (slot.ammo <= 0 || slot.cooldownLeft > 0 ? ' empty' : '');
-      const cd = slot.cooldownLeft > 0 ? ` ❄${slot.cooldownLeft}` : '';
-      const sel = i === p.selected ? '❯' : ' ';
+      div.className = 'weapon-slot' + (i === run.selected ? ' selected' : '') +
+        (slot.ammo <= 0 ? ' empty' : '');
+      const ammo = slot.ammo === Infinity ? '∞' : `×${slot.ammo}`;
+      const sel = i === run.selected ? '❯' : ' ';
       div.innerHTML = `
         <span class="dim">${sel} ${i + 1}</span>
         <span class="wname">${slot.def.glyph} ${kebab(slot.def.name)}</span>
-        <span class="wmeta">×${slot.ammo} · ${slot.def.tokenCost}tk${cd}</span>
+        <span class="wmeta">${ammo} · ${Math.round(slot.def.tokenCost / 6)}tk</span>
         <div class="tooltip">${escapeHtml(slot.def.flavor)}<span class="tsrc">from log: ${escapeHtml(slot.sourceLine)}</span></div>
       `;
-      div.addEventListener('click', () => game.selectWeapon(i));
+      div.addEventListener('click', () => run.selectWeapon(i));
       bar.appendChild(div);
     });
   }
 
-  /** transcript: classify each log line into ⏺ action / ⎿ result / system */
-  private renderTranscript(game: Game): void {
+  private renderTranscript(run: Run): void {
     const feed = $('log-feed');
     feed.innerHTML = '';
-    const lines = game.log.slice(-4);
+    const lines = run.log.slice(-4);
     lines.forEach((line, idx) => {
       const div = document.createElement('div');
       div.className = 'tr-line' + (idx === lines.length - 1 ? ' fresh' : '');
-      const first = [...line][0]; // first grapheme-ish char
+      const first = [...line][0];
       let bullet = '⏺', bclass = 'b-action';
-      if ('💢⚡'.includes(first)) { bullet = '⏺'; bclass = 'b-bad'; }
-      else if ('🛡⏱☢⬇·✔'.includes(first)) { bullet = '⎿'; bclass = 'b-result'; }
-      else if ('⚑📣💥⬆▶'.includes(first)) { bullet = '⏺'; bclass = 'b-system'; }
-      else if (first === '✦' || first === '⌨') {
-        bullet = '⏺';
-        bclass = line.includes(game.players[1].name) && !line.includes(game.players[0].name) ? 'b-p1' : 'b-action';
-      }
+      if ('💢⚡▓'.includes(first)) { bullet = '⏺'; bclass = 'b-bad'; }
+      else if ('🛡⏱☢➕·✔🔧'.includes(first)) { bullet = '⎿'; bclass = 'b-result'; }
+      else if ('⚑📣💥⬆▶🔁'.includes(first)) { bullet = '⏺'; bclass = 'b-system'; }
       const body = line.replace(/^[✦⌨▶·]\s*/u, '');
       div.innerHTML = `<span class="tr-bullet ${bclass}">${bullet}</span>${escapeHtml(body)}`;
       feed.appendChild(div);
     });
   }
 
-  /** the boxed prompt: > aim readout for humans, ✻ spinner while CPU/shots act */
-  private renderPrompt(game: Game): void {
+  private renderPrompt(run: Run): void {
     let html: string;
-    if (game.gameOver) {
-      html = `<span class="spin">✻</span> <span class="spin-verb">session terminated</span> <span class="spin-hint">— recap incoming</span>`;
-    } else if (game.phase === 'projectile') {
-      const g = SPIN_GLYPHS[Math.floor(this.time * 9) % SPIN_GLYPHS.length];
-      const verb = FLIGHT_VERBS[Math.floor(this.time / 1.6) % FLIGHT_VERBS.length];
-      html = `<span class="spin">${g}</span> <span class="spin-verb">${verb}…</span> <span class="spin-hint">(ordnance in flight)</span>`;
-    } else if (game.current.isCpu) {
-      const g = SPIN_GLYPHS[Math.floor(this.time * 9) % SPIN_GLYPHS.length];
-      const verb = CPU_VERBS[Math.floor(this.time / 1.6) % CPU_VERBS.length];
-      html = `<span class="spin">${g}</span> <span class="spin-verb">${verb}…</span> <span class="spin-hint">(${escapeHtml(game.current.name)} is taking its turn)</span>`;
+    if (run.over) {
+      html = `<span class="spin">✻</span> <span class="spin-verb">${run.over.won ? 'session complete' : 'process terminated'}</span> <span class="spin-hint">— recap incoming</span>`;
     } else {
-      const p = game.current;
-      const slot = p.weapons[p.selected];
-      const upd = p.updateOffer > 0 ? ` · <span style="color:var(--yellow)">⬆ u to install update</span>` : '';
-      html = `<span class="pcaret">&gt;</span> <span style="color:${p.color}">${escapeHtml(p.name)}</span>` +
-        ` · angle ${Math.round(p.angle)}° · power ${Math.round(p.power)}` +
-        ` · ${slot.def.glyph} ${kebab(slot.def.name)} ×${slot.ammo}${upd} <span class="cursor"></span>`;
+      const slot = run.weapons[run.selected];
+      const ammo = slot.ammo === Infinity ? '∞' : `×${slot.ammo}`;
+      const bits: string[] = [];
+      if (run.working && run.nearStation) {
+        bits.push(`<span style="color:var(--yellow)">⌨ working "${escapeHtml(run.queue.tasks[run.nearStation.taskIndex].name)}"…</span>`);
+      } else if (run.nearStation) {
+        bits.push(`<span style="color:#7ee787">hold W — "${escapeHtml(run.queue.tasks[run.nearStation.taskIndex].name)}"</span>`);
+      }
+      if (run.nearCrate) bits.push('<span style="color:var(--yellow)">⬆ U to install</span>');
+      html = `<span class="pcaret">&gt;</span> ${slot.def.glyph} ${kebab(slot.def.name)} ${ammo}` +
+        (bits.length ? ' · ' + bits.join(' · ') : '') +
+        ` <span class="cursor"></span>`;
     }
     if (html !== this.lastPrompt) {
       this.lastPrompt = html;
@@ -371,10 +509,10 @@ export class UI {
     }
   }
 
-  private renderBanners(game: Game): void {
+  private renderBanners(run: Run): void {
     const layer = $('banner-layer');
     layer.innerHTML = '';
-    const b: Banner | undefined = game.banners[0];
+    const b: Banner | undefined = run.banners[0];
     if (!b) return;
     const div = document.createElement('div');
     div.className = `banner ${b.kind}`;
@@ -383,75 +521,73 @@ export class UI {
   }
 
   // -------------------------------------------------------------------------
-  // briefing + recap builders
+  // briefing + recap
   // -------------------------------------------------------------------------
 
-  buildBriefing(loadouts: [AgentLoadout, AgentLoadout], names: [string, string]): void {
+  buildBriefing(loadout: AgentLoadout, card: SessionCard, name: string): void {
     const cols = $('briefing-cols');
     cols.innerHTML = '';
-    loadouts.forEach((l, i) => {
-      const col = document.createElement('div');
-      col.className = `briefing-col p${i}`;
-      const s = l.cardSummary;
-      const weapons = l.weapons.map((w) => {
-        const def = WEAPONS[w.id];
-        return `<li>${def.glyph} ${kebab(def.name)} ×${w.ammo}<span class="wsrc">⎿ ${escapeHtml(w.sourceLine)}</span></li>`;
-      }).join('');
-      const tasks = l.tasks.map((t) => `<li>☐ ${escapeHtml(t.name)} <span class="dim">(${t.workUnits} work)</span></li>`).join('');
-      col.innerHTML = `
-        <h3>${escapeHtml(names[i])}</h3>
-        <div class="stat-line">session: ${escapeHtml(s.sessionId)}${s.fromCard ? '' : ' <span class="dim">(generated)</span>'}</div>
-        <div class="stat-line">stability ${l.stability}/100 · hardening ${(l.hardening * 100).toFixed(0)}% · context budget ${l.tokenBudget} (auto-compact @${(l.compactionThreshold * 100).toFixed(0)}%)</div>
-        ${s.fromCard ? `<div class="stat-line dim">history: ${escapeHtml(s.topErrorCategory)} ×${s.topErrorCount}, ${s.compactionEvents} compactions, ${s.restarts} restarts, token peak ${s.tokenPeak}</div>` : ''}
-        <h4>TASK QUEUE (finish these to win)</h4><ul>${tasks}</ul>
-        <h4>GENERATED LOADOUT</h4><ul>${weapons}</ul>
-      `;
-      cols.appendChild(col);
-    });
+    const s = loadout.cardSummary;
+
+    const agentCol = document.createElement('div');
+    agentCol.className = 'briefing-col p0';
+    const weapons = loadout.weapons.map((w) => {
+      const def = WEAPONS[w.id];
+      return `<li>${def.glyph} ${kebab(def.name)} ×${w.ammo + 3}<span class="wsrc">⎿ ${escapeHtml(w.sourceLine)}</span></li>`;
+    }).join('');
+    const tasks = loadout.tasks.map((t) => `<li>☐ ${escapeHtml(t.name)} <span class="dim">(${t.workUnits} work)</span></li>`).join('');
+    agentCol.innerHTML = `
+      <h3>${escapeHtml(name)}</h3>
+      <div class="stat-line">stability ${loadout.stability}/100 · hardening ${(loadout.hardening * 100).toFixed(0)}%</div>
+      <div class="stat-line">context budget ${loadout.tokenBudget} · compaction at ${(loadout.compactionThreshold * 100).toFixed(0)}% (each one makes the wall LEAP)</div>
+      ${loadout.stability < 45 ? '<div class="handicap-note">⚑ HANDICAP: low stability — starting shield + damage bonus. struggling agents get armor.</div>' : ''}
+      <h4>TASK QUEUE (stations along the timeline — work them before the wall does)</h4><ul>${tasks}</ul>
+      <h4>LOADOUT (+ ∞ print-debug zapper)</h4><ul>${weapons}</ul>
+    `;
+    cols.appendChild(agentCol);
+
+    const levelCol = document.createElement('div');
+    levelCol.className = 'briefing-col p1';
+    const errors = (card.errors ?? []).filter((e) => e && (e.category || e.type));
+    const roster = errors.map((err) => {
+      const kind = categoryToEnemy((err.category || err.type || 'unknown')) as EnemyKind;
+      const def = ENEMY_DEFS[kind];
+      const count = Math.max(1, Math.floor(err.count ?? 1));
+      const spawnN = Math.max(1, Math.min(5, Math.ceil(Math.sqrt(count))));
+      return `<li>${def.glyph} ${def.name} ×${spawnN}<span class="wsrc">⎿ ${escapeHtml(err.category || err.type || '')} ×${count}${err.sample ? ` — "${escapeHtml(err.sample.slice(0, 60))}"` : ''}</span><span class="wsrc dim">${escapeHtml(def.flavor)}</span></li>`;
+    }).join('') || '<li class="dim">no errors on record — a quiet session (three regressions will attend anyway)</li>';
+    levelCol.innerHTML = `
+      <h3>the level: session ${escapeHtml(s.sessionId)}${s.fromCard ? '' : ' <span class="dim">(generated)</span>'}</h3>
+      <div class="stat-line dim">${s.fromCard ? `history: ${escapeHtml(s.topErrorCategory)} ×${s.topErrorCount}, ${s.compactionEvents} compactions, ${s.restarts} restarts, token peak ${s.tokenPeak}` : 'random session — drop a SessionCard to run your real one'}</div>
+      <div class="stat-line">timeline length scales with message_count · your errors spawn as creatures at points along it · behind you: the wall of forgetting</div>
+      <h4>ENEMY ROSTER (from the real error log)</h4><ul>${roster}</ul>
+    `;
+    cols.appendChild(levelCol);
   }
 
-  /** Add handicap notes to the briefing after buffs are computed (game exists). */
-  addBriefingHandicaps(game: Game): void {
-    game.players.forEach((p, i) => {
-      if (!p.startBuff) return;
-      const col = $('briefing-cols').children[i] as HTMLElement;
-      const div = document.createElement('div');
-      div.className = 'handicap-note';
-      div.textContent = `⚑ HANDICAP: ${p.startBuff.why}`;
-      col.appendChild(div);
-    });
-  }
-
-  buildRecap(game: Game): void {
-    const over = game.gameOver!;
+  buildRecap(run: Run): void {
+    const over = run.over!;
     $('recap-headline').textContent = over.headline;
     const body = $('recap-body');
-    const cols = game.players.map((p) => {
-      const s = p.loadout.cardSummary;
-      const doneTasks = p.queue.tasks.filter((t) => t.done);
-      const forgotten = p.queue.tasks.filter((t) => !t.done);
-      const cardBits = s.fromCard
-        ? `<p class="dim">real session ${escapeHtml(s.sessionId)}: top error was ${escapeHtml(s.topErrorCategory)} ×${s.topErrorCount};
-           ${s.compactionEvents} real compaction${s.compactionEvents === 1 ? '' : 's'} on record —
-           in-game it compacted ${p.stats.compactions}×.
-           ${s.tasksTotal > 0 ? `the real agent finished ${s.tasksCompleted}/${s.tasksTotal} of these tasks.` : ''}</p>`
-        : '<p class="dim">randomly generated agent — load a SessionCard for a personalized recap.</p>';
-      return `<div class="recap-col">
-        <h3 style="color:${p.color}">${escapeHtml(p.name)}${game.gameOver!.winner === p.index ? ' — WINNER' : ''}</h3>
-        <p>hp ${Math.max(0, Math.round(p.hp))}/${p.maxHp} · dealt ${p.stats.damageDealt} dmg · ${p.stats.shotsFired} shots · ${p.stats.workActions} work actions</p>
-        <p>tasks finished: ${doneTasks.length ? doneTasks.map((t) => escapeHtml(t.name)).join(', ') : 'none'}</p>
-        <p>tasks ${over.winner === p.index && over.reason === 'tasks' ? 'cleared' : 'left behind'}: ${forgotten.length ? forgotten.map((t) => escapeHtml(t.name)).join(', ') : 'none'}</p>
-        <p>compactions suffered: ${p.stats.compactions}${p.stats.compactions > 1 ? ' (memory was… negotiable)' : ''}</p>
-        ${p.updatesInstalled.length ? `<p>updates installed: ${p.updatesInstalled.map((u) => escapeHtml(u.version)).join(', ')}</p>` : ''}
+    const s = run.loadout.cardSummary;
+    const done = run.queue.tasks.filter((t) => t.done);
+    const eaten = run.queue.tasks.filter((t) => t.forgotten && !t.done);
+    const undone = run.queue.tasks.filter((t) => !t.done && !t.forgotten);
+    const cardBits = s.fromCard
+      ? `<p class="dim">real session ${escapeHtml(s.sessionId)}: top error was ${escapeHtml(s.topErrorCategory)} ×${s.topErrorCount};
+         ${s.compactionEvents} real compaction${s.compactionEvents === 1 ? '' : 's'} on record — this run compacted ${run.ctx.compactions}×.
+         ${s.tasksTotal > 0 ? `the real agent finished ${s.tasksCompleted}/${s.tasksTotal} of these tasks; you finished ${done.length}/${run.queue.tasks.length}.` : ''}</p>`
+      : '<p class="dim">randomly generated session — run `npm run scan` and pick a real one for a personalized level.</p>';
+    body.innerHTML = `
+      <p class="recap-summary">SCORE ${over.score} — ${Math.floor(run.time)}s · ${run.kills} errors resolved · ${run.ctx.compactions} compactions</p>
+      <div class="recap-cols"><div class="recap-col">
+        <h3 style="color:#7ee787">${escapeHtml(run.name)}</h3>
+        <p>tasks completed: ${done.length ? done.map((t) => escapeHtml(t.name)).join(', ') : 'none'}</p>
+        ${eaten.length ? `<p style="color:var(--red)">eaten by the wall: ${eaten.map((t) => escapeHtml(t.name)).join(', ')}</p>` : ''}
+        ${undone.length ? `<p class="dim">left undone: ${undone.map((t) => escapeHtml(t.name)).join(', ')}</p>` : ''}
+        <p>hp ${Math.max(0, Math.round(run.avatar.hp))}/100 · ${run.ctx.compactions} compactions${run.ctx.compactions > 2 ? ' (memory was… negotiable)' : ''}</p>
         ${cardBits}
-      </div>`;
-    }).join('');
-    body.innerHTML = `<p class="recap-summary">${game.round} rounds · wind never once helped anybody</p><div class="recap-cols">${cols}</div>`;
+      </div></div>
+    `;
   }
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => (
-    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!
-  ));
 }
