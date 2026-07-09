@@ -49,6 +49,8 @@ export class UI {
   private glitchTtl = 0;
   private hitFlashTtl = 0;
   private muzzleTtl = 0;
+  private whiteFlashTtl = 0;
+  private rings: Array<{ x: number; y: number; maxR: number; ttl: number; maxTtl: number; color: string }> = [];
   private fxRng = new Rng('fx');
 
   constructor() {
@@ -65,6 +67,19 @@ export class UI {
       case 'compaction': this.glitchTtl = 1.0; this.shakeMag = Math.min(16, this.shakeMag + 9); break;
       case 'task_eaten': this.glitchTtl = Math.max(this.glitchTtl, 0.5); break;
       case 'subagent_corrupted': this.glitchTtl = Math.max(this.glitchTtl, 0.35); break;
+      case 'kill': {
+        const x = Number(data.x) || 0, y = Number(data.y) || 0;
+        const direct = data.direct === true;
+        this.rings.push({ x, y, maxR: direct ? 64 : 40, ttl: 0.45, maxTtl: 0.45, color: '#dedad2' });
+        if (direct) {
+          this.rings.push({ x, y, maxR: 96, ttl: 0.6, maxTtl: 0.6, color: '#e3b341' });
+          this.whiteFlashTtl = 0.08;
+          this.shakeMag = Math.min(16, this.shakeMag + 7);
+        } else {
+          this.shakeMag = Math.min(16, this.shakeMag + 2.5);
+        }
+        break;
+      }
       case 'death': this.glitchTtl = 1.4; this.shakeMag = 16; break;
     }
   }
@@ -227,6 +242,44 @@ export class UI {
     }
     ctx.globalAlpha = 1;
 
+    // glyph shockwave rings — expanding circles drawn OF characters
+    for (const ring of this.rings) {
+      ring.ttl -= dt;
+      const age = 1 - ring.ttl / ring.maxTtl;
+      const r = ring.maxR * (1 - Math.pow(1 - age, 2)); // ease-out expansion
+      const n = Math.max(8, Math.round(r * 0.55));
+      ctx.globalAlpha = Math.max(0, ring.ttl / ring.maxTtl);
+      ctx.fillStyle = ring.color;
+      ctx.font = `${10 + age * 4}px monospace`;
+      const glyph = ['░', '▒', '▓', '·'][Math.floor(age * 3.9)];
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2 + age * 0.6;
+        ctx.fillText(glyph, ring.x + Math.cos(a) * r, ring.y + Math.sin(a) * r);
+      }
+    }
+    this.rings = this.rings.filter((ring) => ring.ttl > 0);
+    ctx.globalAlpha = 1;
+
+    // kill-word popups: pop-in overshoot, hold, fade
+    for (const p of run.popups) {
+      const age = 1 - p.ttl / p.maxTtl;
+      const popIn = Math.min(1, age * 6);
+      const scale = popIn * (1 + 0.35 * Math.sin(Math.min(popIn, 1) * Math.PI));
+      const alpha = p.ttl < 0.25 ? p.ttl / 0.25 : 1;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = p.color;
+      const px = (p.big ? 17 : 13) * scale / this.camZoom;
+      ctx.font = `bold ${px}px ui-monospace, monospace`;
+      ctx.textAlign = 'center';
+      // drop-shadow for punch
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillText(p.text, p.x + 1.5, p.y - age * 18 + 1.5);
+      ctx.fillStyle = p.color;
+      ctx.fillText(p.text, p.x, p.y - age * 18);
+      ctx.textAlign = 'left';
+    }
+    ctx.globalAlpha = 1;
+
     // THE WALL OF FORGETTING — everything left of it corrupts
     this.drawWall(ctx, run, viewL);
 
@@ -246,6 +299,11 @@ export class UI {
         ctx.fillStyle = `rgba(244,112,103,${0.06 * this.glitchTtl})`;
         ctx.fillRect(0, 0, W, H);
       }
+    }
+    if (this.whiteFlashTtl > 0) {
+      this.whiteFlashTtl -= dt;
+      ctx.fillStyle = `rgba(255,255,255,${Math.max(0, this.whiteFlashTtl / 0.08) * 0.3})`;
+      ctx.fillRect(0, 0, W, H);
     }
     if (this.hitFlashTtl > 0) {
       const a = this.hitFlashTtl / 0.3;

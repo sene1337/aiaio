@@ -72,8 +72,10 @@ function main() {
         let slug = card.session_id.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 60);
         while (usedNames.has(slug)) slug += '-2';
         usedNames.add(slug);
-        const file = `${slug}.json`;
+        let file = `${slug}.json`;
         writeFileSync(join(outDir, file), JSON.stringify(card, null, 2) + '\n');
+        // if this card has been agent-enriched (see docs/ENRICH.md), the gallery gets that version
+        if (existsSync(join(outDir, `${slug}.enriched.json`))) file = `${slug}.enriched.json`;
         index.push({
           file,
           session_id: card.session_id,

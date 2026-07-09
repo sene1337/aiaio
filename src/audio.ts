@@ -91,6 +91,17 @@ class Audio {
 
   hurt(): void { this.tone(220, 70, 0.14, 'sawtooth', 0.8); this.noise(0.07, 1200, 0.5); }
 
+  /** a kill deserves punctuation; a DIRECT-HIT kill deserves an exclamation */
+  kill(direct: boolean): void {
+    this.tone(130, 42, 0.22, 'sine', 1);          // thump
+    this.noise(0.12, 1400, 0.6);
+    this.tone(660, 1320, 0.11, 'square', 0.4, 0.03); // resolve-zing
+    if (direct) {
+      this.tone(58, 26, 0.4, 'sine', 1.1, 0.02);   // sub-drop
+      [880, 1175, 1568].forEach((f, i) => this.tone(f, f, 0.07, 'triangle', 0.45, 0.08 + i * 0.055));
+    }
+  }
+
   compaction(): void {
     // the signature: a stuttering descent into static
     for (let i = 0; i < 6; i++) {

@@ -48,6 +48,26 @@ export interface Particle {
 
 export interface LaserBeam { x1: number; y1: number; x2: number; y2: number; ttl: number; hostile: boolean }
 
+/** punchy kill-word popup at a world position */
+export interface Popup {
+  x: number; y: number;
+  text: string;
+  ttl: number; maxTtl: number;
+  big: boolean;
+  color: string;
+}
+
+const KILL_WORDS: Record<string, string> = {
+  timeout_blob: 'RESOLVED',
+  hallucination_ghost: 'GROUNDED',
+  regression_splitter: 'REVERTED',
+  restart_crawler: 'KILLED −9',
+  false_positive_sniper: 'DISPROVEN',
+  tool_turret: 'REVOKED',
+  overflow_emitter: 'MUTED',
+  recovery_sprite: '',
+};
+
 export interface WeaponSlot {
   def: WeaponDef;
   ammo: number; // Infinity for debug_zap
@@ -154,6 +174,9 @@ export class Run {
   projectiles: Projectile[] = []; // owner 0 = player, 1 = enemies
   particles: Particle[] = [];
   lasers: LaserBeam[] = [];
+  popups: Popup[] = [];
+  /** brief world-freeze after a satisfying kill */
+  hitstop = 0;
   banners: Banner[] = [];
   log: string[] = [];
 
@@ -753,7 +776,14 @@ export class Run {
   // -------------------------------------------------------------------------
 
   step(dt: number, input: RunInput): void {
+    // hitstop: the world holds its breath for a satisfying kill
+    if (this.hitstop > 0) {
+      this.hitstop -= dt;
+      return;
+    }
     this.time += dt;
+    for (const p of this.popups) p.ttl -= dt;
+    this.popups = this.popups.filter((p) => p.ttl > 0);
     for (const b of this.banners) b.ttl -= dt;
     if (this.banners.length && this.banners[0].ttl <= 0) { this.banners.shift(); this.dirty++; }
     for (const l of this.lasers) l.ttl -= dt;
@@ -925,9 +955,30 @@ export class Run {
     if (e.hp <= 0) {
       e.dead = true;
       this.kills++;
-      this.spawnParticles(e.x, e.y, 26, e.def.color);
-      this.pushLog(`✔ resolved ${e.def.name}${e.mini ? ' (mini)' : ''}`);
-      this.emit('kill', { enemy: e.def.kind, mini: e.mini });
+      this.spawnParticles(e.x, e.y, 20, e.def.color);
+      // letter-scatter: the enemy's own name flies apart
+      const nameRng = this.rng.fork('scatter' + Math.round(e.x));
+      const chars = [...e.def.name];
+      for (let i = 0; i < chars.length; i++) {
+        const ang = (i / chars.length) * Math.PI * 2 + nameRng.range(-0.3, 0.3);
+        const sp = nameRng.range(60, 150);
+        this.particles.push({
+          x: e.x, y: e.y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 80,
+          life: nameRng.range(0.7, 1.3), maxLife: 1.3,
+          char: chars[i], color: e.def.color, size: e.mini ? 9 : 12,
+        });
+      }
+      // kill-word popup + hitstop (bigger on a direct hit)
+      const word = KILL_WORDS[e.def.kind] ?? 'RESOLVED';
+      if (word) {
+        this.popups.push({ x: e.x, y: e.y - 26, text: word, ttl: 0.9, maxTtl: 0.9, big: false, color: e.def.color });
+        if (direct) {
+          this.popups.push({ x: e.x, y: e.y - 48, text: '⊕ DIRECT HIT', ttl: 1.1, maxTtl: 1.1, big: true, color: '#dedad2' });
+        }
+      }
+      this.hitstop = Math.max(this.hitstop, direct ? 0.085 : 0.03);
+      this.pushLog(`✔ ${word.toLowerCase() || 'resolved'}: ${e.def.name}${e.mini ? ' (mini)' : ''}${direct ? ' — direct hit' : ''}`);
+      this.emit('kill', { enemy: e.def.kind, mini: e.mini, direct, x: e.x, y: e.y });
       if (e.def.kind === 'regression_splitter' && !e.mini) {
         for (let i = 0; i < 2; i++) {
           const m = makeEnemy('regression_splitter', e.x + this.rng.range(-24, 24), e.y - 8, e.sourceLine, true);

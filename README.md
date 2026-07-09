@@ -117,6 +117,22 @@ All heuristic, deterministic, on-machine — no LLM involved. Redaction applies 
 every snippet, but a card now contains fragments of your actual prompts: **skim
 before sharing.**
 
+### Tier 2 — your agent writes your level
+
+AIAIO's players have agents, so the deep enrichment doesn't ship a model —
+**your own agent novelizes your session** (see [docs/ENRICH.md](docs/ENRICH.md)):
+
+```bash
+node scripts/enrich-sessioncard.mjs public/cards/<card>.json <session-dir>
+# default: claude -p · override: AIAIO_LLM_CMD="ollama run llama3.2" …
+```
+
+The model rewrites ONLY goal/tasks/moments (imperative task names, real
+completion flags, verbatim moment quotes); every mechanical field is
+whitelist-protected, every accepted string re-redacted and capped. `npm run
+scan` automatically prefers `<card>.enriched.json` in the gallery when one
+exists. For private sessions, point `AIAIO_LLM_CMD` at a local model.
+
 ## `npm run scan` — your sessions become levels
 
 Auto-discovers agent session logs (`~/.claude/projects`, `~/.openclaw`,

@@ -133,6 +133,7 @@ function routeAudio(type: string, data: Record<string, unknown>): void {
       break;
     }
     case 'explosion': audio.explode(Number(data.radius) || 20); break;
+    case 'kill': audio.kill(data.direct === true); break;
     case 'damage': audio.hurt(); break;
     case 'compaction': audio.compaction(); break;
     case 'work_tick': audio.taskTick(); break;
