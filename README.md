@@ -29,7 +29,8 @@ sessions + random generation).
 - **W (hold)** work the task at a station — you're rooted and **heads-down**
   (+25% damage taken) while working. Working is how you win; working is when
   you're weakest.
-- **U** install an update at a ⬆ crate (risk roll: patch-note buffs OR nerfs)
+- **U** open a ⬆ crate's command menu (choose with 1/2/3), or install a ◈ model
+  upgrade · **C** run `/compact`
 - **[ ] / 1-9** switch weapons — slot 1 is the **∞ print-debug zapper**
   (you can never run out of print statements; you can never win with them alone)
 - **S** spawn a **subagent** (900tk + ~16tk/s upkeep — inference isn't free, and
@@ -59,9 +60,10 @@ sessions + random generation).
   *cleanly* — no surge, nothing forgotten — but the summarization pass costs
   250tk and roots you heads-down for a beat. Run it too close to the threshold
   and the pass itself tips you over. Compact early, compact often.
-- **Context economy** — firing and working cost tokens. The meter is literally
-  distance: pressure = wall speed. The context-window-nuke erases half a screen
-  of errors and floods a quarter of your own meter. Choose violence carefully.
+- **Context economy** — every token burned is wall distance; the meter itself is
+  your countdown to the next involuntary compaction surge. The context-window-nuke
+  erases half a screen of errors and floods a quarter of your own meter (~700px of
+  wall). Choose violence carefully.
   **Getting hit injects error-spew into your context** (stack traces are long) —
   damage accelerates your own compaction.
 - **Upgrades** — ⬆ patch crates open a 3-option command menu: the classic random
@@ -86,7 +88,7 @@ sessions + random generation).
 | restart / crash | 🔁 restart-crawler | relaunches itself once after dying |
 | false_positive | ⚡ false-positive-sniper | telegraphed laser, 100% confidence, ~70% accuracy |
 | tool_error | 🔧 tool-turret | interrupt bolts; hit while working = lose task progress |
-| context_overflow | 📈 overflow-emitter | **priority target**: accelerates the wall while alive |
+| context_overflow | 📈 overflow-emitter | **priority target**: spams tokens into your meter while you're near — which moves the wall |
 | recovery | ➕ recovery-sprite | *friendly* — touch for hp/shield |
 
 Enemy count per category scales `√count` (max 5). Weapon ammo scales the same way
