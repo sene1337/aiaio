@@ -1,0 +1,664 @@
+<meta charset="utf-8">
+<title>AIAIO — THE MEMORY PALACE</title>
+<style>
+  :root{
+    --bg:#0f0f0e; --panel:#161615; --sel:#24241f; --text:#dedad2; --dim:#7a766e;
+    --border:#3a3833; --green:#7ee787; --clay:#d97757; --blue:#6cb6ff;
+    --yellow:#e3b341; --red:#f47067;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--text); overflow:hidden;
+    font-family:ui-monospace,'SF Mono',Menlo,Consolas,'Courier New',monospace;
+    font-size:13px; display:flex; flex-direction:column;
+  }
+  /* header strip */
+  header{
+    flex:0 0 auto; border-bottom:1px solid var(--border); background:var(--panel);
+    padding:8px 14px; display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;
+  }
+  header .mark{color:var(--clay)}
+  header h1{
+    font-size:14px; font-weight:normal; letter-spacing:.14em; color:var(--text);
+  }
+  header .pitch{color:var(--dim); font-size:12px}
+  header .tag{
+    margin-left:auto; color:var(--dim); font-size:11px; border:1px solid var(--border);
+    padding:1px 7px;
+  }
+  /* design notes */
+  details{
+    flex:0 0 auto; border-bottom:1px solid var(--border); background:var(--bg);
+    font-size:12px;
+  }
+  details>summary{
+    padding:5px 14px; cursor:pointer; color:var(--yellow); list-style:none;
+    user-select:none;
+  }
+  details>summary::before{content:'▸ '; color:var(--dim)}
+  details[open]>summary::before{content:'▾ '}
+  details .notes{
+    padding:4px 18px 14px; display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+    gap:12px 24px; color:var(--text); line-height:1.55;
+  }
+  details .notes h4{
+    color:var(--clay); font-size:11px; letter-spacing:.1em; font-weight:normal;
+    margin-bottom:3px; text-transform:uppercase;
+  }
+  details .notes h4.keep{color:var(--green)}
+  details .notes h4.fun{color:var(--blue)}
+  details .notes h4.risk{color:var(--red)}
+  details .notes ul{list-style:none}
+  details .notes li{margin:2px 0; color:var(--dim)}
+  details .notes li b{color:var(--text); font-weight:normal}
+  details .notes li::before{content:'· '; color:var(--border)}
+  /* stage */
+  #stage{flex:1 1 auto; position:relative; min-height:0; overflow:hidden}
+  #cv{position:absolute; inset:0; width:100%; height:100%; display:block}
+  #scan{
+    pointer-events:none; position:absolute; inset:0; z-index:6;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,.14) 0,rgba(0,0,0,.14) 1px,transparent 1px,transparent 3px);
+  }
+  #rgb{pointer-events:none; position:absolute; inset:0; z-index:7; opacity:0; mix-blend-mode:screen;
+    background:linear-gradient(90deg,rgba(244,112,103,.5),transparent 12%,transparent 88%,rgba(108,182,255,.5));}
+  /* HUD overlays */
+  .hud{position:absolute; z-index:5; pointer-events:none}
+  .box{border:1px solid var(--border); background:rgba(22,22,21,.88); padding:6px 9px}
+  #goal{top:10px; left:12px; max-width:340px}
+  #goal .lbl{color:var(--dim); font-size:10px; letter-spacing:.12em}
+  #goal .g{color:var(--text); font-size:12px; line-height:1.4}
+  #goal .g q{color:var(--clay)}
+  #ctx{top:10px; right:12px; min-width:230px; text-align:left}
+  #ctx .row{display:flex; gap:8px; align-items:baseline; font-size:11px; white-space:pre}
+  #ctx .k{color:var(--dim)}
+  #ctx .v{color:var(--text)}
+  #ctx .bar{letter-spacing:0; color:var(--dim)}
+  #ctx .warn{color:var(--red)}
+  #tasks{left:12px; bottom:12px; min-width:300px}
+  #tasks h3{font-size:10px; letter-spacing:.14em; color:var(--dim); font-weight:normal; margin-bottom:5px}
+  #tasks h3 .q{color:var(--dim)}
+  .task{display:flex; gap:7px; align-items:baseline; font-size:11px; line-height:1.75; white-space:nowrap}
+  .task .gl{color:var(--dim); width:11px; display:inline-block; text-align:center}
+  .task .nm{color:var(--text); overflow:hidden; text-overflow:ellipsis; max-width:210px}
+  .task .pb{margin-left:auto; letter-spacing:0; font-size:10px; color:var(--dim)}
+  .task.current .nm{color:var(--green)}
+  .task.current .gl{color:var(--green)}
+  .task.done .nm{color:var(--dim); text-decoration:line-through}
+  .task.done .gl{color:var(--green)}
+  .task.forgot .nm{color:var(--red)}
+  .task.forgot .gl{color:var(--red)}
+  .task.meta .nm{color:var(--dim); font-style:italic}
+  #toast{bottom:14px; left:50%; transform:translateX(-50%); max-width:520px; text-align:center;
+    font-size:12px; transition:opacity .3s; opacity:0}
+  #toast .b{color:var(--dim)}
+  #toast.win .q{color:var(--green)}
+  #toast.frust .q{color:var(--red)}
+  #toast .q{color:var(--text)}
+  #legend{right:12px; bottom:12px; font-size:10px; color:var(--dim); line-height:1.7; text-align:right}
+  #legend b{color:var(--text); font-weight:normal}
+  /* compaction banner */
+  #compact{position:absolute; z-index:8; top:46%; left:50%; transform:translate(-50%,-50%);
+    border:1px solid var(--red); background:rgba(15,15,14,.96); padding:10px 18px; text-align:left;
+    max-width:460px; opacity:0; pointer-events:none}
+  #compact h3{color:var(--red); font-size:14px; font-weight:normal; margin-bottom:4px}
+  #compact p{color:var(--text); font-size:12px; line-height:1.5}
+  #compact p::before{content:'⎿  '; color:var(--dim)}
+  .glitch{animation:gl .18s infinite}
+  @keyframes gl{0%,100%{transform:translate(-50%,-50%)}25%{transform:translate(calc(-50% - 3px),calc(-50% + 2px))}
+    50%{transform:translate(calc(-50% + 2px),calc(-50% - 2px))}75%{transform:translate(calc(-50% + 3px),calc(-50% + 1px))}}
+</style>
+
+<header>
+  <span class="mark">✻</span>
+  <h1>THE&nbsp;MEMORY&nbsp;PALACE</h1>
+  <span class="pitch">Your session as a 2.5D palace of rooms — walk it while the Wall of Forgetting eats the rooms behind you, tile by tile, then whole wings.</span>
+  <span class="tag">AIAIO · concept mock · attract mode</span>
+</header>
+
+<details>
+  <summary>DESIGN NOTES</summary>
+  <div class="notes">
+    <div>
+      <h4>What changes vs the side-scroller</h4>
+      <ul>
+        <li>2D horizontal terrain → <b>2.5D isometric palace</b>: one room per conversation chapter / topic.</li>
+        <li>Floors are the chapter's <b>actual text</b> as dim monospace tiles; furniture = tool calls; desks = real user asks; doorways = topic transitions.</li>
+        <li>The wall no longer eats a terrain column — it <b>eats whole rooms</b>. You can look back through a doorway and watch a room you just solved dissolve.</li>
+        <li>Play is <b>room-to-room navigation</b> + spatial routing, not pure run-and-gun.</li>
+      </ul>
+    </div>
+    <div>
+      <h4 class="keep">What stays (invariant)</h4>
+      <ul>
+        <li>SessionCard → deterministic level; <b>wall of forgetting</b> = context pressure made spatial.</li>
+        <li>Token economy <b>ctx meter</b>; token spend advances the room-rot.</li>
+        <li><b>⚡ compaction</b> surge + amnesia — now a <b>wing-collapse</b> set-piece.</li>
+        <li>Task queue = real user asks with ▰▱ progress; <b>✳ subagents</b> cost upkeep; error-log bestiary; TUI / Claude-Code look + WebAudio.</li>
+      </ul>
+    </div>
+    <div>
+      <h4 class="fun">Why it could be MORE fun</h4>
+      <ul>
+        <li>Rooms = chapters you <b>recognize</b> — the palace is legible, so loss is legible.</li>
+        <li>Genuine dread: watch a room you just cleared garble and drop off the map.</li>
+        <li>Routing puzzle: send <b>✳ subagents</b> into a doomed room to grab crates before it's forgotten.</li>
+        <li>Wing-collapse compaction is a real gut-punch, not a slider.</li>
+      </ul>
+    </div>
+    <div>
+      <h4 class="risk">Top 2 risks</h4>
+      <ul>
+        <li><b>Engineering / perf:</b> iso render + per-tile corruption + text-tile floors is a big lift vs the side-scroller; tiny tiles may be unreadable at speed.</li>
+        <li><b>Pacing:</b> room-based traversal risks feeling like a walking-sim — enemies and wall pressure must stay high or the arcade urgency drains.</li>
+      </ul>
+    </div>
+  </div>
+</details>
+
+<div id="stage">
+  <canvas id="cv"></canvas>
+  <div id="rgb"></div>
+  <div id="scan"></div>
+
+  <div class="hud box" id="goal">
+    <div class="lbl">THE MISSION, IN YOUR OWN WORDS</div>
+    <div class="g"><q>the tests are flaky again and the migration is due today — fix both, please</q></div>
+  </div>
+
+  <div class="hud box" id="ctx">
+    <div class="row"><span class="k">ctx </span><span class="bar" id="ctxbar"></span><span class="v" id="ctxpct"></span></div>
+    <div class="row"><span class="k">tok </span><span class="v" id="toktxt"></span></div>
+    <div class="row"><span class="k">wall</span><span class="v" id="walltxt"></span></div>
+    <div class="row"><span class="k">agts</span><span class="v" id="agttxt"></span></div>
+  </div>
+
+  <div class="hud box" id="tasks">
+    <h3>TASK QUEUE — <span class="q">your actual asks</span></h3>
+    <div id="tasklist"></div>
+  </div>
+
+  <div class="hud" id="toast"><span class="b">⎿  </span><span class="q" id="toastq"></span></div>
+
+  <div class="hud box" id="legend">
+    <div><b>◻</b> avatar (session · v2)&nbsp;&nbsp;<b>✳</b> subagent</div>
+    <div><b>▤</b> tool-call furniture&nbsp;&nbsp;<b>▮</b> task desk</div>
+    <div>👻 hallucination&nbsp;&nbsp;⏱ timeout&nbsp;&nbsp;☢ regression</div>
+    <div style="color:var(--red)">▓▒░ wall of forgetting</div>
+  </div>
+
+  <div id="compact">
+    <h3 id="compacth">⚡ /compact — summarizing…</h3>
+    <p id="compactp">a wing of the palace collapses. progress rewound. shield gone.</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+  var stage=document.getElementById('stage');
+  var TW=30, TH=15;                 // iso tile half-extents
+  var LOOP=22.0;                    // seconds
+  var start=performance.now();
+  var dpr=1, cw=0, ch=0;
+
+  function resize(){
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    cw=stage.clientWidth; ch=stage.clientHeight;
+    cv.width=Math.round(cw*dpr); cv.height=Math.round(ch*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener('resize',resize); resize();
+
+  // ---- helpers ----
+  function lerp(a,b,t){return a+(b-a)*t;}
+  function clamp(x,a,b){return x<a?a:(x>b?b:x);}
+  function ease(t){return t<0?0:(t>1?1:t*t*(3-2*t));}
+  function rr(x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+  var GLYPHS="▓▒░#@%&$/\\|<>*+=~^".split("");
+  function junk(n){var s="";for(var i=0;i<n;i++)s+=GLYPHS[(Math.random()*GLYPHS.length)|0];return s;}
+
+  // camera (set each frame)
+  var cam={x:0,y:0}, shake={x:0,y:0};
+  function proj(wx,wy){
+    return { x:(wx-wy)*TW + cam.x + shake.x, y:(wx+wy)*TH + cam.y + shake.y };
+  }
+
+  // ---- world ----
+  var ROOMS=[
+    {id:'A', x0:0,  y0:0,  w:4,h:4, accent:'#d97757', txt:"npm test 3 failing flaky retry timeout test_auth assert equal race condition seed rng sleep 200ms nondeterministic order "},
+    {id:'B', x0:6,  y0:4,  w:4,h:4, accent:'#6cb6ff', txt:"ALTER TABLE users add column dry_run migrate up down schema version 014 backfill batch commit rollback lock wait "},
+    {id:'C', x0:12, y0:8,  w:4,h:4, accent:'#7ee787', txt:"support ticket reply queue refund status escalate SLA breach ack template ok resolved close thanks for waiting "},
+    {id:'D', x0:18, y0:12, w:4,h:4, accent:'#e3b341', txt:"postmortem root cause timeline what happened impact five whys action items owner due follow up blameless summary "},
+    {id:'E', x0:24, y0:16, w:4,h:4, accent:'#7a766e', txt:"what was i doing again the task the ask the goal remember scroll up context lost summary of summary of summary "}
+  ];
+  // corridor tiles (doorway bridges)
+  var CORR=[[4,3],[4,4],[5,4],[5,5],[10,7],[10,8],[11,8],[11,9],[16,11],[16,12],[17,12],[17,13],[22,15],[22,16],[23,16],[23,17]];
+
+  // build tile list
+  var tiles=[];
+  ROOMS.forEach(function(r,ri){
+    var k=0;
+    for(var yy=0;yy<r.h;yy++) for(var xx=0;xx<r.w;xx++){
+      var wx=r.x0+xx, wy=r.y0+yy;
+      tiles.push({wx:wx,wy:wy,room:ri,ch:r.txt[k%r.txt.length]||' ',accent:r.accent,edge:(xx===0||yy===0||xx===r.w-1||yy===r.h-1)});
+      k++;
+    }
+  });
+  CORR.forEach(function(c,i){ tiles.push({wx:c[0],wy:c[1],room:-1,ch:"·:.,"[i%4],accent:'#3a3833',edge:false,corr:true}); });
+
+  // desks (one per room)
+  var DESKS=[
+    {wx:1.5,wy:1.5,room:0,name:"fix the flaky test suite"},
+    {wx:7.5,wy:5.5,room:1,name:"migrate the database"},
+    {wx:13.5,wy:9.5,room:2,name:"answer the support queue"},
+    {wx:19.5,wy:13.5,room:3,name:"write the postmortem"},
+    {wx:25.5,wy:17.5,room:4,name:"remember what the task was"}
+  ];
+  // furniture = tool calls
+  var FURN=[
+    {wx:0,wy:3,l:"Read"},{wx:3,wy:0,l:"Bash"},{wx:0,wy:0,l:"Grep"},
+    {wx:6,wy:7,l:"Edit"},{wx:9,wy:4,l:"Bash"},
+    {wx:12,wy:11,l:"Read"},{wx:15,wy:8,l:"Write"},
+    {wx:18,wy:15,l:"Edit"}
+  ];
+  // enemies haunting rooms
+  var ENEM=[
+    {wx:2.4,wy:3.2,g:"☢",c:'#f47067'},   // regression in A
+    {wx:8.2,wy:4.4,g:"👻",c:'#dedad2'},  // hallucination in B
+    {wx:14.2,wy:10.3,g:"⏱",c:'#e3b341'}  // timeout in C
+  ];
+  // plaques = moments
+  var PLAQ=[
+    {wx:0,wy:1.6,t:"why is test_auth failing",win:false},
+    {wx:5,wy:5,t:"still broken. still. broken.",win:false},
+    {wx:7.2,wy:4,t:"dry-run passed!",win:true},
+    {wx:13,wy:8,t:"ok it works. nobody touch anything.",win:true}
+  ];
+
+  // avatar keyframes {t,x,y}
+  var KF=[
+    {t:0.0, x:0.2,y:2.4},
+    {t:2.0, x:1.5,y:1.5},
+    {t:4.6, x:1.5,y:1.5},   // work desk A
+    {t:6.2, x:3.3,y:3.3},   // doorway A
+    {t:8.0, x:5.0,y:4.4},   // corridor
+    {t:9.6, x:7.5,y:5.5},
+    {t:13.4,x:7.5,y:5.5},   // work desk B
+    {t:15.4,x:7.5,y:5.5},   // rooted through compaction
+    {t:17.4,x:11.0,y:8.2},  // corridor to C
+    {t:19.4,x:13.5,y:9.5},
+    {t:22.0,x:13.5,y:9.5}
+  ];
+  function avatar(t){
+    for(var i=0;i<KF.length-1;i++){
+      if(t>=KF[i].t && t<=KF[i+1].t){
+        var a=KF[i],b=KF[i+1], u=ease((t-a.t)/(b.t-a.t||1));
+        var still=(Math.abs(a.x-b.x)<0.05&&Math.abs(a.y-b.y)<0.05);
+        return {x:lerp(a.x,b.x,u),y:lerp(a.y,b.y,u),working:still};
+      }
+    }
+    return {x:KF[KF.length-1].x,y:KF[KF.length-1].y,working:false};
+  }
+
+  // wall front (world depth = wx+wy). advances w/ token spend, lurches at compaction.
+  function wallEdge(t){
+    if(t<6)    return lerp(-4, 1.5,(t)/6);
+    if(t<12)   return lerp(1.5, 6.6,(t-6)/6);
+    if(t<14)   return lerp(6.6, 9.6,(t-12)/2);
+    if(t<15.4) return lerp(9.6,16.2,(t-14)/1.4);   // ⚡ compaction lurch — a wing goes
+    return lerp(16.2,19.0,(t-15.4)/(LOOP-15.4));
+  }
+  var BAND=2.9;
+
+  function ctxVal(t){
+    if(t<14)   return lerp(0.16,0.92,t/14);
+    if(t<15.4) return lerp(0.92,0.30,(t-14)/1.4);
+    return lerp(0.30,0.52,(t-15.4)/(LOOP-15.4));
+  }
+
+  // ---- drawing ----
+  function diamond(wx,wy){
+    var a=proj(wx,wy),b=proj(wx+1,wy),c=proj(wx+1,wy+1),d=proj(wx,wy+1);
+    return [a,b,c,d];
+  }
+  function drawTile(tl,we,t){
+    var dc=tl.wx+0.5+tl.wy+0.5;         // tile center depth
+    if(dc < we-0.2) return;             // consumed → void
+    var corrupt=0;
+    if(dc < we+BAND) corrupt=clamp(1-(dc-we)/BAND,0,1);
+    var p=diamond(tl.wx,tl.wy);
+    ctx.beginPath();
+    ctx.moveTo(p[0].x,p[0].y);ctx.lineTo(p[1].x,p[1].y);ctx.lineTo(p[2].x,p[2].y);ctx.lineTo(p[3].x,p[3].y);ctx.closePath();
+    // fill
+    if(corrupt>0.05){
+      ctx.fillStyle='rgba('+ (30+corrupt*80|0) +',12,10,'+(0.55+0.4*corrupt)+')';
+    } else {
+      ctx.fillStyle= tl.corr? 'rgba(20,20,19,0.5)' : 'rgba(22,22,21,0.72)';
+    }
+    ctx.fill();
+    ctx.lineWidth=1;
+    ctx.strokeStyle= corrupt>0.2? 'rgba(244,112,103,'+(0.4+0.5*corrupt)+')'
+                    : (tl.edge? 'rgba(58,56,51,0.9)':'rgba(58,56,51,0.5)');
+    ctx.stroke();
+    // char
+    var cx=(p[0].x+p[2].x)/2, cy=(p[0].y+p[2].y)/2;
+    ctx.font='10px ui-monospace,Menlo,monospace';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    if(corrupt>0.15){
+      ctx.fillStyle= (Math.random()<0.6)?'#f47067':'#7a2a26';
+      ctx.fillText(GLYPHS[(Math.random()*GLYPHS.length)|0], cx+(Math.random()*3-1.5), cy+(Math.random()*3-1.5));
+    } else {
+      ctx.fillStyle= tl.corr? 'rgba(122,118,110,0.5)' : 'rgba(122,118,110,0.78)';
+      ctx.fillText(tl.ch, cx, cy);
+    }
+  }
+
+  function drawFurniture(f,we){
+    var d=f.wx+0.5+f.wy+0.5; if(d<we-0.2) return;
+    var corrupt=(d<we+BAND)?clamp(1-(d-we)/BAND,0,1):0;
+    var h=20;
+    var b0=proj(f.wx+0.15,f.wy+0.15),b1=proj(f.wx+0.85,f.wy+0.15),b2=proj(f.wx+0.85,f.wy+0.85),b3=proj(f.wx+0.15,f.wy+0.85);
+    // left & right faces
+    ctx.fillStyle= corrupt>0.2?'rgba(60,14,12,0.9)':'rgba(15,15,14,0.95)';
+    ctx.strokeStyle= corrupt>0.2?'#f47067':'#3a3833'; ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(b3.x,b3.y);ctx.lineTo(b2.x,b2.y);ctx.lineTo(b2.x,b2.y-h);ctx.lineTo(b3.x,b3.y-h);ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.fillStyle= corrupt>0.2?'rgba(80,18,15,0.9)':'rgba(22,22,21,0.97)';
+    ctx.beginPath();ctx.moveTo(b1.x,b1.y);ctx.lineTo(b2.x,b2.y);ctx.lineTo(b2.x,b2.y-h);ctx.lineTo(b1.x,b1.y-h);ctx.closePath();ctx.fill();ctx.stroke();
+    // top
+    ctx.fillStyle= corrupt>0.2?'rgba(100,22,18,0.95)':'rgba(36,36,31,0.98)';
+    ctx.beginPath();ctx.moveTo(b0.x,b0.y-h);ctx.lineTo(b1.x,b1.y-h);ctx.lineTo(b2.x,b2.y-h);ctx.lineTo(b3.x,b3.y-h);ctx.closePath();ctx.fill();ctx.stroke();
+    // label
+    ctx.font='9px ui-monospace,monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillStyle= corrupt>0.3?'#f47067':'#7a766e';
+    ctx.fillText(corrupt>0.3?junk(4):f.l, (b1.x+b3.x)/2, b2.y-h-6);
+  }
+
+  function drawDesk(dk,we,t,progress){
+    var d=dk.wx+0.5+dk.wy+0.5;
+    var gone = d<we-0.2;
+    var corrupt=(!gone && d<we+BAND)?clamp(1-(d-we)/BAND,0,1):0;
+    var acc=ROOMS[dk.room].accent;
+    if(!gone){
+      // desk base (short console)
+      var h=13;
+      var b1=proj(dk.wx-0.35,dk.wy-0.35),b2=proj(dk.wx+0.35,dk.wy-0.35),b3=proj(dk.wx+0.35,dk.wy+0.35),b4=proj(dk.wx-0.35,dk.wy+0.35);
+      ctx.fillStyle='rgba(15,15,14,0.95)';ctx.strokeStyle=corrupt>0.2?'#f47067':acc;ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(b4.x,b4.y);ctx.lineTo(b3.x,b3.y);ctx.lineTo(b3.x,b3.y-h);ctx.lineTo(b4.x,b4.y-h);ctx.closePath();ctx.fill();ctx.stroke();
+      ctx.beginPath();ctx.moveTo(b2.x,b2.y);ctx.lineTo(b3.x,b3.y);ctx.lineTo(b3.x,b3.y-h);ctx.lineTo(b2.x,b2.y-h);ctx.closePath();ctx.fill();ctx.stroke();
+      ctx.fillStyle='rgba(36,36,31,0.98)';
+      ctx.beginPath();ctx.moveTo(b1.x,b1.y-h);ctx.lineTo(b2.x,b2.y-h);ctx.lineTo(b3.x,b3.y-h);ctx.lineTo(b4.x,b4.y-h);ctx.closePath();ctx.fill();ctx.stroke();
+    }
+    // floating task card
+    var c=proj(dk.wx,dk.wy);
+    var cardY=c.y - (gone? 6 : 40) - Math.sin(t*2+dk.wx)*2;
+    var w=Math.min(210, 92+dk.name.length*4.6);
+    var col= gone? '#f47067' : (corrupt>0.3?'#f47067':acc);
+    ctx.save();
+    ctx.globalAlpha= gone? clamp(1-(we-d)*1.4,0,1) : 1;
+    // glow
+    ctx.shadowColor=col; ctx.shadowBlur= gone?4:12;
+    rr(c.x-w/2, cardY-15, w, 22, 3);
+    ctx.fillStyle='rgba(22,22,21,0.96)'; ctx.fill();
+    ctx.shadowBlur=0;
+    ctx.strokeStyle=col; ctx.lineWidth=1; ctx.stroke();
+    ctx.font='9px ui-monospace,monospace'; ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillStyle= col;
+    var nm = gone? junk(Math.min(dk.name.length,16)) : dk.name;
+    ctx.fillText('▮ '+nm, c.x-w/2+6, cardY-8);
+    // mini progress ▰▱
+    var N=14, filled=Math.round(progress*N), s='';
+    ctx.font='8px ui-monospace,monospace';
+    var bx=c.x-w/2+6, by=cardY+2;
+    for(var i=0;i<N;i++){
+      ctx.fillStyle= i<filled? col : '#3a3833';
+      ctx.fillText(i<filled?'▰':'▱', bx+i*((w-14)/N), by);
+    }
+    ctx.restore();
+    // pointer line desk->card
+    if(!gone){
+      ctx.strokeStyle='rgba(122,118,110,0.4)';ctx.beginPath();ctx.moveTo(c.x,c.y-10);ctx.lineTo(c.x,cardY+7);ctx.stroke();
+    }
+  }
+
+  function drawEnemy(e,we,t){
+    var d=e.wx+0.5+e.wy+0.5; if(d<we-0.2) return;
+    var corrupt=(d<we+BAND)?clamp(1-(d-we)/BAND,0,1):0;
+    var p=proj(e.wx,e.wy);
+    var bob=Math.sin(t*2.6+e.wx)*4;
+    ctx.font='16px ui-monospace,monospace'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    // shadow
+    ctx.fillStyle='rgba(0,0,0,0.35)';
+    ctx.beginPath();ctx.ellipse(p.x,p.y-2,9,3,0,0,6.283);ctx.fill();
+    ctx.globalAlpha= corrupt>0.4?0.5:0.92;
+    ctx.fillStyle= corrupt>0.3?'#f47067':e.c;
+    ctx.fillText(corrupt>0.5?GLYPHS[(Math.random()*4)|0]:e.g, p.x, p.y-16+bob);
+    ctx.globalAlpha=1;
+  }
+
+  function drawPlaque(pl,we,t){
+    var d=pl.wx+0.5+pl.wy+0.5; if(d<we-0.2) return;
+    var corrupt=(d<we+BAND)?clamp(1-(d-we)/BAND,0,1):0;
+    var p=proj(pl.wx,pl.wy);
+    var col= corrupt>0.3?'#f47067':(pl.win?'#7ee787':'#f47067');
+    // post
+    ctx.strokeStyle='rgba(122,118,110,0.5)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(p.x,p.y-4);ctx.lineTo(p.x,p.y-24);ctx.stroke();
+    // diamond ◇
+    ctx.font='12px ui-monospace,monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle=col; ctx.fillText('◇', p.x, p.y-30);
+  }
+
+  function drawSubagent(t){
+    if(t<5) return;
+    // travels from A desk into B/C area, then back
+    var u,ax,ay;
+    if(t<10){u=ease((t-5)/5); ax=lerp(1.6,8.2,u); ay=lerp(1.8,4.6,u);}
+    else if(t<16){u=ease((t-10)/6); ax=lerp(8.2,13.6,u); ay=lerp(4.6,10.0,u);}
+    else {u=ease((t-16)/6); ax=lerp(13.6,7.6,u); ay=lerp(10.0,5.6,u);}
+    var p=proj(ax,ay);
+    var bob=Math.sin(t*5)*3;
+    // tether
+    ctx.strokeStyle='rgba(126,231,135,0.25)';ctx.setLineDash([2,3]);
+    var av=avatar(t), ap=proj(av.x,av.y);
+    ctx.beginPath();ctx.moveTo(ap.x,ap.y-14);ctx.lineTo(p.x,p.y-14+bob);ctx.stroke();ctx.setLineDash([]);
+    ctx.font='15px ui-monospace,monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle='#7ee787';
+    ctx.shadowColor='#7ee787';ctx.shadowBlur=8;
+    ctx.fillText('✳', p.x, p.y-16+bob);
+    ctx.shadowBlur=0;
+  }
+
+  function drawAvatar(av,t,blink){
+    var p=proj(av.x,av.y);
+    // shadow
+    ctx.fillStyle='rgba(0,0,0,0.4)';
+    ctx.beginPath();ctx.ellipse(p.x,p.y-2,13,4,0,0,6.283);ctx.fill();
+    var w=46,h=32, lift=18+Math.sin(t*3)*1.2;
+    var x=p.x-w/2, y=p.y-h-lift;
+    var acc= av.working? '#7ee787':'#d97757';
+    // antenna
+    ctx.strokeStyle=acc;ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(p.x,y);ctx.lineTo(p.x,y-9);ctx.stroke();
+    ctx.fillStyle= blink?acc:'#161615';
+    ctx.beginPath();ctx.arc(p.x,y-11,2.2,0,6.283);ctx.fill();
+    // body
+    ctx.shadowColor=acc;ctx.shadowBlur= av.working?10:6;
+    rr(x,y,w,h,5); ctx.fillStyle='#161615'; ctx.fill();
+    ctx.shadowBlur=0;
+    ctx.strokeStyle=acc;ctx.lineWidth=1.4;ctx.stroke();
+    // title bar
+    ctx.beginPath();ctx.moveTo(x+1,y+9);ctx.lineTo(x+w-1,y+9);ctx.strokeStyle='rgba(58,56,51,0.9)';ctx.lineWidth=1;ctx.stroke();
+    var dots=['#f47067','#e3b341','#7ee787'];
+    for(var i=0;i<3;i++){ctx.fillStyle=dots[i];ctx.beginPath();ctx.arc(x+7+i*7,y+5,1.8,0,6.283);ctx.fill();}
+    ctx.font='7px ui-monospace,monospace';ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillStyle='#7a766e';ctx.fillText('v2',x+w-4,y+5);
+    // face '>_'
+    ctx.font='13px ui-monospace,monospace';ctx.textAlign='left';ctx.textBaseline='middle';
+    ctx.fillStyle=acc;
+    ctx.fillText('>', x+8, y+21);
+    if(blink){ctx.fillStyle=acc;ctx.fillRect(x+18,y+16,7,10);}
+    // working spinner
+    if(av.working){
+      var verbs=['✻','✽','✳','✶'];
+      ctx.font='10px ui-monospace,monospace';ctx.textAlign='center';
+      ctx.fillStyle='#7ee787';ctx.fillText(verbs[(t*6|0)%4]+' working…', p.x, y-16);
+    }
+  }
+
+  // wall of forgetting — flickering red glyph curtain along the diagonal wx+wy=we
+  function drawWall(we,t){
+    ctx.font='12px ui-monospace,monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+    var base=Math.floor(we);
+    for(var wx=base-16; wx<base+16; wx+=0.5){
+      var wy=we-wx; if(wy<-3||wx<-3) continue;
+      var p=proj(wx,wy);
+      if(p.x<-40||p.x>cw+40||p.y<-40||p.y>ch+40) continue;
+      var cols=5;
+      for(var r2=0;r2<cols;r2++){
+        var yy=p.y - r2*11 - 4 - Math.random()*3;
+        var a=(0.85-r2*0.13)*(0.6+0.4*Math.random());
+        ctx.fillStyle='rgba('+(200+Math.random()*55|0)+',60,55,'+a+')';
+        ctx.fillText(GLYPHS[(Math.random()*GLYPHS.length)|0], p.x+(Math.random()*4-2), yy);
+      }
+    }
+    // faint red haze wash on the consumed side handled by void (tiles skipped)
+  }
+
+  // ---- HUD dom refs ----
+  var ctxbar=document.getElementById('ctxbar'), ctxpct=document.getElementById('ctxpct'),
+      toktxt=document.getElementById('toktxt'), walltxt=document.getElementById('walltxt'),
+      agttxt=document.getElementById('agttxt'), tasklist=document.getElementById('tasklist'),
+      toast=document.getElementById('toast'), toastq=document.getElementById('toastq'),
+      compact=document.getElementById('compact'), rgb=document.getElementById('rgb');
+
+  var TASKDEF=[
+    {name:"fix the flaky test suite"},
+    {name:"migrate the database"},
+    {name:"answer the support queue"},
+    {name:"write the postmortem"},
+    {name:"remember what the task was",meta:true}
+  ];
+  // build task rows
+  var rows=TASKDEF.map(function(td){
+    var d=document.createElement('div'); d.className='task'+(td.meta?' meta':'');
+    d.innerHTML='<span class="gl">☐</span><span class="nm">'+td.name+'</span><span class="pb"></span>';
+    tasklist.appendChild(d);
+    return {el:d, gl:d.querySelector('.gl'), pb:d.querySelector('.pb')};
+  });
+
+  function progVal(idx,t){
+    if(idx===0) return clamp((t-2.0)/2.4,0,1);
+    if(idx===1) return clamp((t-9.6)/3.4,0,1);
+    if(idx===2) return clamp((t-17.4)/2.0,0,1);
+    return 0;
+  }
+  function bar(p,n){var f=Math.round(p*n),s='';for(var i=0;i<n;i++)s+=(i<f?'▰':'▱');return s;}
+
+  var lastToast="";
+  function updateHUD(t,we){
+    var c=ctxVal(t);
+    var n=18, f=Math.round(c*n), s='';
+    for(var i=0;i<n;i++) s+=(i<f?'▮':'▯');
+    ctxbar.textContent='['+s+']';
+    ctxbar.className='bar'+(c>0.8?' warn':'');
+    ctxpct.textContent=Math.round(c*100)+'%';
+    ctxpct.className='v'+(c>0.8?' warn':'');
+    toktxt.textContent=(12800+Math.round(c*7200)).toLocaleString()+' / 20,000';
+    var av=avatar(t);
+    var gap=(av.x+av.y)-we;
+    walltxt.textContent= gap<3? '⚠ '+gap.toFixed(1)+' rooms — CLOSE' : gap.toFixed(1)+' rooms behind';
+    walltxt.style.color= gap<3? 'var(--red)':'var(--dim)';
+    agttxt.textContent= t>=5&&t<21? '1 active · ✳ scouting D':'0';
+
+    // tasks
+    for(var k=0;k<TASKDEF.length;k++){
+      var p=progVal(k,t), cur=false, done=false, forgot=false;
+      var deskDepth=DESKS[k].wx+0.5+DESKS[k].wy+0.5;
+      if(k===0){ done=p>=1; forgot= we>4.2; }        // room A eaten -> completed task un-ships
+      else if(k===1){ done=p>=1; }
+      else if(k===2){ cur=(t>16&&p<1); done=p>=1; }
+      else if(k===3){ cur=false; }
+      // current highlight for in-progress
+      if(!done&&!forgot&&p>0&&p<1) cur=true;
+      var cls='task'+(TASKDEF[k].meta?' meta':'');
+      if(forgot) cls+=' forgot'; else if(done) cls+=' done'; else if(cur) cls+=' current';
+      rows[k].el.className=cls;
+      rows[k].gl.textContent= forgot?'▨':(done?'☒':(cur?'▸':'☐'));
+      rows[k].pb.textContent= forgot? '▨▨▨ lost' : (TASKDEF[k].meta? '—' : bar(p,10));
+      rows[k].pb.style.color= forgot?'var(--red)':(done?'var(--green)':'var(--dim)');
+    }
+
+    // plaque toast: nearest within range
+    var best=null,bd=99;
+    PLAQ.forEach(function(pl){
+      var dx=pl.wx-av.x, dy=pl.wy-av.y, dd=Math.sqrt(dx*dx+dy*dy);
+      if(dd<bd){bd=dd;best=pl;}
+    });
+    if(best && bd<2.2 && (best.wx+best.wy)>we){
+      if(best.t!==lastToast){ lastToast=best.t;
+        toastq.textContent='“'+best.t+'”';
+        toast.className='hud '+(best.win?'win':'frust');
+      }
+      toast.style.opacity=1;
+    } else { toast.style.opacity=0; lastToast=""; }
+
+    // compaction banner + rgb split
+    if(t>=14 && t<15.5){
+      compact.style.opacity=1; compact.classList.add('glitch');
+      rgb.style.opacity=(0.4+Math.random()*0.5);
+    } else { compact.style.opacity=0; compact.classList.remove('glitch'); rgb.style.opacity=0; }
+  }
+
+  // ---- frame ----
+  function frame(now){
+    var t=((now-start)/1000)%LOOP;
+    var we=wallEdge(t);
+    var av=avatar(t);
+
+    // camera follows avatar (iso pre-camera coords)
+    var aix=(av.x-av.y)*TW, aiy=(av.x+av.y)*TH;
+    cam.x = cw*0.46 - aix;
+    cam.y = ch*0.56 - aiy;
+    // shake during compaction
+    if(t>=14 && t<15.4){ var m=(15.4-t)/1.4*6; shake.x=(Math.random()*2-1)*m; shake.y=(Math.random()*2-1)*m; }
+    else { shake.x=0; shake.y=0; }
+
+    ctx.clearRect(0,0,cw,ch);
+
+    // floor tiles, back-to-front by depth
+    tiles.sort(function(a,b){return (a.wx+a.wy)-(b.wx+b.wy);});
+    for(var i=0;i<tiles.length;i++) drawTile(tiles[i],we,t);
+
+    // props collected + depth sorted
+    var props=[];
+    FURN.forEach(function(f){ props.push({d:f.wx+f.wy, fn:function(f){return function(){drawFurniture(f,we);};}(f)}); });
+    PLAQ.forEach(function(pl){ props.push({d:pl.wx+pl.wy-0.1, fn:function(pl){return function(){drawPlaque(pl,we,t);};}(pl)}); });
+    DESKS.forEach(function(dk,idx){ props.push({d:dk.wx+dk.wy, fn:function(dk,idx){return function(){drawDesk(dk,we,t,progVal(idx,t));};}(dk,idx)}); });
+    ENEM.forEach(function(e){ props.push({d:e.wx+e.wy+0.1, fn:function(e){return function(){drawEnemy(e,we,t);};}(e)}); });
+    // wall curtain as a prop at its depth
+    props.push({d:we, fn:function(){drawWall(we,t);}});
+    // subagent
+    props.push({d:99, fn:function(){drawSubagent(t);}});
+    // avatar
+    var blink=(now%1100)<620;
+    props.push({d:av.x+av.y+0.05, fn:function(){drawAvatar(av,t,blink);}});
+
+    props.sort(function(a,b){return a.d-b.d;});
+    for(var j=0;j<props.length;j++) props[j].fn();
+
+    updateHUD(t,we);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>

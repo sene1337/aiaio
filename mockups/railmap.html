@@ -1,0 +1,697 @@
+<meta charset="utf-8">
+<title>AIAIO — THE RAIL MAP</title>
+<style>
+  :root{
+    --bg:#0f0f0e; --panel:#161615; --sel:#24241f; --text:#dedad2; --dim:#7a766e;
+    --border:#3a3833; --green:#7ee787; --clay:#d97757; --blue:#6cb6ff;
+    --yellow:#e3b341; --red:#f47067;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;background:var(--bg);color:var(--text);
+    font-family:ui-monospace,'SF Mono',Menlo,Consolas,'Courier New',monospace;
+    font-size:13px;overflow-x:hidden}
+  #wrap{max-width:1040px;margin:0 auto;padding:0 12px 40px}
+
+  /* ---- fixed header strip ---- */
+  header{position:sticky;top:0;z-index:20;background:var(--bg);
+    border-bottom:1px solid var(--border);padding:10px 14px;
+    display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  header .mark{color:var(--clay)}
+  header h1{font-size:14px;font-weight:normal;letter-spacing:.14em;color:var(--text)}
+  header h1 .n{color:var(--green)}
+  header .pitch{color:var(--dim);font-size:12px}
+  header .badge{margin-left:auto;color:var(--dim);font-size:11px;
+    border:1px solid var(--border);padding:2px 7px;border-radius:3px}
+  header .badge .dot{color:var(--green)}
+
+  /* ---- canvas frame ---- */
+  #frame{position:relative;margin:14px 0 12px;border:1px solid var(--border);
+    background:var(--panel);border-radius:5px;overflow:hidden}
+  #c{display:block;width:100%;height:auto}
+  #scan{pointer-events:none;position:absolute;inset:0;z-index:5;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,.11) 0px,rgba(0,0,0,.11) 1px,transparent 1px,transparent 3px)}
+  #tag{position:absolute;left:50%;transform:translateX(-50%);bottom:7px;z-index:6;
+    color:var(--dim);font-size:10px;letter-spacing:.12em;white-space:nowrap;
+    opacity:.7}
+  #tag b{color:var(--clay);font-weight:normal}
+
+  /* ---- design notes ---- */
+  details{border:1px solid var(--border);background:var(--panel);border-radius:5px;
+    padding:0 14px}
+  summary{cursor:pointer;padding:10px 0;list-style:none;color:var(--yellow);
+    font-size:12px;letter-spacing:.08em}
+  summary::-webkit-details-marker{display:none}
+  summary::before{content:'▸ ';color:var(--clay)}
+  details[open] summary::before{content:'▾ '}
+  .notes{padding:2px 0 16px;font-size:12px;line-height:1.65;color:var(--text)}
+  .notes h4{font-size:11px;letter-spacing:.1em;color:var(--dim);
+    font-weight:normal;margin:14px 0 5px}
+  .notes h4:first-child{margin-top:4px}
+  .notes ul{list-style:none;margin:0}
+  .notes li{padding-left:16px;position:relative;margin-bottom:4px;color:var(--text)}
+  .notes li::before{content:'⎿';position:absolute;left:0;color:var(--dim)}
+  .notes .keep::before{content:'✓';color:var(--green)}
+  .notes .risk::before{content:'▲';color:var(--red)}
+  .notes b{color:var(--text)}
+  .notes .clay{color:var(--clay)} .notes .blue{color:var(--blue)}
+  .notes .g{color:var(--green)}
+</style>
+
+<header>
+  <span class="mark">✻</span>
+  <h1>THE <span class="n">RAIL&nbsp;MAP</span></h1>
+  <span class="pitch">your session log as a living metro network — route the signal-train to <b style="color:var(--green)">exit&nbsp;0</b> before the forgetting swallows the line.</span>
+  <span class="badge"><span class="dot">●</span> attract&nbsp;mode</span>
+</header>
+
+<div id="wrap">
+  <div id="frame">
+    <canvas id="c" width="1000" height="500"></canvas>
+    <div id="scan"></div>
+    <div id="tag">AIAIO&nbsp;·&nbsp;<b>concept: rail-map</b>&nbsp;·&nbsp;mini-metro&nbsp;meets&nbsp;terminal&nbsp;·&nbsp;~20s&nbsp;loop</div>
+  </div>
+
+  <details>
+    <summary>DESIGN NOTES — what this reimagines, what it keeps, why it's more fun</summary>
+    <div class="notes">
+      <h4>WHAT CHANGES vs the current side-scroller</h4>
+      <ul>
+        <li>Camera flips from a horizontal platformer to a <b>top-down transit graph</b>. You don't run — you <b>route</b>: movement is choosing which switch/edge to take at each junction.</li>
+        <li>The timeline becomes <span class="blue">metro lines</span>. Message turns are <b>stations</b>; threads of work are <b>colored lines</b>; the session's shape is legible at a glance.</li>
+        <li>Tool calls become literal <span class="clay">side-tracks that loop back</span> — you can dip onto them for a payoff and re-merge, at a token cost.</li>
+        <li>The <b>wall of forgetting</b> is no longer a vertical curtain behind you — it's a 2D <span style="color:var(--red)">corruption front</span> sweeping the whole map from the origin station, <b>garbling station names</b> as it eats them.</li>
+      </ul>
+      <h4>WHAT STAYS (every invariant, intact)</h4>
+      <ul>
+        <li class="keep"><b>Task-queue race</b> — your real asks are interchange hubs with <span class="g">▰▱</span> work progress you must stop and grind.</li>
+        <li class="keep"><b>Token economy</b> — a live <b>ctx meter</b>; every switch thrown and metre travelled spends tokens, and tokens are wall distance.</li>
+        <li class="keep"><b>⚡ Compaction events</b> — glitch + the front <b>surges</b> forward; the ctx meter drains.</li>
+        <li class="keep"><b>Subagents</b> — <span style="color:var(--yellow)">✳ helper trains</span> on parallel branch lines that can <span style="color:var(--red)">corrupt</span> and merge back badly.</li>
+        <li class="keep"><b>The avatar</b> — the terminal-window signal riding a rail car: title bar, traffic-light dots, <b>v2</b> tag, blinking <span class="g">&gt;_</span> face, antenna.</li>
+        <li class="keep"><b>Bestiary from your error log</b> — 👻 hallucination-ghost phases between lines, ⏱ timeout-blob stalls a track, ☢ regression-splitter lurks.</li>
+        <li class="keep"><b>TUI / Claude-Code aesthetic</b> — monospace, boxed panels, ⎿ transcript grammar, the exact palette.</li>
+      </ul>
+      <h4>WHY IT COULD BE MORE FUN</h4>
+      <ul>
+        <li><b>Decisions, not just dodging.</b> Branch vs. main-line, dip the tool-loop or skip it, babysit a subagent or terminate it — every junction is a real choice under the ticking front.</li>
+        <li><b>The map IS the story, and it's different every session.</b> A clean run is a tidy line; a rough one is a tangle of red branches and dead hubs — instant replay value and shareable topology.</li>
+      </ul>
+      <h4>TOP 2 RISKS</h4>
+      <ul>
+        <li class="risk"><b>Readability / clutter.</b> Metro map + garbling corruption + enemies + labels can collapse into noise — especially once the front starts scrambling names. Needs ruthless label culling and z-order discipline.</li>
+        <li class="risk"><b>Loss of twitch tension.</b> A routing game risks feeling turn-based and calm. The real-time pressure (front speed, timeout-blobs stalling live track, ghosts phasing your branch) has to stay genuinely stressful or it's a puzzle, not a game.</li>
+      </ul>
+    </div>
+  </details>
+</div>
+
+<script>
+(function(){
+  var cv = document.getElementById('c');
+  var ctx = cv.getContext('2d');
+  var W = 1000, H = 500;
+
+  // colors
+  var C = {
+    bg:'#0f0f0e', panel:'#161615', sel:'#24241f', text:'#dedad2', dim:'#7a766e',
+    border:'#3a3833', green:'#7ee787', clay:'#d97757', blue:'#6cb6ff',
+    yellow:'#e3b341', red:'#f47067'
+  };
+
+  // hi-dpi sizing to the displayed width
+  function resize(){
+    var dpr = window.devicePixelRatio || 1;
+    var cssW = cv.clientWidth || W;
+    var cssH = cssW * (H / W);
+    cv.width = Math.round(cssW * dpr);
+    cv.height = Math.round(cssH * dpr);
+    var s = (cssW * dpr) / W;
+    ctx.setTransform(s, 0, 0, s, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+
+  function rr(x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+
+  // ---- the main line polyline (the timeline the signal rides) ----
+  // includes a tool-call side-loop dip after the first hub
+  var P = [
+    [70,240],  // 0 origin
+    [150,240], // 1 moment: why is test_auth failing
+    [300,240], // 2 hub: fix the flaky test suite
+    // tool-call side loop:
+    [336,256], // 3
+    [362,306], // 4
+    [332,346], // 5
+    [278,346], // 6
+    [252,300], // 7
+    [280,252], // 8
+    [300,240], // 9 back to hub
+    [410,240], // 10 (dry-run connector base)
+    [520,240], // 11 hub: migrate the database
+    [620,240], // 12 (still broken connector base)
+    [720,240], // 13 hub: answer the support queue
+    [830,240], // 14 (ok it works connector base)
+    [910,240], // 15 hub: write the postmortem
+    [978,240]  // 16 exit: process exit 0
+  ];
+  // cumulative arc length
+  var cum = [0];
+  for (var i=1;i<P.length;i++){
+    var dx=P[i][0]-P[i-1][0], dy=P[i][1]-P[i-1][1];
+    cum[i] = cum[i-1] + Math.sqrt(dx*dx+dy*dy);
+  }
+  var total = cum[P.length-1];
+  function sOf(idx){ return cum[idx]/total; }
+  // point + tangent at arc fraction s
+  function ptAt(s){
+    var d = Math.max(0,Math.min(1,s))*total;
+    for (var i=1;i<P.length;i++){
+      if (d <= cum[i] || i===P.length-1){
+        var seg = cum[i]-cum[i-1];
+        var f = seg>0 ? (d-cum[i-1])/seg : 0;
+        var x = P[i-1][0]+(P[i][0]-P[i-1][0])*f;
+        var y = P[i-1][1]+(P[i][1]-P[i-1][1])*f;
+        var a = Math.atan2(P[i][1]-P[i-1][1], P[i][0]-P[i-1][0]);
+        return {x:x,y:y,a:a};
+      }
+    }
+    return {x:P[0][0],y:P[0][1],a:0};
+  }
+
+  // ---- avatar schedule: [seconds, arc-fraction], smoothstepped ----
+  var KF = [
+    [0.0,  sOf(0)],
+    [1.4,  sOf(2)],   // arrive hub1
+    [2.1,  sOf(2)],   // pause
+    [4.2,  sOf(9)],   // ride the tool-call loop back to hub1
+    [5.6,  sOf(11)],  // to migrate hub
+    [9.8,  sOf(11)],  // working the migrate hub (subagent runs)
+    [11.1, sOf(13)],  // to support hub
+    [12.9, sOf(13)],  // hold (compaction hits ~12.5)
+    [14.2, sOf(15)],  // to postmortem hub
+    [16.6, sOf(15)],  // work postmortem
+    [18.0, sOf(16)],  // to exit
+    [20.0, sOf(16)]   // hold at exit
+  ];
+  function smooth(t){ return t*t*(3-2*t); }
+  function sSched(tt){
+    if (tt<=KF[0][0]) return KF[0][1];
+    for (var i=1;i<KF.length;i++){
+      if (tt<=KF[i][0]){
+        var span=KF[i][0]-KF[i-1][0];
+        var f=span>0?(tt-KF[i-1][0])/span:0;
+        return KF[i-1][1]+(KF[i][1]-KF[i-1][1])*smooth(f);
+      }
+    }
+    return KF[KF.length-1][1];
+  }
+
+  // ---- systems over time ----
+  function wallX(tt){
+    var base = 32 + tt*12.2;
+    var surge = 0;
+    if (tt>12.5) surge = 96 * smooth(Math.min(1,(tt-12.5)/0.5)) + (tt-12.5)*6;
+    return base + surge;
+  }
+  function ctxFrac(tt){
+    var v;
+    if (tt < 12.5) v = 0.16 + tt*0.052;
+    else v = 0.30 + 0.15 + (tt-12.5)*0.05; // post-compaction refill
+    return Math.max(0, Math.min(0.97, v));
+  }
+  function compactionFlash(tt){
+    if (tt>=12.35 && tt<=12.95) return 1 - Math.abs((tt-12.55)/0.4);
+    return 0;
+  }
+
+  // task hub progress
+  function clamp01(v){ return Math.max(0,Math.min(1,v)); }
+  function tasks(tt){
+    return [
+      {name:'remember what the task was', prog: 0, state: (wallX(tt)>76?'forgotten':'pending')},
+      {name:'fix the flaky test suite', prog: clamp01((tt-1.4)/2.6), state: tt>4.2?'done':(tt>1.4?'active':'pending')},
+      {name:'migrate the database', prog: clamp01((tt-5.6)/4.0), state: tt>9.8?'done':(tt>5.6?'active':'pending')},
+      {name:'answer the support queue', prog: Math.min(0.72,clamp01((tt-11.1)/1.6)), state: tt>11.1?'corrupt':'pending'},
+      {name:'write the postmortem', prog: clamp01((tt-14.4)/1.9), state: tt>16.5?'done':(tt>14.4?'active':'pending')}
+    ];
+  }
+
+  // ---- stations (map coords + label metadata) ----
+  var GLYPH = "▓▒░#@%&*!?<>/\\|=+ΞΨλ§¤";
+  function garble(str, amt){
+    var out='';
+    for (var i=0;i<str.length;i++){
+      var ch=str[i];
+      if (ch===' '){ out+=' '; continue; }
+      out += (Math.random()<amt) ? GLYPH[(Math.random()*GLYPH.length)|0] : ch;
+    }
+    return out;
+  }
+  // type: hub | moment | exit ; tone: win|frust|neutral ; side: -1 up / +1 down
+  var STN = [
+    {x:70, y:240, type:'hub',    name:'remember what the task was', side:-1, tone:'neutral'},
+    {x:150,y:240, type:'moment', name:'why is test_auth failing',  side:-1, tone:'frust'},
+    {x:300,y:240, type:'hub',    name:'fix the flaky test suite',  side:-1, tone:'neutral'},
+    {x:410,y:205, type:'moment', name:'dry-run passed!',           side:-1, tone:'win', stub:240},
+    {x:520,y:240, type:'hub',    name:'migrate the database',      side:1,  tone:'neutral'},
+    {x:620,y:292, type:'moment', name:'still broken. still. broken.', side:1, tone:'frust', stub:240},
+    {x:720,y:240, type:'hub',    name:'answer the support queue',  side:-1, tone:'neutral'},
+    {x:830,y:240, type:'moment', name:'ok it works. nobody touch anything.', side:1, tone:'win'},
+    {x:910,y:240, type:'hub',    name:'write the postmortem',      side:-1, tone:'neutral'},
+    {x:978,y:240, type:'exit',   name:'process exit 0',            side:-1, tone:'exit'}
+  ];
+
+  function drawLabel(x,y,side,txt,col,small){
+    ctx.font = (small?'10px ':'11px ')+"ui-monospace,Menlo,monospace";
+    var w = ctx.measureText(txt).width;
+    var pad=5, h=15;
+    var lx = x - w/2 - pad;
+    var ly = side<0 ? (y-20-h) : (y+20);
+    // keep on-canvas
+    if (lx < 4) lx = 4;
+    if (lx + w + pad*2 > W-4) lx = W-4-w-pad*2;
+    ctx.fillStyle='rgba(15,15,14,0.82)';
+    rr(lx,ly,w+pad*2,h,3); ctx.fill();
+    ctx.strokeStyle='rgba(58,56,51,0.7)'; ctx.lineWidth=1; ctx.stroke();
+    ctx.fillStyle=col;
+    ctx.textBaseline='middle'; ctx.textAlign='left';
+    ctx.fillText(txt, lx+pad, ly+h/2+0.5);
+  }
+
+  function seg(a,b,col,w,glow){
+    ctx.lineCap='round'; ctx.lineJoin='round';
+    if (glow){ ctx.shadowColor=col; ctx.shadowBlur=glow; } else { ctx.shadowBlur=0; }
+    ctx.strokeStyle=col; ctx.lineWidth=w;
+    ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.stroke();
+    ctx.shadowBlur=0;
+  }
+
+  // ---- main render ----
+  var LOOP = 20; // seconds
+  function draw(now){
+    var tt = (now/1000) % LOOP;
+    var wx = wallX(tt);
+    resizeIfNeeded();
+
+    // bg
+    ctx.setTransform((cv.width)/W,0,0,(cv.width)/W,0,0);
+    ctx.fillStyle=C.bg; ctx.fillRect(0,0,W,H);
+
+    // faint node grid
+    ctx.fillStyle='rgba(122,118,110,0.10)';
+    for (var gx=20; gx<W; gx+=26){
+      for (var gy=104; gy<392; gy+=26){ ctx.fillRect(gx,gy,1,1); }
+    }
+
+    // forgotten-zone tint (behind stations, so names show garbled but tinted)
+    var g = ctx.createLinearGradient(Math.max(0,wx-150),0,wx,0);
+    g.addColorStop(0,'rgba(244,112,103,0)');
+    g.addColorStop(1,'rgba(244,112,103,0.22)');
+    ctx.fillStyle=g; ctx.fillRect(0,90,Math.max(0,wx),320);
+
+    // ---- draw main line, per segment ----
+    for (var i=1;i<P.length;i++){
+      var a=P[i-1], b=P[i];
+      var midx=(a[0]+b[0])/2;
+      var isLoop = (i>=3 && i<=9);      // tool-call side-loop
+      var col = isLoop ? C.clay : C.blue;
+      var wdt = isLoop ? 5 : 8;
+      if (midx < wx) { col = C.red; }    // eaten segment
+      // timeout-blob stalls the 620->720 segment (dashed) while present
+      var stalled = (i===13 && tt>10 && tt<13.2);
+      if (stalled){
+        ctx.setLineDash([7,6]); seg(a,b,C.red,7,7); ctx.setLineDash([]);
+      } else {
+        seg(a,b,col,wdt, midx<wx?9:(isLoop?4:5));
+      }
+    }
+
+    // ---- tool-call nodes on the side-loop (Read/Grep/Edit) ----
+    var toolNodes = [[P[4],'Read'],[P[6],'Grep'],[P[8],'Edit']];
+    for (var tn=0; tn<toolNodes.length; tn++){
+      var tp=toolNodes[tn][0]; var eatenT = tp[0] < wx;
+      var tcol = eatenT ? C.red : C.clay;
+      ctx.fillStyle=C.panel; ctx.strokeStyle=tcol; ctx.lineWidth=1.6;
+      ctx.beginPath(); ctx.rect(tp[0]-4,tp[1]-4,8,8); ctx.fill(); ctx.stroke();
+    }
+    ctx.font='9px monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillStyle = (312<wx)?C.red:C.clay;
+    ctx.fillText((312<wx)?garble('tool call ↻ loop',0.5):'tool call ↻ loop', 312, 372);
+
+    // ---- subagent branch line (parallel) ----
+    var branch = [[520,240],[560,168],[660,168],[720,240]];
+    var corrupted = tt>8.6;
+    var bcol = corrupted ? C.red : C.yellow;
+    if (tt>5.4 && tt<10.6){
+      for (var j=1;j<branch.length;j++){
+        ctx.setLineDash(corrupted?[5,5]:[]);
+        seg(branch[j-1],branch[j], bcol, 4, corrupted?8:5);
+      }
+      ctx.setLineDash([]);
+      // bad-merge splice glow at support hub
+      if (corrupted && tt>9.4){
+        ctx.fillStyle='rgba(244,112,103,'+(0.28+0.2*Math.sin(now/70))+')';
+        ctx.beginPath(); ctx.arc(720,240,15,0,7); ctx.fill();
+      }
+    }
+
+    // ---- connector stubs for off-line moments ----
+    for (var s2=0;s2<STN.length;s2++){
+      var st=STN[s2];
+      if (st.stub!=null){
+        ctx.strokeStyle=(st.x<wx?C.red:C.dim); ctx.lineWidth=2;
+        ctx.setLineDash([3,3]);
+        ctx.beginPath(); ctx.moveTo(st.x,st.y); ctx.lineTo(st.x,st.stub); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+
+    // ---- enemies (ambient) ----
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    // regression-splitter near "still broken"
+    if (tt>5 && tt<8.4){
+      ctx.font='15px monospace'; ctx.fillStyle=C.red;
+      ctx.fillText('☢', 592, 322 + Math.sin(now/220)*3);
+    }
+    // timeout-blob on stalled track
+    if (tt>10 && tt<13.2){
+      var pulse=0.6+0.4*Math.sin(now/140);
+      ctx.font='16px monospace'; ctx.globalAlpha=pulse; ctx.fillStyle=C.red;
+      ctx.fillText('⏱', 670, 218); ctx.globalAlpha=1;
+    }
+    // hallucination-ghost phasing near the subagent branch
+    if (tt>7 && tt<10.2){
+      var jitter=(Math.floor(tt*1.3)%3-1)*30;
+      ctx.globalAlpha=0.35+0.4*Math.abs(Math.sin(now/260));
+      ctx.font='17px monospace'; ctx.fillStyle=C.text;
+      ctx.fillText('👻', 636+jitter, 150+Math.sin(now/180)*6);
+      ctx.globalAlpha=1;
+    }
+
+    // ---- stations + labels ----
+    for (var k=0;k<STN.length;k++){
+      var n=STN[k];
+      var eaten = n.x < wx;
+      var depth = clamp01((wx - n.x)/60);
+      var flick = 0.4 + 0.6*Math.abs(Math.sin(now/90 + k));
+      var amt = eaten ? clamp01(depth*flick + 0.2) : 0;
+      var label = eaten ? garble(n.name, amt) : n.name;
+
+      // marker color
+      var mc = C.dim, ring = C.dim;
+      if (n.type==='moment'){ mc = n.tone==='win'?C.green:C.red; ring=mc; }
+      if (n.type==='exit'){ mc = C.green; ring=C.green; }
+      if (n.type==='hub'){ ring=C.text; mc=C.panel; }
+      if (eaten){ mc = C.red; ring=C.red; }
+
+      // active hub highlight
+      var activeHub = (k===2 && tt>1.4 && tt<4.2) ||
+                      (k===4 && tt>5.6 && tt<9.8) ||
+                      (k===8 && tt>14.4 && tt<16.6);
+      var doneHub = (k===2 && tt>=4.2) || (k===4 && tt>=9.8) || (k===8 && tt>=16.6);
+
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      if (n.type==='hub'){
+        // interchange: double ring
+        var hr = 11;
+        ctx.shadowBlur = activeHub?12:0; ctx.shadowColor=C.green;
+        ctx.fillStyle = eaten?C.red:C.panel;
+        ctx.beginPath(); ctx.arc(n.x,n.y,hr,0,7); ctx.fill();
+        ctx.shadowBlur=0;
+        ctx.lineWidth=3;
+        ctx.strokeStyle = eaten?C.red:(activeHub?C.green:(doneHub?C.dim:C.text));
+        ctx.beginPath(); ctx.arc(n.x,n.y,hr,0,7); ctx.stroke();
+        // inner
+        ctx.fillStyle = eaten?C.red:(activeHub?C.green:(doneHub?C.dim:C.text));
+        ctx.beginPath(); ctx.arc(n.x,n.y,3.2,0,7); ctx.fill();
+        // working ring sweep
+        if (activeHub){
+          ctx.strokeStyle=C.green; ctx.lineWidth=2.4;
+          var sw=(now/220)%(Math.PI*2);
+          ctx.beginPath(); ctx.arc(n.x,n.y,15,sw,sw+1.6); ctx.stroke();
+        }
+        var hcol = eaten?C.red:(activeHub?C.green:(doneHub?C.dim:C.text));
+        drawLabel(n.x,n.y,n.side,label,hcol,false);
+      } else if (n.type==='exit'){
+        ctx.fillStyle=C.green; ctx.shadowBlur=10; ctx.shadowColor=C.green;
+        ctx.beginPath(); ctx.moveTo(n.x-8,n.y-9); ctx.lineTo(n.x+9,n.y);
+        ctx.lineTo(n.x-8,n.y+9); ctx.closePath(); ctx.fill(); ctx.shadowBlur=0;
+        drawLabel(n.x,n.y,n.side,label,C.green,false);
+      } else {
+        // moment: diamond
+        var mr=6;
+        ctx.fillStyle=mc; ctx.shadowBlur=eaten?0:8; ctx.shadowColor=mc;
+        ctx.beginPath();
+        ctx.moveTo(n.x,n.y-mr); ctx.lineTo(n.x+mr,n.y);
+        ctx.lineTo(n.x,n.y+mr); ctx.lineTo(n.x-mr,n.y); ctx.closePath(); ctx.fill();
+        ctx.shadowBlur=0;
+        drawLabel(n.x,n.y,n.side, (n.tone==='win'?'◇ ':'◆ ')+label, mc, true);
+      }
+    }
+
+    // ---- subagent helper train (✳) on the branch ----
+    if (tt>5.9 && tt<10.4){
+      var q = smooth(clamp01((tt-5.9)/3.4));
+      var hp = branchPt(branch, q);
+      var scol = tt>8.6 ? C.red : C.yellow;
+      ctx.font='14px monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillStyle=scol; ctx.shadowBlur=8; ctx.shadowColor=scol;
+      ctx.fillText('✳', hp.x, hp.y); ctx.shadowBlur=0;
+      var stxt = tt>8.6 ? garble('subagent:migrate-helper',0.5) : 'subagent:migrate-helper';
+      ctx.font='9px monospace'; ctx.fillStyle=scol;
+      ctx.fillText(stxt, hp.x, hp.y-13);
+    }
+
+    // ---- the avatar signal-train ----
+    var pos = ptAt(sSched(tt));
+    drawAvatar(pos.x, pos.y, tt, now);
+
+    // ---- wall front line + static (over everything on the map) ----
+    drawWallFront(wx, now, tt);
+
+    // ---- HUD ----
+    drawHud(tt, wx, now);
+
+    // ---- compaction glitch overlay ----
+    var cf = compactionFlash(tt);
+    if (cf>0) drawCompaction(cf, now);
+
+    // ---- loop-seam fade ----
+    var fade=0;
+    if (tt<0.4) fade=(0.4-tt)/0.4;
+    else if (tt>19.5) fade=(tt-19.5)/0.5;
+    if (fade>0){ ctx.fillStyle='rgba(15,15,14,'+fade+')'; ctx.fillRect(0,0,W,H); }
+
+    requestAnimationFrame(draw);
+  }
+
+  function branchPt(br, q){
+    // cum along branch
+    var c=[0];
+    for (var i=1;i<br.length;i++){
+      var dx=br[i][0]-br[i-1][0], dy=br[i][1]-br[i-1][1];
+      c[i]=c[i-1]+Math.sqrt(dx*dx+dy*dy);
+    }
+    var tot=c[c.length-1], d=q*tot;
+    for (var j=1;j<br.length;j++){
+      if (d<=c[j]||j===br.length-1){
+        var seglen=c[j]-c[j-1]; var f=seglen>0?(d-c[j-1])/seglen:0;
+        return {x:br[j-1][0]+(br[j][0]-br[j-1][0])*f, y:br[j-1][1]+(br[j][1]-br[j-1][1])*f};
+      }
+    }
+    return {x:br[0][0],y:br[0][1]};
+  }
+
+  function drawAvatar(x,y,tt,now){
+    // rail car under the window
+    ctx.save();
+    ctx.translate(x,y);
+    // car body
+    ctx.fillStyle=C.sel; ctx.strokeStyle=C.border; ctx.lineWidth=1;
+    rr(-26,8,52,9,2); ctx.fill(); ctx.stroke();
+    // wheels
+    ctx.fillStyle=C.dim;
+    ctx.beginPath(); ctx.arc(-16,19,3,0,7); ctx.fill();
+    ctx.beginPath(); ctx.arc(16,19,3,0,7); ctx.fill();
+    // antenna
+    var blink = (Math.floor(now/400)%2===0);
+    ctx.strokeStyle=C.green; ctx.lineWidth=1.4;
+    ctx.beginPath(); ctx.moveTo(0,-22); ctx.lineTo(0,-32); ctx.stroke();
+    ctx.fillStyle=blink?C.green:C.clay; ctx.shadowBlur=6; ctx.shadowColor=ctx.fillStyle;
+    ctx.beginPath(); ctx.arc(0,-34,2.4,0,7); ctx.fill(); ctx.shadowBlur=0;
+    // terminal window
+    var ww=54, wh=30, wxx=-ww/2, wyy=-22;
+    ctx.shadowBlur=12; ctx.shadowColor='rgba(126,231,135,0.35)';
+    ctx.fillStyle=C.panel; rr(wxx,wyy,ww,wh,4); ctx.fill(); ctx.shadowBlur=0;
+    ctx.strokeStyle=C.green; ctx.lineWidth=1.4; rr(wxx,wyy,ww,wh,4); ctx.stroke();
+    // title bar
+    ctx.fillStyle=C.sel; rr(wxx,wyy,ww,9,4); ctx.fill();
+    ctx.fillStyle='rgba(58,56,51,0.9)'; ctx.fillRect(wxx,wyy+7,ww,2);
+    // traffic dots
+    var dots=[C.red,C.yellow,C.green];
+    for (var d=0;d<3;d++){ ctx.fillStyle=dots[d]; ctx.beginPath();
+      ctx.arc(wxx+7+d*7, wyy+4.5, 2, 0,7); ctx.fill(); }
+    // v2 tag
+    ctx.font='7px monospace'; ctx.fillStyle=C.dim; ctx.textAlign='right'; ctx.textBaseline='middle';
+    ctx.fillText('v2', wxx+ww-4, wyy+4.5);
+    // >_ face + cursor
+    ctx.font='13px monospace'; ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillStyle=C.green; ctx.fillText('>_', wxx+7, wyy+20);
+    if (Math.floor(now/500)%2===0){
+      ctx.fillStyle=C.text; ctx.fillRect(wxx+27, wyy+15, 6, 10);
+    }
+    ctx.restore();
+  }
+
+  function drawWallFront(wx, now, tt){
+    if (wx<=0) return;
+    // jagged bright front
+    ctx.strokeStyle=C.red; ctx.lineWidth=2.5;
+    ctx.shadowBlur=16; ctx.shadowColor=C.red;
+    ctx.beginPath();
+    var started=false;
+    for (var y=92;y<=408;y+=9){
+      var jx = wx + Math.sin(y*0.35 + now/120)*6 + (Math.random()-0.5)*3;
+      if (!started){ ctx.moveTo(jx,y); started=true; } else ctx.lineTo(jx,y);
+    }
+    ctx.stroke(); ctx.shadowBlur=0;
+    // static glyphs sweeping in the front
+    ctx.font='11px monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    for (var s=0;s<26;s++){
+      var gx = wx - Math.random()*70;
+      var gy = 96 + Math.random()*310;
+      ctx.globalAlpha=0.25+Math.random()*0.5;
+      ctx.fillStyle = Math.random()<0.5?C.red:C.dim;
+      ctx.fillText(GLYPH[(Math.random()*GLYPH.length)|0], gx, gy);
+    }
+    ctx.globalAlpha=1;
+    // label
+    ctx.font='9px monospace'; ctx.textAlign='left'; ctx.fillStyle=C.red;
+    ctx.fillText('◀ WALL OF FORGETTING', 6, 100);
+  }
+
+  function drawHud(tt, wx, now){
+    // ---- ctx meter (top-left) ----
+    var cf = ctxFrac(tt);
+    var thr = 0.82;
+    ctx.fillStyle='rgba(22,22,21,0.9)'; ctx.strokeStyle=C.border; ctx.lineWidth=1;
+    rr(12,12,214,34,4); ctx.fill(); ctx.stroke();
+    ctx.font='10px monospace'; ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillStyle=C.dim; ctx.fillText('ctx', 22, 22);
+    var near = cf>0.7;
+    var meterCol = cf>=thr? C.red : (near? C.yellow : C.blue);
+    var slots=18, filled=Math.round(cf*slots);
+    var bx=22, bw=140;
+    for (var m=0;m<slots;m++){
+      ctx.fillStyle = m<filled? meterCol : 'rgba(58,56,51,0.7)';
+      ctx.fillRect(bx + m*(bw/slots), 30, (bw/slots)-1.4, 8);
+    }
+    // threshold tick
+    ctx.fillStyle=C.red; ctx.fillRect(bx + thr*bw, 27, 1.5, 14);
+    ctx.fillStyle=C.text; ctx.textAlign='left';
+    ctx.fillText((cf*18).toFixed(1)+'k / 18k', 168, 22);
+    ctx.fillStyle=C.dim; ctx.fillText('◆ tokens', 168, 34);
+
+    // ---- wall distance (top-right) ----
+    var pos = ptAt(sSched(tt));
+    var gap = Math.max(0, pos.x - wx);
+    ctx.fillStyle='rgba(22,22,21,0.9)'; ctx.strokeStyle=C.border;
+    rr(W-176,12,164,34,4); ctx.fill(); ctx.stroke();
+    ctx.textAlign='left'; ctx.fillStyle=C.dim; ctx.font='10px monospace';
+    ctx.fillText('front gap', W-166, 22);
+    ctx.fillStyle = gap<180? C.red : C.green;
+    ctx.font='13px monospace';
+    ctx.fillText(Math.round(gap)+'px', W-166, 35);
+    ctx.font='9px monospace'; ctx.fillStyle=C.dim; ctx.textAlign='right';
+    ctx.fillText(tt>12.5?'⚡ surged':'closing', W-18, 35);
+    ctx.fillText('seed a1f · 4e2c', W-18, 22);
+
+    // ---- task queue (bottom-left) ----
+    var ts = tasks(tt);
+    var px=12, py=384, pw=352, ph=104;
+    ctx.fillStyle='rgba(22,22,21,0.92)'; ctx.strokeStyle=C.border;
+    rr(px,py,pw,ph,4); ctx.fill(); ctx.stroke();
+    ctx.font='10px monospace'; ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillStyle=C.clay; ctx.fillText('✻ TASK QUEUE', px+12, py+13);
+    ctx.fillStyle=C.dim; ctx.textAlign='right';
+    ctx.fillText('race the front', px+pw-12, py+13);
+    ctx.textAlign='left';
+    for (var q=0;q<ts.length;q++){
+      var t=ts[q]; var ry=py+30+q*15;
+      var name=t.name, col=C.text, glyph='☐', bar='';
+      var nb=Math.round(t.prog*5);
+      for (var b=0;b<5;b++) bar += (b<nb?'▰':'▱');
+      if (t.state==='done'){ col=C.dim; glyph='☒'; bar='▰▰▰▰▰'; }
+      else if (t.state==='active'){ col=C.green; glyph='◐'; }
+      else if (t.state==='corrupt'){ col=C.red; glyph='⚠'; name=garble(name,0.35); }
+      else if (t.state==='forgotten'){ col=C.red; glyph='✖'; name=garble(name,0.6); bar='─────'; }
+      else { col=C.dim; glyph='☐'; }
+      ctx.fillStyle=col;
+      ctx.fillText(glyph, px+12, ry);
+      ctx.fillStyle=(t.state==='forgotten'||t.state==='corrupt')?C.red:(t.state==='done'?C.dim:col);
+      ctx.fillText(bar, px+26, ry);
+      ctx.fillStyle=col;
+      var nm = name.length>30? name.slice(0,29)+'…' : name;
+      ctx.fillText(nm, px+72, ry);
+    }
+
+    // ---- transcript ticker (bottom-right) ----
+    var lx=W-360, ly=452;
+    var line = transcriptLine(tt);
+    ctx.font='10px monospace'; ctx.textAlign='left';
+    ctx.fillStyle=line.c; ctx.fillText(line.b, lx, ly);
+    ctx.fillStyle=C.dim; ctx.fillText(line.t, lx+16, ly);
+    ctx.fillStyle=C.dim; ctx.fillText('⎿  '+line.t2, lx+16, ly+16);
+  }
+
+  function transcriptLine(tt){
+    if (tt<2)   return {b:'⏺',c:C.green, t:'switch → line: fix-flaky-tests', t2:'routing signal onto hub-1'};
+    if (tt<4.2) return {b:'⎿',c:C.clay,  t:'tool call: Read ×3 · Grep · Edit', t2:'side-loop engaged (−180 tk)'};
+    if (tt<5.6) return {b:'⏺',c:C.green, t:'task shipped: flaky test suite', t2:'☒ dry-run passed!'};
+    if (tt<8.6) return {b:'✳',c:C.yellow,t:'subagent spawned: migrate-helper', t2:'parallel branch line · 900 tk'};
+    if (tt<10.6)return {b:'👻',c:C.red,  t:'ghost touched subagent — CORRUPTED', t2:'branch merging back badly…'};
+    if (tt<12.5)return {b:'⏱',c:C.red,   t:'timeout-blob stalling support track', t2:'still broken. still. broken.'};
+    if (tt<13.3)return {b:'⚡',c:C.red,   t:'INVOLUNTARY COMPACTION', t2:'front surged +96px · ctx drained'};
+    if (tt<16.6)return {b:'⏺',c:C.green, t:'switch → line: write-postmortem', t2:'working hub-4 heads-down'};
+    return {b:'⏺',c:C.green, t:'process exit 0 — reached alive', t2:'ok it works. nobody touch anything.'};
+  }
+
+  function drawCompaction(a, now){
+    // RGB-split slabs
+    for (var i=0;i<7;i++){
+      var y=Math.random()*H, h=4+Math.random()*22;
+      ctx.globalAlpha=a*(0.3+Math.random()*0.4);
+      ctx.fillStyle=[C.red,C.blue,C.clay][i%3];
+      ctx.fillRect(0,y,W,h);
+    }
+    ctx.globalAlpha=a*0.16; ctx.fillStyle=C.red; ctx.fillRect(0,0,W,H);
+    ctx.globalAlpha=1;
+    // banner
+    var bw=340, bx=(W-bw)/2;
+    ctx.fillStyle='rgba(15,15,14,0.94)'; ctx.strokeStyle=C.red; ctx.lineWidth=1.5;
+    var ox=(Math.random()-0.5)*4;
+    rr(bx+ox,150,bw,52,3); ctx.fill(); ctx.stroke();
+    ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.font='13px monospace'; ctx.fillStyle=C.red;
+    ctx.fillText('⚡ COMPACTION — context overflow', bx+14+ox, 168);
+    ctx.font='10px monospace'; ctx.fillStyle=C.text;
+    ctx.fillText('⎿  '+garble('remember what the task was',0.5), bx+14+ox, 188);
+  }
+
+  var lastW=0;
+  function resizeIfNeeded(){
+    if (cv.clientWidth !== lastW){ lastW=cv.clientWidth; resize(); }
+  }
+
+  resize();
+  requestAnimationFrame(draw);
+})();
+</script>

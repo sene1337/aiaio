@@ -1,0 +1,626 @@
+<!--
+  AIAIO concept mockup — THE SCROLLBACK
+  Self-contained attract-mode demo. No external assets, no CDNs.
+  Palette + TUI language borrowed from ../src/style.css
+-->
+<meta charset="utf-8">
+<title>AIAIO · THE SCROLLBACK</title>
+<style>
+  :root{
+    --bg:#0f0f0e; --panel:#161615; --sel:#24241f;
+    --text:#dedad2; --dim:#7a766e; --border:#3a3833;
+    --green:#7ee787; --clay:#d97757; --blue:#6cb6ff;
+    --yellow:#e3b341; --red:#f47067;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;background:var(--bg);color:var(--text);overflow:hidden;
+    font-family:ui-monospace,'SF Mono',Menlo,Consolas,'Courier New',monospace;font-size:13px}
+
+  /* ---- fixed header strip ---- */
+  #cap{
+    position:fixed;top:0;left:0;right:0;z-index:20;
+    border-bottom:1px solid var(--border);background:rgba(15,15,14,0.94);
+    padding:7px 14px 6px;display:flex;flex-direction:column;gap:2px;
+  }
+  #cap .row{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  #cap .ttl{color:var(--clay);font-size:14px;letter-spacing:.22em}
+  #cap .ttl b{color:var(--green);font-weight:normal}
+  #cap .pitch{color:var(--text);font-size:11.5px}
+  #cap .tag{margin-left:auto;color:var(--dim);font-size:10.5px;letter-spacing:.12em;white-space:nowrap}
+  #cap .goal{color:var(--dim);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #cap .goal b{color:var(--green);font-weight:normal}
+  #cap .goal .q{color:var(--text)}
+
+  #stage{position:absolute;top:52px;left:0;right:0;bottom:0}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+  /* faint CRT scanline whisper over everything */
+  #crt{pointer-events:none;position:absolute;inset:0;z-index:12;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,.11) 0,rgba(0,0,0,.11) 1px,transparent 1px,transparent 3px)}
+
+  /* ---- game HUD (top-right) ---- */
+  #hud{position:absolute;top:12px;right:12px;z-index:14;width:236px;
+    border:1px solid var(--border);background:rgba(22,22,21,.86);padding:8px 10px;
+    font-size:11px;line-height:1.5;backdrop-filter:blur(1px)}
+  #hud .sec{color:var(--dim);letter-spacing:.14em;font-size:9.5px;margin:8px 0 4px}
+  #hud .sec:first-child{margin-top:0}
+  #hud .trow{display:flex;gap:8px;align-items:baseline;white-space:nowrap}
+  #hud .trow .nm{flex:1;overflow:hidden;text-overflow:ellipsis}
+  #hud .trow .bar{color:var(--green);letter-spacing:-1px;font-size:10px}
+  #hud .trow.p .nm{color:var(--green)}
+  #hud .trow.q .nm{color:var(--clay)}
+  #hud .trow.done .nm{color:var(--dim);text-decoration:line-through}
+  #hud .trow.done .bar{color:var(--dim)}
+  #hud .trow.amn .nm,#hud .trow.amn .bar{color:var(--red)}
+  #hud .ctx{white-space:pre;letter-spacing:-1px;font-size:11px}
+  #hud .ctx .fill{color:var(--yellow)}
+  #hud .ctx .hot{color:var(--red)}
+  #hud .ctx .empty{color:var(--border)}
+  #hud .ctx .lbl{color:var(--dim);letter-spacing:normal;font-size:10px}
+  #hud .foot{color:var(--dim);font-size:10px;margin-top:8px;border-top:1px solid var(--border);padding-top:6px}
+  #hud .foot b{color:var(--green);font-weight:normal}
+  #hud .foot .c{color:var(--clay)}
+
+  /* ---- design notes ---- */
+  #notes{position:absolute;left:12px;bottom:12px;z-index:16;max-width:520px;
+    border:1px solid var(--border);background:rgba(22,22,21,.94);font-size:11px}
+  #notes>summary{cursor:pointer;list-style:none;padding:6px 12px;color:var(--yellow);
+    letter-spacing:.1em;user-select:none}
+  #notes>summary::-webkit-details-marker{display:none}
+  #notes>summary::before{content:'▸ ';color:var(--clay)}
+  #notes[open]>summary::before{content:'▾ '}
+  #notes .body{padding:2px 14px 12px;line-height:1.6;max-height:56vh;overflow:auto}
+  #notes h4{color:var(--green);font-weight:normal;font-size:11px;letter-spacing:.08em;margin:10px 0 3px}
+  #notes h4:first-child{margin-top:2px}
+  #notes p,#notes li{color:var(--text)}
+  #notes .k{color:var(--clay)}
+  #notes .d{color:var(--dim)}
+  #notes ul{list-style:none;margin:2px 0}
+  #notes li{margin:2px 0;padding-left:14px;position:relative}
+  #notes li::before{content:'⎿';position:absolute;left:0;color:var(--dim)}
+  #notes .risk{color:var(--red)}
+  #hint{position:absolute;right:12px;bottom:12px;z-index:14;color:var(--dim);font-size:10px;
+    letter-spacing:.1em;background:rgba(15,15,14,.7);padding:3px 8px;border:1px solid var(--border)}
+</style>
+
+<header id="cap">
+  <div class="row">
+    <span class="ttl"><b>◤</b> THE SCROLLBACK</span>
+    <span class="pitch">You don't run across the level — you <b style="color:var(--clay)">rappel <i>down</i> your own transcript</b> while eviction eats it from the top.</span>
+    <span class="tag">AIAIO · concept · attract-mode</span>
+  </div>
+  <div class="goal">&gt; <b>the mission, in your own words:</b> <span class="q">"the tests are flaky again and the migration is due today — fix both, please"</span></div>
+</header>
+
+<div id="stage">
+  <canvas id="c"></canvas>
+  <div id="crt"></div>
+
+  <aside id="hud">
+    <div class="sec">TASK QUEUE ▰▱ race</div>
+    <div id="tq"></div>
+    <div class="sec">CONTEXT · every action costs</div>
+    <div class="ctx" id="ctx"></div>
+    <div class="foot" id="foot"></div>
+  </aside>
+
+  <details id="notes">
+    <summary>DESIGN NOTES</summary>
+    <div class="body">
+      <h4>What changes vs the current side-scroller</h4>
+      <ul>
+        <li><span class="k">Axis flips to vertical.</span> The timeline stops being a floor you walk and becomes a <span class="k">scrollback you fall through</span> — the terrain <i>is</i> the rendered transcript, line by line.</li>
+        <li><span class="k">The wall comes from ABOVE, and that's the point.</span> Real context windows evict the <i>oldest</i> tokens first — the head of the buffer. So the corruption chewing <i>downward</i> from the top isn't arbitrary, it's literally how forgetting works. You rappel toward <span class="d">process&nbsp;exit&nbsp;0</span> at the bottom while your session's opening dissolves overhead. (Below-rising was the alt; top-eviction won for accuracy <i>and</i> the ceiling-collapse dread.)</li>
+        <li><span class="k">Platforms have grammar.</span> Your asks are thick green ledges you can stand on; assistant text is thin dim footing; tool calls are bracketed scaffolding you clamber. Reading the session becomes literal traversal.</li>
+      </ul>
+      <h4>What stays (invariants, untouched)</h4>
+      <ul>
+        <li>Task-queue race with <span class="d">▰▱</span> progress · the wall of forgetting (red static + tendrils) · token economy (ctx meter, every action bills) · <span class="k">⚡ compaction</span> surges · <span class="green">✳</span> subagents · the little walking-terminal avatar (<span class="d">v2</span> title-bar, <span class="green">&gt;_</span> face, antenna) · full Claude-Code TUI aesthetic.</li>
+      </ul>
+      <h4>Why it could be MORE fun</h4>
+      <ul>
+        <li><span class="k">Downwell/rappel flow</span> gives constant momentum — descent is the default verb, so idle = death in a way "stop walking" never quite sold.</li>
+        <li><span class="k">Vertical legibility.</span> You can see your whole recent history stacked above you and the forgetting front eating specific remembered lines — the stakes are the actual words, right there.</li>
+        <li><span class="k">Perch-to-work</span> makes stations feel like rope-stops: you brake your fall, root heads-down (weakest), ship the task, kick off again.</li>
+      </ul>
+      <h4>Top 2 risks</h4>
+      <ul>
+        <li class="risk"><b>Readability vs. speed.</b> Fast vertical scroll + tiny transcript type can turn into unreadable smear. Needs a comfortable fall cadence, snap-to-ledge, and a "quiet zone" band around the avatar where text stays crisp.</li>
+        <li class="risk"><b>Camera/orientation.</b> Danger overhead + gravity down is unusual; players may fight the camera. Mitigate with a persistent top-edge threat gauge and generous coyote-time on ledges.</li>
+      </ul>
+    </div>
+  </details>
+
+  <div id="hint">▶ attract mode · ~20s loop · press nothing</div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  const cv = document.getElementById('c');
+  const g  = cv.getContext('2d');
+  let W=0,H=0,dpr=1;
+  function resize(){
+    const r = cv.getBoundingClientRect();
+    W = r.width; H = r.height;
+    dpr = Math.min(2, window.devicePixelRatio||1);
+    cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr);
+    g.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener('resize', resize);
+
+  const C = {
+    bg:'#0f0f0e', panel:'#161615', sel:'#24241f', text:'#dedad2', dim:'#7a766e',
+    border:'#3a3833', green:'#7ee787', clay:'#d97757', blue:'#6cb6ff',
+    yellow:'#e3b341', red:'#f47067'
+  };
+
+  // ---- one tile of transcript (session start at top → present at bottom) ----
+  // k: sys goal assist tool task mwin(win moment) mfr(frustration moment)
+  const LINE = [
+    {k:'sys',   t:'● session · claude-code v2 · model opus-4 · ctx 0k'},
+    {k:'goal',  t:'the tests are flaky again and the migration is due today — fix both, please'},
+    {k:'assist',t:"I'll start with the flaky suite, then run the migration."},
+    {k:'tool',  t:'Bash(npm test)   ⎿  3 failing · 41 passed'},
+    {k:'mfr',   t:'why is test_auth failing when I did not touch auth'},
+    {k:'assist',t:'test_auth shares fixture state across cases — isolating it.'},
+    {k:'tool',  t:'Read(tests/conftest.py)'},
+    {k:'task',  t:'fix the flaky test suite', ti:0},
+    {k:'tool',  t:'Edit(tests/conftest.py)   ⎿  +12 −4'},
+    {k:'assist',t:'Reset fixtures per-case. Re-running the suite.'},
+    {k:'tool',  t:'Bash(npm test)   ⎿  44 passed'},
+    {k:'mwin',  t:'migration dry-run passed! running it for real now'},
+    {k:'task',  t:'migrate the database', ti:1},
+    {k:'tool',  t:'Bash(alembic upgrade head)'},
+    {k:'assist',t:'Applying 3 revisions to the production replica…'},
+    {k:'mfr',   t:'still broken. still. broken.'},
+    {k:'task',  t:'answer the support queue', ti:2},
+    {k:'assist',t:'Draining 7 tickets — grouping by root cause.'},
+    {k:'tool',  t:'Grep(ERROR, logs/*.log)   ⎿  128 hits'},
+    {k:'task',  t:'write the postmortem', ti:3},
+    {k:'assist',t:'Timeline reconstructed from the transcript above.'},
+    {k:'mwin',  t:'ok it works. nobody touch anything.'},
+    {k:'task',  t:'remember what the task was', ti:4},
+    {k:'sys',   t:'● process exit 0'},
+  ];
+  const N = LINE.length;
+  const LINE_H = 28;
+  const TILE = N*LINE_H;
+  const LOOP = 20;                 // seconds; camera advances exactly one TILE per loop → seamless
+  const GLYPHS = '▓▒░#@%&*/\\|<>=+·:;xX01?■□◊'.split('');
+  const TASK_NAMES = ['fix the flaky test suite','migrate the database','answer the support queue','write the postmortem','remember what the task was'];
+
+  const t0 = performance.now()/1000;
+  let popups = [];
+  let lastWorkPop=0, subDone=false, compDone=false, lastZapPop=0;
+  const tqEl = document.getElementById('tq');
+  const ctxEl = document.getElementById('ctx');
+  const footEl = document.getElementById('foot');
+
+  function pop(x,y,txt,col,size){ popups.push({x,y,txt,col,size:size||10,born:performance.now()/1000}); }
+  function trunc(s,max){ return s.length>max ? s.slice(0,max-1)+'…' : s; }
+  function garble(s){
+    let o='';
+    for(let i=0;i<s.length;i++){
+      o += (s[i]===' '&&Math.random()>.4) ? ' ' : GLYPHS[(Math.random()*GLYPHS.length)|0];
+    }
+    return o;
+  }
+
+  // scanline pattern for the forgetting band
+  let scanPat=null;
+  function makeScan(){
+    const t=document.createElement('canvas'); t.width=4;t.height=4;
+    const tc=t.getContext('2d');
+    tc.fillStyle='rgba(244,112,103,0.10)'; tc.fillRect(0,0,4,1);
+    scanPat = g.createPattern(t,'repeat');
+  }
+
+  function drawLine(gi, sy, comp, frontY){
+    const it = LINE[((gi%N)+N)%N];
+    const rowTop = sy;
+    const textY = Math.round(sy+18);
+    const ruleY = Math.round(sy+LINE_H-4);
+    const cx = 62;                       // content x
+    const maxChars = Math.max(10, ((W-cx-24)/7.05)|0);
+
+    // gutter line number
+    g.font = '11px ui-monospace,Menlo,monospace';
+    g.textAlign='right';
+    g.fillStyle = C.border;
+    g.fillText(String(1000+(gi%9000)), 48, textY);
+    g.textAlign='left';
+
+    const corrupt = rowTop < frontY - 4;
+    const nearEdge = rowTop < frontY + 22 && rowTop >= frontY - 4;
+
+    if(corrupt || (nearEdge && Math.random()<0.6)){
+      g.font='13px ui-monospace,Menlo,monospace';
+      g.fillStyle = 'rgba(244,112,103,'+(corrupt?0.85:0.5)+')';
+      g.fillText(trunc(garble(it.t),maxChars), cx, textY);
+      g.strokeStyle='rgba(244,112,103,0.4)'; g.lineWidth=1;
+      g.beginPath(); g.moveTo(cx,ruleY); g.lineTo(cx+120+Math.random()*180,ruleY); g.stroke();
+      return;
+    }
+
+    g.font='13px ui-monospace,Menlo,monospace';
+    const k = it.k;
+
+    if(k==='goal'){
+      const s = '> "'+it.t+'"';
+      const txt = trunc(s,maxChars);
+      g.fillStyle=C.green; g.fillText(txt, cx, textY);
+      const w = g.measureText(txt).width;
+      g.strokeStyle=C.green; g.lineWidth=3; g.beginPath();
+      g.moveTo(cx-4,ruleY); g.lineTo(cx+w+8,ruleY); g.stroke();
+    }
+    else if(k==='task'){
+      const prog = taskProg[it.ti];
+      const label = '☐  '+it.t;
+      const txt = trunc(label, maxChars-14);
+      const w = Math.min(W-cx-150, g.measureText(txt).width+26);
+      const active = window.__activeTi===it.ti;
+      // station block
+      g.fillStyle = active ? 'rgba(126,231,135,0.10)' : C.sel;
+      g.fillRect(cx-6, rowTop+2, w+150, LINE_H-4);
+      g.strokeStyle = active ? C.green : C.border; g.lineWidth = active?1.4:1;
+      g.strokeRect(cx-6, rowTop+2, w+150, LINE_H-4);
+      // standable top edge (thick green)
+      g.strokeStyle=C.green; g.lineWidth = active?3:2;
+      g.beginPath(); g.moveTo(cx-6, rowTop+2); g.lineTo(cx+w+144, rowTop+2); g.stroke();
+      g.fillStyle = active?C.green:C.text; g.fillText(txt, cx, textY);
+      // in-world ▰▱ bar
+      const bx = cx+w+8, bw=128, filled=Math.round(prog*12);
+      g.font='11px ui-monospace,Menlo,monospace';
+      let bar=''; for(let i=0;i<12;i++) bar+= i<filled?'▰':'▱';
+      g.fillStyle = prog>=1?C.dim:(active?C.clay:C.green);
+      g.fillText(bar, bx, textY);
+    }
+    else if(k==='tool'){
+      const s='⏺  '+it.t;
+      const txt=trunc(s,maxChars);
+      g.fillStyle=C.dim; g.fillText(txt, cx, textY);
+      // bracket scaffolding
+      const w=Math.min(W-cx-30, g.measureText(txt).width+30);
+      g.strokeStyle='rgba(108,182,255,0.35)'; g.lineWidth=1;
+      g.setLineDash([2,4]);
+      g.beginPath(); g.moveTo(cx,ruleY); g.lineTo(cx+w,ruleY); g.stroke();
+      g.setLineDash([]);
+      g.strokeStyle='rgba(108,182,255,0.45)';
+      for(let px=cx; px<cx+w; px+=44){ g.beginPath(); g.moveTo(px,ruleY-3); g.lineTo(px,ruleY+3); g.stroke(); }
+    }
+    else if(k==='mwin' || k==='mfr'){
+      const col = k==='mwin'?C.green:C.red;
+      const s='◇  "'+it.t+'"';
+      const txt=trunc(s,maxChars);
+      g.fillStyle=col; g.fillText(txt, cx, textY);
+      const w=g.measureText(txt).width;
+      g.strokeStyle=col; g.globalAlpha=0.55; g.lineWidth=1.4;
+      g.beginPath(); g.moveTo(cx,ruleY); g.lineTo(cx+w,ruleY); g.stroke();
+      g.globalAlpha=1;
+    }
+    else if(k==='sys'){
+      const txt=trunc(it.t,maxChars);
+      g.fillStyle=C.dim; g.fillText(txt, cx, textY);
+      g.strokeStyle='rgba(122,118,110,0.35)'; g.lineWidth=1;
+      g.beginPath(); g.moveTo(cx,ruleY); g.lineTo(W-24,ruleY); g.stroke();
+    }
+    else { // assist
+      const s='⏺  '+it.t;
+      const txt=trunc(s,maxChars);
+      g.fillStyle='rgba(122,118,110,0.95)'; g.fillText(txt, cx, textY);
+      const w=g.measureText(txt).width;
+      g.strokeStyle='rgba(58,56,51,0.9)'; g.lineWidth=1;
+      g.beginPath(); g.moveTo(cx,ruleY); g.lineTo(cx+w,ruleY); g.stroke();
+    }
+  }
+
+  function drawForgetting(frontY, comp, elapsed){
+    if(frontY<=0) return;
+    // body gradient
+    const grad = g.createLinearGradient(0,0,0,frontY);
+    grad.addColorStop(0,'rgba(60,14,12,0.96)');
+    grad.addColorStop(0.55,'rgba(40,12,11,0.72)');
+    grad.addColorStop(1,'rgba(30,10,10,0.0)');
+    g.fillStyle=grad; g.fillRect(0,0,W,frontY+4);
+    // scanlines inside
+    if(scanPat){ g.fillStyle=scanPat; g.fillRect(0,0,W,frontY); }
+    // glyph static
+    g.font='12px ui-monospace,Menlo,monospace';
+    const cols = (W/13)|0;
+    const rows = (frontY/15)|0;
+    for(let r=0;r<rows;r++){
+      const ry = r*15+11;
+      const dens = 0.35 + (1-ry/frontY)*0.5;
+      for(let cI=0;cI<cols;cI++){
+        if(Math.random()>dens) continue;
+        const a = (0.15 + (1-ry/frontY)*0.6)*(Math.random()*0.7+0.3);
+        g.fillStyle='rgba(244,112,103,'+a.toFixed(3)+')';
+        g.fillText(GLYPHS[(Math.random()*GLYPHS.length)|0], cI*13+ (r%2?6:0), ry);
+      }
+    }
+    // jagged scanning edge
+    g.strokeStyle=C.red; g.lineWidth=1.5; g.beginPath();
+    for(let x=0;x<=W;x+=8){
+      const n = Math.sin(x*0.05+elapsed*3)*3 + Math.sin(x*0.017-elapsed*1.3)*4 + (Math.random()*3-1.5);
+      const y = frontY+n;
+      if(x===0) g.moveTo(x,y); else g.lineTo(x,y);
+    }
+    g.stroke();
+    // bright scan segment sweeping
+    const sweep = (elapsed*0.35)%1;
+    g.fillStyle='rgba(244,112,103,0.5)';
+    g.fillRect(sweep*W, frontY-1, W*0.12, 2);
+    // tendrils reaching down
+    const tend = 5 + (comp*6|0);
+    for(let i=0;i<tend;i++){
+      const tx = ((i*137.5 + Math.floor(elapsed*0.6)*53)%W);
+      const len = 18 + (Math.abs(Math.sin(tx*0.3+elapsed*2)))*(30+comp*70);
+      const tg=g.createLinearGradient(0,frontY,0,frontY+len);
+      tg.addColorStop(0,'rgba(244,112,103,0.7)');
+      tg.addColorStop(1,'rgba(244,112,103,0)');
+      g.strokeStyle=tg; g.lineWidth=1.5+Math.random();
+      g.beginPath(); g.moveTo(tx,frontY);
+      let yy=frontY;
+      while(yy<frontY+len){ yy+=6; g.lineTo(tx+Math.sin(yy*0.4)*4, yy); }
+      g.stroke();
+      if(Math.random()<0.5){ g.fillStyle='rgba(244,112,103,0.6)'; g.font='11px ui-monospace,Menlo,monospace';
+        g.fillText(GLYPHS[(Math.random()*GLYPHS.length)|0], tx-3, frontY+len); }
+    }
+    // top-edge threat label
+    g.font='10px ui-monospace,Menlo,monospace'; g.fillStyle=C.red;
+    g.fillText('▲ WALL OF FORGETTING · oldest lines evicted first', 14, 13);
+  }
+
+  function drawAvatar(ax, feet, working, elapsed, comp){
+    const bw=48, bh=32, tb=10;
+    const top = feet-bh;
+    const sway = Math.sin(elapsed*1.6)*7;
+    // rappel cable from top of screen to antenna
+    g.strokeStyle='rgba(126,231,135,0.35)'; g.lineWidth=1;
+    g.beginPath(); g.moveTo(ax+sway,0);
+    g.quadraticCurveTo(ax+sway*0.4, top-30, ax, top-9);
+    g.stroke();
+    // antenna
+    g.strokeStyle=C.green; g.lineWidth=1;
+    g.beginPath(); g.moveTo(ax, top-9); g.lineTo(ax, top); g.stroke();
+    const blink = (Math.sin(elapsed*6)>0);
+    g.fillStyle = blink?C.blue:C.green;
+    g.beginPath(); g.arc(ax, top-11, 2.1, 0, 7); g.fill();
+
+    // body shadow
+    g.fillStyle='rgba(0,0,0,0.5)'; g.fillRect(ax-bw/2+2, top+2, bw, bh);
+    // window body
+    g.fillStyle=C.panel; g.fillRect(ax-bw/2, top, bw, bh);
+    g.strokeStyle = working?C.clay:C.green; g.lineWidth=1.5;
+    g.strokeRect(ax-bw/2, top, bw, bh);
+    // title bar
+    g.fillStyle=C.sel; g.fillRect(ax-bw/2, top, bw, tb);
+    g.strokeStyle=C.border; g.lineWidth=1; g.strokeRect(ax-bw/2, top, bw, tb);
+    // traffic lights
+    const ly=top+5;
+    [[C.red,-bw/2+7],[C.yellow,-bw/2+14],[C.green,-bw/2+21]].forEach(function(d){
+      g.fillStyle=d[0]; g.beginPath(); g.arc(ax+d[1], ly, 2, 0, 7); g.fill();
+    });
+    // version tag
+    g.font='8px ui-monospace,Menlo,monospace'; g.fillStyle=C.dim; g.textAlign='right';
+    g.fillText('v2', ax+bw/2-4, top+7); g.textAlign='left';
+    // face '>_' with blinking cursor
+    g.font='14px ui-monospace,Menlo,monospace';
+    g.fillStyle = working?C.clay:C.green;
+    g.fillText('>', ax-11, top+bh-8);
+    if((elapsed*1.6|0)%2===0){ g.fillStyle=C.green; g.fillRect(ax-1, top+bh-16, 8, 3); }
+    // legs
+    g.strokeStyle=C.green; g.lineWidth=1.4;
+    const kick = working?0:Math.sin(elapsed*7)*4;
+    g.beginPath();
+    g.moveTo(ax-8,feet); g.lineTo(ax-8+kick, feet+6);
+    g.moveTo(ax+8,feet); g.lineTo(ax+8-kick, feet+6);
+    g.stroke();
+
+    if(working){
+      // rooted ring pulse
+      const pr = 30+Math.sin(elapsed*6)*4;
+      g.strokeStyle='rgba(217,119,87,'+(0.5-Math.sin(elapsed*6)*0.2)+')';
+      g.lineWidth=1; g.beginPath(); g.arc(ax, feet-bh/2, pr, 0, 7); g.stroke();
+      // spinner
+      g.font='11px ui-monospace,Menlo,monospace'; g.fillStyle=C.clay;
+      const sp = '✻✳✢✶'[(elapsed*8|0)%4];
+      g.fillText(sp+' working…', ax+bw/2+8, top+bh-6);
+    }
+  }
+
+  const taskProg = [0,0,0,0,0];
+
+  function frame(){
+    const now = performance.now()/1000;
+    const elapsed = now - t0;
+    const p = (elapsed % LOOP)/LOOP;
+    const camY = (elapsed/LOOP)*TILE;
+
+    // compaction pulse centered at pc
+    const pc = 0.66;
+    let d = Math.abs(p-pc); d = Math.min(d, 1-d);
+    const comp = Math.max(0, 1 - d/0.05);
+
+    // context fraction (fills toward threshold, resets after compaction)
+    let ctxFrac;
+    if(p < pc) ctxFrac = 0.22 + (p/pc)*0.68;
+    else       ctxFrac = 0.28 + ((p-pc)/(1-pc))*0.34;
+    ctxFrac = Math.min(0.985, ctxFrac + Math.sin(elapsed*9)*0.006);
+
+    // task progress (fills in sequence; last one gets amnesia on compaction)
+    for(let i=0;i<5;i++){
+      let pr = Math.max(0, Math.min(1, p*1.55 - i*0.14));
+      if(i===4 && p>pc) pr = Math.max(0, pr*(1-comp*0.9)); // "remember what the task was" un-remembered
+      taskProg[i]=pr;
+    }
+
+    // ---- clear + screen shake ----
+    g.save();
+    if(comp>0.01){ g.translate((Math.random()-0.5)*comp*10, (Math.random()-0.5)*comp*8); }
+    g.fillStyle=C.bg; g.fillRect(-20,-20,W+40,H+40);
+
+    // gutter divider
+    g.strokeStyle='rgba(58,56,51,0.7)'; g.lineWidth=1;
+    g.beginPath(); g.moveTo(54,0); g.lineTo(54,H); g.stroke();
+
+    // forgetting front (screen space): creeps near top, surges down on compaction
+    const frontY = H*0.085 + Math.sin(elapsed*0.7)*6 + comp*H*0.40;
+
+    // ---- transcript lines ----
+    const gStart = Math.floor(camY/LINE_H)-1;
+    const gEnd = Math.floor((camY+H)/LINE_H)+1;
+    // determine active task station near avatar feet
+    const ax = W*0.30 + Math.sin(elapsed*1.9)*10;
+    const afeet = H*0.56;
+    window.__activeTi = -1; let bestAct=0;
+    for(let gi=gStart; gi<=gEnd; gi++){
+      const it = LINE[((gi%N)+N)%N];
+      if(it.k!=='task') continue;
+      const sy = gi*LINE_H - camY;
+      const act = Math.exp(-Math.pow((sy+2 - afeet)/26,2));
+      if(act>bestAct){ bestAct=act; if(act>0.55) window.__activeTi=it.ti; }
+    }
+    const working = bestAct>0.6 && comp<0.3;
+
+    for(let gi=gStart; gi<=gEnd; gi++){
+      const sy = gi*LINE_H - camY;
+      drawLine(gi, sy, comp, frontY);
+    }
+
+    // ---- subagents ✳ (follow avatar with lag) ----
+    for(let s=0;s<2;s++){
+      const ph = elapsed*1.4 + s*Math.PI;
+      const sx = ax + Math.cos(ph)*(34+s*10);
+      const ssy = afeet-18 + Math.sin(ph)*(20+s*8);
+      g.font='13px ui-monospace,Menlo,monospace';
+      g.fillStyle = comp>0.4 ? C.red : C.green;
+      g.globalAlpha = comp>0.4 ? (Math.random()>0.5?1:0.3) : 0.9;
+      g.fillText('✳', sx, ssy);
+      g.globalAlpha=1;
+      // tiny tether
+      g.strokeStyle='rgba(126,231,135,0.18)'; g.lineWidth=1;
+      g.beginPath(); g.moveTo(ax,afeet-16); g.lineTo(sx+4,ssy-4); g.stroke();
+    }
+
+    // ---- enemy: hallucination-ghost 👻 (drifts in, teleport-flickers) ----
+    const gActive = p>0.30 && p<0.66;
+    if(gActive){
+      const gp = (p-0.30)/0.36;
+      const gx = W*1.02 - gp*(W*0.80);
+      const gy = H*0.40 + Math.sin(elapsed*2.1)*34;
+      const flick = comp>0.3 ? (Math.random()>0.4) : (Math.random()>0.12);
+      g.globalAlpha = flick?0.95:0.25;
+      g.font='22px ui-monospace,Menlo,monospace';
+      if(comp>0.4){ g.fillStyle=C.red; g.fillText(GLYPHS[(Math.random()*GLYPHS.length)|0]+GLYPHS[(Math.random()*GLYPHS.length)|0], gx, gy); }
+      else g.fillText('👻', gx, gy);
+      g.globalAlpha=1;
+      // label + targeting bracket when close
+      g.font='9px ui-monospace,Menlo,monospace'; g.fillStyle=C.red;
+      g.fillText('👻 hallucination-ghost', gx-6, gy-16);
+      if(gx < ax+150 && comp<0.3){
+        g.strokeStyle=C.red; g.lineWidth=1;
+        g.strokeRect(gx-4, gy-18, 30, 26);
+        // print-debug zap from avatar
+        if(Math.random()>0.35){
+          g.strokeStyle=C.green; g.lineWidth=1.5; g.setLineDash([3,3]);
+          g.beginPath(); g.moveTo(ax+14, afeet-14); g.lineTo(gx+8, gy-8); g.stroke();
+          g.setLineDash([]);
+          if(now-lastZapPop>0.4){ pop(ax+40,afeet-30,'∞ zap +18tk',C.dim); lastZapPop=now; }
+        }
+      }
+    }
+
+    // ---- avatar ----
+    drawAvatar(ax, afeet, working, elapsed, comp);
+
+    // ---- forgetting band drawn over everything (it eats what's above) ----
+    drawForgetting(frontY, comp, elapsed);
+
+    // ---- token-cost popups ----
+    if(working && now-lastWorkPop>0.26){ pop(ax+30, afeet-24, '+3 tk', C.yellow); lastWorkPop=now; }
+    if(p>0.11 && p<0.135 && !subDone){ pop(ax-10, afeet-40, 'S ▸ subagent  +900 tk', C.clay, 11); subDone=true; }
+    if(p<0.05) subDone=false;
+    if(comp>0.5 && !compDone){ pop(W*0.5, H*0.42, '⚡ /compact  −4.1k ctx', C.green, 15); compDone=true; }
+    if(comp<0.1) compDone=false;
+
+    g.textAlign='center';
+    for(let i=popups.length-1;i>=0;i--){
+      const pu=popups[i]; const age=now-pu.born;
+      if(age>1.35){ popups.splice(i,1); continue; }
+      g.globalAlpha = Math.max(0, 1-age/1.35);
+      g.font = pu.size+'px ui-monospace,Menlo,monospace';
+      g.fillStyle = pu.col;
+      g.fillText(pu.txt, pu.x, pu.y - age*26);
+    }
+    g.globalAlpha=1; g.textAlign='left';
+
+    // ---- compaction glitch overlay ----
+    if(comp>0.02){
+      // chromatic split bars
+      for(let i=0;i<8;i++){
+        const by = Math.random()*H, bh=2+Math.random()*10;
+        g.globalAlpha=comp*0.5;
+        g.fillStyle = Math.random()>0.5?'rgba(108,182,255,0.5)':'rgba(244,112,103,0.5)';
+        g.fillRect((Math.random()-0.5)*comp*30, by, W, bh);
+      }
+      g.globalAlpha=1;
+      // banner
+      if(comp>0.25){
+        const bw=Math.min(420,W-40), bx=W/2-bw/2, by=H*0.30;
+        g.fillStyle='rgba(15,15,14,0.92)'; g.fillRect(bx,by,bw,54);
+        g.strokeStyle=C.red; g.lineWidth=1.5;
+        g.strokeRect(bx+ (Math.random()-0.5)*3, by+(Math.random()-0.5)*3, bw, 54);
+        g.font='14px ui-monospace,Menlo,monospace'; g.fillStyle=C.red;
+        g.fillText('⚡ INVOLUNTARY COMPACTION', bx+14, by+22);
+        g.font='11px ui-monospace,Menlo,monospace'; g.fillStyle=C.text;
+        g.fillText('⎿  '+garble('context threshold crossed — summarizing').slice(0,44), bx+14, by+40);
+      }
+    }
+
+    g.restore();
+
+    // ---- HUD (DOM) ----
+    updateHUD(ctxFrac, comp, p);
+
+    requestAnimationFrame(frame);
+  }
+
+  let hudTick=0;
+  function updateHUD(ctxFrac, comp, p){
+    hudTick++;
+    if(hudTick%3!==0) return; // throttle DOM writes
+    // task queue
+    let html='';
+    for(let i=0;i<5;i++){
+      const pr=taskProg[i]; const filled=Math.round(pr*10);
+      let bar=''; for(let j=0;j<10;j++) bar+= j<filled?'▰':'▱';
+      let cls='trow';
+      const amn = (i===4 && comp>0.3);
+      if(pr>=0.999) cls+=' done';
+      else if(window.__activeTi===i) cls+=' p';
+      else if(pr>0) cls+=' q';
+      if(amn) cls='trow amn';
+      html+='<div class="'+cls+'"><span class="nm">'+(amn?garble(TASK_NAMES[i]):('☐ '+TASK_NAMES[i]))+'</span><span class="bar">'+bar+'</span></div>';
+    }
+    tqEl.innerHTML=html;
+    // ctx meter
+    const total=16; const used=Math.round(ctxFrac*total*10)/10;
+    const cells=24; const fc=Math.round(ctxFrac*cells);
+    const hot=ctxFrac>0.85;
+    let cbar='';
+    for(let i=0;i<cells;i++){
+      if(i<fc) cbar += '<span class="'+(hot?'hot':'fill')+'">▮</span>';
+      else cbar += '<span class="empty">▯</span>';
+    }
+    ctxEl.innerHTML = cbar + '\n<span class="lbl">ctx '+used.toFixed(1)+'k / '+total+'k'+(hot?'  ⚠ compaction imminent':'')+'</span>';
+    // footer
+    footEl.innerHTML = '<b>✳ subagents 2</b>   ·   <span class="c">⚡ compactions '+(p>0.66?1:0)+'</span>   ·   0.16px / token';
+  }
+
+  makeScan();
+  resize();
+  requestAnimationFrame(frame);
+})();
+</script>

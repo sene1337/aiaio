@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AIAIO — traversal concept gallery</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0f0f0e; color: #dedad2; min-height: 100vh;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    padding: 32px 24px;
+  }
+  h1 { font-size: 18px; font-weight: normal; }
+  h1::before { content: '✻ '; color: #d97757; }
+  .sub { color: #7a766e; font-size: 12px; margin: 6px 0 24px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; max-width: 1200px; }
+  a.card {
+    display: block; border: 1px solid #3a3833; background: #161615;
+    padding: 16px; text-decoration: none; color: #dedad2;
+  }
+  a.card:hover { border-color: #7ee787; background: #1a1a18; }
+  a.card h2 { font-size: 14px; font-weight: normal; color: #7ee787; margin-bottom: 6px; }
+  a.card h2 .g { color: #d97757; margin-right: 8px; }
+  a.card p { font-size: 12px; color: #7a766e; line-height: 1.55; }
+  .note { margin-top: 28px; color: #7a766e; font-size: 11px; max-width: 640px; line-height: 1.6; }
+</style>
+</head>
+<body>
+  <h1>AIAIO — six ways to move through a session</h1>
+  <p class="sub">concept mockups · everything decided stays (task race, wall of forgetting, token economy, subagents, your words as content) — only the traversal changes</p>
+  <div class="grid">
+    <a class="card" href="./scrollback.html"><h2><span class="g">▼</span>THE SCROLLBACK</h2><p>Fall down your own transcript. Text lines are platforms; the forgetting chases through the scrollback.</p></a>
+    <a class="card" href="./railmap.html"><h2><span class="g">◈</span>THE RAIL MAP</h2><p>The session as a metro map of turns — tool calls are side-tracks, subagents are branch lines, the red front swallows stations.</p></a>
+    <a class="card" href="./ringbuffer.html"><h2><span class="g">◯</span>THE RING BUFFER</h2><p>The context window as a circle you orbit. A sweep-hand of forgetting chases you; compaction shrinks the world.</p></a>
+    <a class="card" href="./callstack.html"><h2><span class="g">≡</span>THE CALL STACK</h2><p>Climb the session as a tower of stack frames while the corruption tide rises and floors pancake-collapse.</p></a>
+    <a class="card" href="./threelanes.html"><h2><span class="g">⇶</span>THE THREE LANES</h2><p>Time cannot stop. Hop between user/assistant/tool lanes as the session streams past — the left edge is the forgetting.</p></a>
+    <a class="card" href="./memorypalace.html"><h2><span class="g">⌂</span>THE MEMORY PALACE</h2><p>Isometric rooms, one per chapter. Look back through a doorway and watch the room you just left dissolve.</p></a>
+  </div>
+  <p class="note">Each mockup is a self-contained attract-mode animation with a DESIGN NOTES panel (what changes, what stays, why it might be more fun, top risks). Mocked with the chaotic example session's real task names and moments.</p>
+</body>
+</html>

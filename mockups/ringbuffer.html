@@ -1,0 +1,664 @@
+<meta charset="utf-8">
+<title>AIAIO — THE RING BUFFER</title>
+<style>
+  :root {
+    --bg: #0f0f0e; --panel: #161615; --sel: #24241f;
+    --text: #dedad2; --dim: #7a766e; --border: #3a3833;
+    --green: #7ee787; --clay: #d97757; --blue: #6cb6ff;
+    --yellow: #e3b341; --red: #f47067;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, 'Courier New', monospace;
+    font-size: 13px; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+
+  /* ---- fixed header strip ---- */
+  #hdr {
+    flex: 0 0 auto; border-bottom: 1px solid var(--border);
+    background: var(--panel); padding: 8px 14px;
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  }
+  #hdr .tag { color: var(--clay); font-size: 11px; letter-spacing: .18em; }
+  #hdr h1 {
+    font-size: 15px; font-weight: normal; letter-spacing: .12em; color: var(--text);
+  }
+  #hdr h1 b { color: var(--green); font-weight: normal; }
+  #hdr .pitch { color: var(--dim); font-size: 12px; }
+  #hdr .attract { margin-left: auto; color: var(--yellow); font-size: 11px; letter-spacing: .15em; }
+  #hdr .attract .dot { animation: pulse 1.4s steps(1) infinite; }
+  @keyframes pulse { 0%,60%{opacity:1} 61%,100%{opacity:.25} }
+
+  /* ---- stage ---- */
+  #stage { flex: 1 1 auto; position: relative; min-height: 0; }
+  #ring { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #scan {
+    pointer-events: none; position: absolute; inset: 0; z-index: 5;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,.10) 0, rgba(0,0,0,.10) 1px, transparent 1px, transparent 3px);
+  }
+
+  /* ---- design notes ---- */
+  #notes {
+    flex: 0 0 auto; border-top: 1px solid var(--border); background: var(--panel);
+    max-height: 46vh; overflow: auto;
+  }
+  #notes > summary {
+    list-style: none; cursor: pointer; padding: 7px 14px; font-size: 12px;
+    color: var(--blue); user-select: none;
+  }
+  #notes > summary::-webkit-details-marker { display: none; }
+  #notes > summary::before { content: '▸ '; color: var(--dim); }
+  #notes[open] > summary::before { content: '▾ '; }
+  #notes .body { padding: 4px 16px 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px 26px; }
+  #notes h4 { font-size: 12px; font-weight: normal; letter-spacing: .08em; margin-bottom: 5px; }
+  #notes h4.stay { color: var(--green); }
+  #notes h4.change { color: var(--clay); }
+  #notes h4.fun { color: var(--yellow); }
+  #notes h4.risk { color: var(--red); }
+  #notes ul { list-style: none; }
+  #notes li { color: var(--text); font-size: 12px; line-height: 1.65; margin-bottom: 3px; padding-left: 14px; text-indent: -14px; }
+  #notes li::before { content: '⎿ '; color: var(--dim); }
+  #notes .k { color: var(--clay); }
+  #notes .g { color: var(--green); }
+  @media (max-width: 720px) { #notes .body { grid-template-columns: 1fr; } }
+</style>
+
+<div id="hdr">
+  <span class="tag">AIAIO ◍</span>
+  <h1>THE <b>RING&nbsp;BUFFER</b></h1>
+  <span class="pitch">the context window is a track you lap — work the stations before the sweep-hand of forgetting laps you.</span>
+  <span class="attract"><span class="dot">◆</span> ATTRACT MODE</span>
+</div>
+
+<div id="stage">
+  <canvas id="ring"></canvas>
+  <div id="scan"></div>
+</div>
+
+<details id="notes">
+  <summary>DESIGN NOTES — the pitch, in the open</summary>
+  <div class="body">
+    <div>
+      <h4 class="change">WHAT CHANGES vs the side-scroller</h4>
+      <ul>
+        <li>The timeline stops being a <span class="k">left→right corridor</span> and becomes a <span class="k">closed loop</span> — you lap it, you never reach a far wall, you manage a chase.</li>
+        <li>The Wall of Forgetting is no longer a vertical curtain behind you — it's a <span class="k">radar sweep-hand</span> pinned to the center, rotating only when you burn tokens. Spatially it reads as a clock you're racing.</li>
+        <li><span class="k">/compact</span> and involuntary compaction physically <span class="k">shrink the ring</span> — the whole world contracts, contents re-pack tighter, near-misses become collisions. A <span class="k">◈ model upgrade</span> grows it back. The context budget is now literally the size of your playfield.</li>
+        <li>Positioning is angular, not linear: you can retreat by <span class="k">lapping ahead into stale terrain</span> the hand already ate — risky, but it buys distance.</li>
+      </ul>
+      <h4 class="stay" style="margin-top:12px">WHAT STAYS (invariant)</h4>
+      <ul>
+        <li>Task-queue race — real user asks as stations with <span class="g">▰▱</span> work progress.</li>
+        <li>Token economy — every action costs; <span class="k">spend = hand movement</span>. Stand still, the hand stops.</li>
+        <li>The bestiary from your error log — <span class="g">👻 ⏱ ☢</span> at the points they really happened.</li>
+        <li>◇ moments quote your real wins & frustrations; ✳ subagents orbit and help.</li>
+        <li>The terminal-window avatar (traffic-lights, <span class="k">v2</span> tag, <span class="g">&gt;_</span> face, antenna) and the whole Claude-Code / TUI skin.</li>
+      </ul>
+    </div>
+    <div>
+      <h4 class="fun">WHY IT COULD BE MORE FUN</h4>
+      <ul>
+        <li><span class="k">Legible pressure.</span> One glance at the clock tells you exactly how much runway is left and where the hand will bite next — dread you can read, not guess.</li>
+        <li><span class="k">The shrink is a genuine "oh no" beat.</span> Watching your world contract mid-fight — stations sliding into your lap, the hand suddenly closer — is a compaction you <em>feel</em>, and it makes the ◈ upgrade euphoric.</li>
+        <li><span class="k">Lap tactics.</span> Do I finish this station or sprint a quarter-turn to dodge the sweep? Every second is a tempo call — pure arcade risk/reward that the corridor never quite forced.</li>
+        <li>Center-screen goal + ctx meter means the <span class="k">whole fantasy is always on camera</span> — Tempest/Missile-Command readability, attract-mode ready.</li>
+      </ul>
+      <h4 class="risk" style="margin-top:12px">TOP 2 RISKS</h4>
+      <ul>
+        <li><span class="k">Readability at small ring sizes.</span> After a compaction the track is tight and re-packed — station labels, enemies, and the avatar can overlap into mush. Needs aggressive label de-clutter (fan-out leaders, fade distant text) or the shrink turns fun into noise.</li>
+        <li><span class="k">Orientation / motion sickness.</span> A radial world where the camera may want to rotate with the player is disorienting; keeping the ring world-locked (as here) is safer but makes "behind you" less visceral than a side-scroller's over-the-shoulder wall.</li>
+      </ul>
+    </div>
+  </div>
+</details>
+
+<script>
+(function () {
+  "use strict";
+  var C = {
+    bg:'#0f0f0e', panel:'#161615', sel:'#24241f', text:'#dedad2', dim:'#7a766e',
+    border:'#3a3833', green:'#7ee787', clay:'#d97757', blue:'#6cb6ff',
+    yellow:'#e3b341', red:'#f47067'
+  };
+  var cv = document.getElementById('ring');
+  var ctx = cv.getContext('2d');
+  var W = 0, H = 0, DPR = 1, cx = 0, cy = 0;
+
+  var LOOP = 20;                 // seconds per attract cycle
+  var TOP = -Math.PI / 2;        // angle of the timeline origin (12 o'clock)
+  var LAPS = 1.15;               // laps the avatar runs per cycle
+  var COMP = { s: 12.6, e: 13.9 };   // compaction shrink window
+  var MU   = { s: 18.1, e: 19.6 };   // ◈ model-upgrade grow window
+
+  // ---- session data ----
+  var GOAL = "the tests are flaky again and the migration is due today — fix both, please";
+  var stations = [
+    { off: 0.00, name: "fix the flaky test suite" },
+    { off: 1.28, name: "migrate the database" },
+    { off: 2.52, name: "answer the support queue" },
+    { off: 3.86, name: "write the postmortem" },
+    { off: 5.18, name: "remember what the task was" }
+  ];
+  var moments = [
+    { off: 0.62, kind: "frust", q: "why is test_auth failing" },
+    { off: 1.94, kind: "win",   q: "dry-run passed!" },
+    { off: 3.16, kind: "frust", q: "still broken. still. broken." },
+    { off: 4.58, kind: "win",   q: "ok it works. nobody touch anything." }
+  ];
+  var enemies = [
+    { off: 1.55, g: "👻", name: "hallucination-ghost" },
+    { off: 3.34, g: "⏱", name: "timeout-blob" },
+    { off: 5.62, g: "☢", name: "regression-splitter" }
+  ];
+  var HAND_ORIGIN = -0.55;       // fixed trailing edge of the forgotten arc (offset from TOP)
+
+  // ---- helpers ----
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function clamp(x, a, b) { return x < a ? a : x > b ? b : x; }
+  function smooth(t) { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); }
+  function pol(r, ang) { return { x: cx + r * Math.cos(ang), y: cy + r * Math.sin(ang) }; }
+  var GLYPHS = "▓▒░#@%&/\\<>|=+*¤§¬".split("");
+  function garble(str, amt) {
+    var o = "", i, ch;
+    for (i = 0; i < str.length; i++) {
+      ch = str[i];
+      if (ch !== " " && Math.random() < amt) o += GLYPHS[(Math.random() * GLYPHS.length) | 0];
+      else o += ch;
+    }
+    return o;
+  }
+  function wrap(text, maxW) {
+    var words = text.split(" "), lines = [], cur = "";
+    for (var i = 0; i < words.length; i++) {
+      var t = cur ? cur + " " + words[i] : words[i];
+      if (ctx.measureText(t).width > maxW && cur) { lines.push(cur); cur = words[i]; }
+      else cur = t;
+    }
+    if (cur) lines.push(cur);
+    return lines;
+  }
+
+  // ---- per-frame animation state ----
+  function ringRadius(t) {
+    var base = Math.min(W, H) * 0.315;
+    if (t < COMP.s) return base;
+    if (t < COMP.e) return lerp(base, base * 0.70, smooth((t - COMP.s) / (COMP.e - COMP.s)));
+    if (t < MU.s)   return base * 0.70;
+    if (t < MU.e)   return lerp(base * 0.70, base, smooth((t - MU.s) / (MU.e - MU.s)));
+    return base;
+  }
+  function avatarProg(t) { return LAPS * 2 * Math.PI * (t / LOOP); }
+  function handProg(t) {
+    if (t < COMP.s) return -0.4 + Math.pow(t / COMP.s, 1.18) * 3.7;
+    if (t < COMP.e) return 3.3;                                   // relief: drained, hand pauses
+    return 3.3 + (t - COMP.e) / (LOOP - COMP.e) * 1.7;
+  }
+  function tokenPct(t) {
+    if (t < COMP.s) return (t / COMP.s) * 0.9;
+    if (t < COMP.e) return lerp(0.9, 0.2, smooth((t - COMP.s) / (COMP.e - COMP.s)));
+    return clamp(0.2 + (t - COMP.e) / (LOOP - COMP.e) * 0.5, 0, 1);
+  }
+  function swept(off, hp) { return off >= HAND_ORIGIN && off <= hp; }
+
+  var SPIN = "✻✳✢✶".split("");
+  var VERBS = ["Migrating", "Reconciling", "Bisecting", "Re-running", "Compiling", "Recalling"];
+
+  // ---- resize ----
+  function resize() {
+    var st = document.getElementById('stage');
+    var w = st.clientWidth, h = st.clientHeight;
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    if (w === W && h === H) return;
+    W = w; H = h; cx = W / 2; cy = H / 2;
+    cv.width = W * DPR; cv.height = H * DPR;
+    cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+
+  // ---- draw pieces ----
+  function drawTrack(R, hp, glitch) {
+    // stale/forgotten arc first (under the track)
+    ctx.save();
+    ctx.lineWidth = R * 0.14;
+    ctx.strokeStyle = 'rgba(58,56,51,0.9)';
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+
+    // forgotten (swept) region — red corruption band
+    var a0 = TOP + HAND_ORIGIN, a1 = TOP + hp;
+    var grad = ctx.createLinearGradient(cx - R, cy, cx + R, cy);
+    ctx.strokeStyle = 'rgba(244,112,103,0.32)';
+    ctx.beginPath(); ctx.arc(cx, cy, R, a0, a1); ctx.stroke();
+    ctx.restore();
+
+    // tick marks around the ring (clock feel)
+    ctx.save();
+    ctx.strokeStyle = 'rgba(122,118,110,0.55)';
+    for (var i = 0; i < 60; i++) {
+      var ang = TOP + i / 60 * Math.PI * 2;
+      var maj = (i % 5 === 0);
+      var r1 = R - R * 0.075, r2 = R + R * 0.075 * (maj ? 1 : 0.55);
+      var p1 = pol(r1, ang), p2 = pol(r2, ang);
+      ctx.lineWidth = maj ? 1.4 : 0.7;
+      ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+    }
+    ctx.restore();
+
+    // static glyphs scattered in the forgotten band
+    ctx.save();
+    ctx.font = (R * 0.05 | 0) + "px ui-monospace, monospace";
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    var span = (TOP + hp) - a0;
+    for (var k = 0; k < 26; k++) {
+      if (Math.random() > 0.6) continue;
+      var ga = a0 + Math.random() * span;
+      var gr = R + (Math.random() - 0.5) * R * 0.13;
+      var gp = pol(gr, ga);
+      ctx.fillStyle = Math.random() < 0.5 ? 'rgba(244,112,103,0.7)' : 'rgba(122,118,110,0.6)';
+      ctx.fillText(GLYPHS[(Math.random() * GLYPHS.length) | 0], gp.x, gp.y);
+    }
+    ctx.restore();
+  }
+
+  function drawStations(R, ap, hp, t) {
+    ctx.textBaseline = 'middle';
+    for (var i = 0; i < stations.length; i++) {
+      var s = stations[i], ang = TOP + s.off, p = pol(R, ang);
+      var isForgotten = swept(s.off, hp);
+      var passed = ap > s.off + 0.16;
+      var isCurrent = Math.abs(ap - s.off) < 0.34 && !isForgotten;
+      var status, col;
+      if (isForgotten) { status = 'lost'; col = C.red; }
+      else if (isCurrent) { status = 'work'; col = C.clay; }
+      else if (passed) { status = 'done'; col = C.green; }
+      else { status = 'todo'; col = C.dim; }
+
+      // node
+      ctx.save();
+      ctx.fillStyle = C.panel; ctx.strokeStyle = col; ctx.lineWidth = 1.6;
+      var rad = R * 0.045;
+      ctx.beginPath(); ctx.arc(p.x, p.y, rad, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      if (status === 'work') {
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.arc(p.x, p.y, rad * 0.45 * (0.7 + 0.3 * Math.sin(t * 9)), 0, Math.PI * 2); ctx.fill();
+      } else if (status === 'done') {
+        ctx.strokeStyle = col; ctx.lineWidth = 1.8;
+        ctx.beginPath(); ctx.moveTo(p.x - rad * 0.4, p.y); ctx.lineTo(p.x - rad * 0.05, p.y + rad * 0.4);
+        ctx.lineTo(p.x + rad * 0.5, p.y - rad * 0.4); ctx.stroke();
+      }
+      ctx.restore();
+
+      // outward leader + label
+      var lo = pol(R + R * 0.14, ang);
+      var right = Math.cos(ang) >= -0.001;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(122,118,110,0.5)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(pol(R + rad, ang).x, pol(R + rad, ang).y); ctx.lineTo(lo.x, lo.y); ctx.stroke();
+      ctx.font = "11px ui-monospace, monospace";
+      ctx.textAlign = right ? 'left' : 'right';
+      ctx.fillStyle = col;
+      var label = isForgotten ? garble(s.name, 0.5) : s.name;
+      ctx.fillText(label, lo.x + (right ? 4 : -4), lo.y - 6);
+      // progress bar ▰▱
+      var filled = status === 'done' || status === 'lost' ? 5 :
+                   status === 'work' ? clamp(Math.round((1 - (Math.abs(ap - s.off) / 0.34)) * 5), 1, 5) : 0;
+      var bar = "";
+      for (var b = 0; b < 5; b++) bar += b < filled ? "▰" : "▱";
+      ctx.font = "10px ui-monospace, monospace";
+      ctx.fillStyle = status === 'lost' ? C.red : status === 'work' ? C.clay : C.dim;
+      ctx.fillText(bar, lo.x + (right ? 4 : -4), lo.y + 6);
+      ctx.restore();
+    }
+  }
+
+  function drawMoments(R, ap, hp, t) {
+    for (var i = 0; i < moments.length; i++) {
+      var m = moments[i], ang = TOP + m.off, p = pol(R * 1.0, ang);
+      var forgotten = swept(m.off, hp);
+      var near = Math.abs(ap - m.off) < 0.28;
+      var col = m.kind === 'win' ? C.green : C.yellow;
+      if (forgotten) col = C.red;
+      ctx.save();
+      ctx.font = (R * 0.055 | 0) + "px ui-monospace, monospace";
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = col;
+      ctx.globalAlpha = forgotten ? 0.5 : (near ? 1 : 0.8);
+      ctx.fillText("◇", p.x, p.y);
+      ctx.restore();
+      if (near && !forgotten) {
+        // quote pops toward center
+        var qp = pol(R * 0.72, ang);
+        ctx.save();
+        ctx.font = "11px ui-monospace, monospace";
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = C.panel;
+        var qtxt = '“' + m.q + '”';
+        var w = ctx.measureText(qtxt).width + 12;
+        ctx.fillRect(qp.x - w / 2, qp.y - 9, w, 18);
+        ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.strokeRect(qp.x - w / 2, qp.y - 9, w, 18);
+        ctx.fillStyle = col; ctx.fillText(qtxt, qp.x, qp.y);
+        ctx.restore();
+      }
+    }
+  }
+
+  function drawEnemies(R, ap, hp, t) {
+    for (var i = 0; i < enemies.length; i++) {
+      var e = enemies[i], ang = TOP + e.off;
+      var forgotten = swept(e.off, hp);
+      var encounter = Math.abs(ap - e.off) < 0.30 && !forgotten;
+      var jx = 0, jy = 0, alpha = 1;
+      if (e.g === "👻") { // phasing ghost
+        alpha = 0.55 + 0.45 * Math.abs(Math.sin(t * 4 + i));
+        jx = Math.sin(t * 7 + i) * R * 0.02; jy = Math.cos(t * 6 + i) * R * 0.02;
+      }
+      var p = pol(R * 0.9, ang);
+      p.x += jx; p.y += jy;
+      if (forgotten) alpha *= 0.4;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.font = (R * 0.085 | 0) + "px ui-monospace, monospace";
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(e.g, p.x, p.y);
+      ctx.restore();
+
+      if (encounter) {
+        // clash flash
+        ctx.save();
+        ctx.strokeStyle = C.red; ctx.lineWidth = 1.4; ctx.globalAlpha = 0.6 + 0.4 * Math.sin(t * 20);
+        ctx.beginPath(); ctx.arc(p.x, p.y, R * 0.11, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 1; ctx.fillStyle = C.red; ctx.font = "bold 13px ui-monospace, monospace";
+        ctx.fillText("!", p.x, p.y - R * 0.13);
+        ctx.restore();
+        // enemy tag toward rim
+        var lo = pol(R * 0.9 + R * 0.16, ang);
+        ctx.save();
+        ctx.font = "10px ui-monospace, monospace";
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = C.red;
+        ctx.fillText(e.name, lo.x, lo.y);
+        ctx.restore();
+      }
+    }
+  }
+
+  function drawHand(R, hp, t) {
+    var ang = TOP + hp;
+    var tip = pol(R + R * 0.10, ang);
+    var base = pol(Math.min(W, H) * 0.13, ang);
+    // corruption trail (a couple degrees wide)
+    ctx.save();
+    var g = ctx.createLinearGradient(base.x, base.y, tip.x, tip.y);
+    g.addColorStop(0, 'rgba(244,112,103,0.05)');
+    g.addColorStop(1, 'rgba(244,112,103,0.95)');
+    ctx.strokeStyle = g; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(base.x, base.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
+    // flickering glyph static along the hand
+    ctx.font = "10px ui-monospace, monospace"; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (var s = 0.2; s < 1; s += 0.12) {
+      if (Math.random() > 0.7) continue;
+      var gp = pol(lerp(Math.min(W, H) * 0.13, R + R * 0.10, s), ang + (Math.random() - 0.5) * 0.05);
+      ctx.fillStyle = 'rgba(244,112,103,' + (0.4 + Math.random() * 0.5) + ')';
+      ctx.fillText(GLYPHS[(Math.random() * GLYPHS.length) | 0], gp.x, gp.y);
+    }
+    ctx.restore();
+    // tip label
+    ctx.save();
+    ctx.font = "9px ui-monospace, monospace"; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = C.red;
+    var lp = pol(R + R * 0.20, ang);
+    ctx.fillText("WALL OF", lp.x, lp.y - 5);
+    ctx.fillText("FORGETTING", lp.x, lp.y + 5);
+    ctx.restore();
+  }
+
+  function drawAvatar(R, ap, t, version) {
+    var ang = TOP + ap;
+    var p = pol(R, ang);
+    var s = R * 0.11;                 // half-size of the terminal window
+    var w = s * 2.1, h = s * 1.55;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    // antenna
+    ctx.strokeStyle = C.green; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(0, -h / 2); ctx.lineTo(0, -h / 2 - s * 0.5); ctx.stroke();
+    ctx.fillStyle = C.green;
+    ctx.beginPath(); ctx.arc(0, -h / 2 - s * 0.5, 2.2, 0, Math.PI * 2); ctx.fill();
+    // window body
+    ctx.fillStyle = C.panel; ctx.strokeStyle = C.green; ctx.lineWidth = 1.6;
+    roundRect(-w / 2, -h / 2, w, h, 3); ctx.fill(); ctx.stroke();
+    // title bar
+    ctx.fillStyle = C.sel;
+    roundRect(-w / 2, -h / 2, w, h * 0.32, 3); ctx.fill();
+    // traffic lights
+    var lights = [C.red, C.yellow, C.green];
+    for (var i = 0; i < 3; i++) {
+      ctx.fillStyle = lights[i];
+      ctx.beginPath(); ctx.arc(-w / 2 + 6 + i * 6, -h / 2 + h * 0.16, 1.8, 0, Math.PI * 2); ctx.fill();
+    }
+    // v-tag
+    ctx.fillStyle = C.dim; ctx.font = "8px ui-monospace, monospace";
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(version, w / 2 - 4, -h / 2 + h * 0.16);
+    // >_ face (blinking)
+    ctx.fillStyle = C.green; ctx.font = "bold " + (s * 0.9 | 0) + "px ui-monospace, monospace";
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    var blink = (t % 1.1) < 0.9 ? ">_" : "> ";
+    ctx.fillText(blink, 0, h * 0.12);
+    ctx.restore();
+
+    // subagents ✳ orbiting
+    for (var k = 0; k < 2; k++) {
+      var oa = t * 2.2 + k * Math.PI;
+      var op = { x: p.x + Math.cos(oa) * s * 1.9, y: p.y + Math.sin(oa) * s * 1.9 };
+      ctx.save();
+      ctx.font = (s | 0) + "px ui-monospace, monospace";
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = C.blue;
+      ctx.fillText("✳", op.x, op.y);
+      ctx.restore();
+    }
+    return p;
+  }
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function drawHub(R, t, tp, version) {
+    var rh = R * 0.44;
+    // gauge arc (ctx meter) around the hub
+    ctx.save();
+    ctx.lineWidth = 5; ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(58,56,51,0.9)';
+    ctx.beginPath(); ctx.arc(cx, cy, rh + 8, 0, Math.PI * 2); ctx.stroke();
+    var gcol = tp > 0.8 ? C.red : tp > 0.55 ? C.yellow : C.green;
+    ctx.strokeStyle = gcol;
+    ctx.beginPath(); ctx.arc(cx, cy, rh + 8, TOP, TOP + tp * Math.PI * 2); ctx.stroke();
+    ctx.restore();
+
+    // hub panel
+    ctx.save();
+    ctx.fillStyle = C.panel; ctx.strokeStyle = C.border; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(cx, cy, rh, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.clip();
+
+    ctx.textAlign = 'center';
+    // ctx label + token count
+    ctx.textBaseline = 'top';
+    ctx.font = "10px ui-monospace, monospace"; ctx.fillStyle = C.dim;
+    ctx.fillText("◫ ctx window", cx, cy - rh + rh * 0.24);
+    ctx.font = "bold 15px ui-monospace, monospace"; ctx.fillStyle = gcol;
+    var tk = (tp * 18000) | 0;
+    ctx.fillText((tk / 1000).toFixed(1) + "k / 18k tk", cx, cy - rh + rh * 0.44);
+
+    // goal (wrapped)
+    ctx.font = "11px ui-monospace, monospace";
+    var lines = wrap("“" + GOAL + "”", rh * 1.5);
+    ctx.fillStyle = C.text; ctx.textBaseline = 'middle';
+    var ly = cy - (lines.length - 1) * 7;
+    for (var i = 0; i < lines.length; i++) { ctx.fillText(lines[i], cx, ly + i * 14); }
+
+    // spinner + session id
+    ctx.textBaseline = 'bottom';
+    ctx.font = "10px ui-monospace, monospace";
+    var sp = SPIN[(t * 6 | 0) % SPIN.length];
+    var vb = VERBS[(t * 0.5 | 0) % VERBS.length];
+    ctx.fillStyle = C.clay; ctx.fillText(sp + " " + vb + "… (" + version + ")", cx, cy + rh - rh * 0.30);
+    ctx.fillStyle = C.dim; ctx.font = "9px ui-monospace, monospace";
+    ctx.fillText("session ring-buffer · loop " + (Math.floor(performance.now() / (LOOP * 1000)) + 1), cx, cy + rh - rh * 0.14);
+    ctx.restore();
+  }
+
+  function drawNarration(t, avPos, R) {
+    var line, col = C.dim;
+    if (t < COMP.s) {
+      line = "> reading transcript · working the queue — every token turns the hand";
+      // detect encounter
+      var ap = avatarProg(t);
+      for (var i = 0; i < enemies.length; i++) {
+        if (Math.abs(ap - enemies[i].off) < 0.30) {
+          line = enemies[i].g + " " + enemies[i].name + " phased in — burning tokens to fight = feeding the wall";
+          col = C.red; break;
+        }
+      }
+    } else if (t < COMP.e) {
+      line = garble("⚡ /compact — re-packing context · THE RING IS SHRINKING", 0.28);
+      col = C.red;
+    } else if (t < MU.s) {
+      line = "▸ smaller world, tighter track — stations re-packed, collisions closer";
+      col = C.yellow;
+    } else if (t < MU.e) {
+      line = "◈ MODEL UPGRADE — context budget restored · the ring grows back · v2 → v3";
+      col = C.green;
+    } else {
+      line = "> back to full width — lap it clean before the next compaction";
+      col = C.green;
+    }
+    ctx.save();
+    ctx.font = "12px ui-monospace, monospace";
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    var pad = 8, w = ctx.measureText(line).width + pad * 2, x = cx - w / 2, y = H - 14;
+    ctx.fillStyle = 'rgba(15,15,14,0.92)';
+    ctx.fillRect(x, y - 20, w, 24);
+    ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.strokeRect(x, y - 20, w, 24);
+    ctx.fillStyle = col; ctx.fillText(line, cx, y);
+    ctx.restore();
+  }
+
+  function drawCorner(t) {
+    ctx.save();
+    ctx.font = "10px ui-monospace, monospace"; ctx.textBaseline = 'top';
+    // top-left legend
+    ctx.textAlign = 'left';
+    ctx.fillStyle = C.dim;
+    ctx.fillText("◍ THE RING BUFFER — context window as track", 14, 12);
+    var leg = [
+      ["◈ ", C.green, "model upgrade grows the ring"],
+      ["⚡ ", C.red, "compaction shrinks it"],
+      ["◇ ", C.yellow, "real moment"],
+      ["✳ ", C.blue, "subagent"]
+    ];
+    for (var i = 0; i < leg.length; i++) {
+      var yy = 30 + i * 14;
+      ctx.fillStyle = leg[i][1]; ctx.fillText(leg[i][0], 14, yy);
+      ctx.fillStyle = C.dim; ctx.fillText(leg[i][2], 30, yy);
+    }
+    // top-right economy
+    ctx.textAlign = 'right';
+    ctx.fillStyle = C.dim;
+    ctx.fillText("token economy: spend = hand movement", W - 14, 12);
+    ctx.fillText("stand still → the hand stands still", W - 14, 26);
+    ctx.restore();
+  }
+
+  // ---- main loop ----
+  var startT = performance.now();
+  function frame(now) {
+    resize();
+    var t = ((now - startT) / 1000) % LOOP;
+    var R = ringRadius(t);
+    var ap = avatarProg(t);
+    var hp = handProg(t);
+    var tp = tokenPct(t);
+    var version = (t >= MU.s ? "v3" : "v2");
+
+    // clear
+    ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
+
+    // faint radial spokes (Tempest depth)
+    ctx.save();
+    ctx.strokeStyle = 'rgba(58,56,51,0.35)'; ctx.lineWidth = 1;
+    for (var i = 0; i < 12; i++) {
+      var a = TOP + i / 12 * Math.PI * 2;
+      var p1 = pol(Math.min(W, H) * 0.10, a), p2 = pol(R + R * 0.1, a);
+      ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+    }
+    ctx.restore();
+
+    // compaction glitch: shake + RGB split
+    var glitching = t >= COMP.s && t < COMP.e;
+    ctx.save();
+    if (glitching) {
+      ctx.translate((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6);
+    }
+
+    drawTrack(R, hp, glitching);
+    drawHand(R, hp, t);
+    drawMoments(R, ap, hp, t);
+    drawStations(R, ap, hp, t);
+    drawEnemies(R, ap, hp, t);
+    var avPos = drawAvatar(R, ap, t, version);
+    drawHub(R, t, tp, version);
+
+    ctx.restore();
+
+    // RGB-split ghost of the ring during glitch
+    if (glitching) {
+      ctx.save();
+      ctx.globalAlpha = 0.35; ctx.globalCompositeOperation = 'screen';
+      ctx.lineWidth = R * 0.14;
+      ctx.strokeStyle = C.red;
+      ctx.beginPath(); ctx.arc(cx + 4, cy, R, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = C.blue;
+      ctx.beginPath(); ctx.arc(cx - 4, cy, R, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
+
+    // ◈ model-upgrade pulse
+    if (t >= MU.s && t < MU.e) {
+      ctx.save();
+      var pu = smooth((t - MU.s) / (MU.e - MU.s));
+      ctx.globalAlpha = 1 - pu; ctx.strokeStyle = C.green; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(cx, cy, R * (0.6 + pu * 0.7), 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 1; ctx.fillStyle = C.green;
+      ctx.font = "13px ui-monospace, monospace"; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText("◈", pol(R, TOP).x, pol(R, TOP).y - 4);
+      ctx.restore();
+    }
+
+    drawNarration(t, avPos, R);
+    drawCorner(t);
+
+    // loop fade (clean cut into replay)
+    if (t > LOOP - 0.4) {
+      ctx.fillStyle = 'rgba(15,15,14,' + smooth((t - (LOOP - 0.4)) / 0.4) + ')';
+      ctx.fillRect(0, 0, W, H);
+    } else if (t < 0.4) {
+      ctx.fillStyle = 'rgba(15,15,14,' + (1 - smooth(t / 0.4)) + ')';
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>

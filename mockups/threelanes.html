@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIAIO — THE THREE LANES</title>
+<style>
+  :root{
+    --bg:#0f0f0e; --panel:#161615; --sel:#24241f;
+    --text:#dedad2; --dim:#7a766e; --border:#3a3833;
+    --green:#7ee787; --clay:#d97757; --blue:#6cb6ff;
+    --yellow:#e3b341; --red:#f47067;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:ui-monospace,'SF Mono',Menlo,Consolas,'Courier New',monospace;
+    font-size:13px; overflow:hidden;
+    display:flex; flex-direction:column;
+  }
+  /* faint scanlines over everything — a whisper of CRT under the TUI */
+  #crt{pointer-events:none;position:fixed;inset:0;z-index:90;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,.10) 0,rgba(0,0,0,.10) 1px,transparent 1px,transparent 3px)}
+
+  /* ---- fixed header strip ---- */
+  header{
+    flex:0 0 auto; border-bottom:1px solid var(--border); background:var(--panel);
+    padding:8px 14px; display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;
+  }
+  header .brand{color:var(--clay); font-size:12px; letter-spacing:.14em}
+  header .brand b{color:var(--text)}
+  header .title{color:var(--green); font-size:15px; letter-spacing:.18em; font-weight:normal}
+  header .pitch{color:var(--dim); font-size:12px; flex:1; min-width:220px}
+  header .tag{color:var(--dim); font-size:10px; border:1px solid var(--border); padding:1px 6px}
+
+  /* ---- stage ---- */
+  #stage{flex:1; position:relative; min-height:0}
+  #c{position:absolute; inset:0; width:100%; height:100%; display:block}
+
+  /* ---- design notes ---- */
+  details{
+    flex:0 0 auto; border-top:1px solid var(--border); background:var(--panel);
+    font-size:12px; line-height:1.6; max-height:44vh; overflow:auto;
+  }
+  details[open]{padding-bottom:6px}
+  summary{
+    cursor:pointer; padding:7px 14px; color:var(--yellow); list-style:none;
+    letter-spacing:.08em; user-select:none;
+  }
+  summary::-webkit-details-marker{display:none}
+  summary::before{content:'▸ '; color:var(--clay)}
+  details[open] summary::before{content:'▾ '}
+  .notes{padding:0 16px 4px; display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px}
+  .note h4{font-size:11px; letter-spacing:.1em; font-weight:normal; margin-bottom:5px}
+  .note.change h4{color:var(--clay)}
+  .note.stay h4{color:var(--green)}
+  .note.fun h4{color:var(--blue)}
+  .note.risk h4{color:var(--red)}
+  .note ul{list-style:none}
+  .note li{color:var(--text); margin-bottom:4px; padding-left:14px; position:relative}
+  .note li::before{content:'⎿'; position:absolute; left:0; color:var(--dim)}
+  .note .k{color:var(--yellow)}
+</style>
+</head>
+<body>
+<div id="crt"></div>
+
+<header>
+  <span class="brand"><b>AIAIO</b> ·</span>
+  <h1 class="title">THE THREE LANES</h1>
+  <span class="pitch">The session plays forward and you live inside its flow — hop lanes to catch the work, dodge the log, and outrun the wall of forgetting eating the left edge.</span>
+  <span class="tag">attract mode · autoplay</span>
+</header>
+
+<div id="stage"><canvas id="c"></canvas></div>
+
+<details>
+  <summary>DESIGN NOTES</summary>
+  <div class="notes">
+    <div class="note change">
+      <h4>WHAT CHANGES vs the current side-scroller</h4>
+      <ul>
+        <li>The level is now a <span class="k">conveyor</span>, not a place you roam — the transcript auto-scrolls right→left and you hold a near-fixed x.</li>
+        <li>Your only inputs collapse to <span class="k">↑/↓ hop lane</span> + <span class="k">W hold to go heads-down</span>. No aiming, no terrain-drilling.</li>
+        <li>The wall stops being a chasing entity — it <span class="k">is the left screen edge</span>. Falling behind the scroll = the edge eats you.</li>
+        <li>Token spend maps to <span class="k">belt speed</span>, not just distance: burn tokens and the whole tape lurches faster.</li>
+      </ul>
+    </div>
+    <div class="note stay">
+      <h4>WHAT STAYS (invariants)</h4>
+      <ul>
+        <li>Task queue race with real user asks + <span class="k">▰▱</span> progress.</li>
+        <li>Wall of forgetting: red corruption + flickering static, tasks it passes are forgotten.</li>
+        <li>Token economy — ctx meter; spending accelerates.</li>
+        <li><span class="k">⚡ compaction</span> = tape-skip glitch that tears unfinished windows.</li>
+        <li>Subagents <span class="k">✳</span> hold a lane for you. Terminal-window avatar (traffic-lights, v2, &gt;_ face, antenna). Moments &amp; enemies mined from the real log.</li>
+      </ul>
+    </div>
+    <div class="note fun">
+      <h4>WHY IT COULD BE MORE FUN</h4>
+      <ul>
+        <li><span class="k">Instant-read dread</span>: the failure state is right there on the left — no camera-hunting to know how doomed you are.</li>
+        <li><span class="k">Greed vs sight</span>: heads-down fills the bar fastest but blinds you to the next lane of hazards — a real choice every second.</li>
+        <li>One-thumb, pick-up-and-play; Canabalt/rhythm-runner tempo that reads great in attract mode and over-the-shoulder.</li>
+        <li>Compaction becomes a screen-wide <span class="k">beat drop</span> you learn to brace for, not just a meter event.</li>
+      </ul>
+    </div>
+    <div class="note risk">
+      <h4>TOP 2 RISKS</h4>
+      <ul>
+        <li><span class="k">Depth loss.</span> Three lanes may be too thin to carry AIAIO's richer systems (weapons, upgrade gambles, destructible terrain) — risk of flattening a sim into a plain runner.</li>
+        <li><span class="k">Heads-down fights the fiction.</span> "Locked in place while the tape scrolls" only feels fair if the work-window docks to you cleanly; get it wrong and going heads-down reads as punishment, not a gamble.</li>
+      </ul>
+    </div>
+  </div>
+</details>
+
+<script>
+(function(){
+  "use strict";
+  var C = document.getElementById('c');
+  var X = C.getContext('2d');
+  var W = 0, H = 0, DPR = 1;
+
+  var COL = {
+    bg:'#0f0f0e', panel:'#161615', sel:'#24241f', text:'#dedad2', dim:'#7a766e',
+    border:'#3a3833', green:'#7ee787', clay:'#d97757', blue:'#6cb6ff',
+    yellow:'#e3b341', red:'#f47067'
+  };
+
+  function resize(){
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    var r = C.getBoundingClientRect();
+    W = Math.max(320, r.width); H = Math.max(240, r.height);
+    C.width = Math.round(W * DPR); C.height = Math.round(H * DPR);
+    X.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+
+  // ---------- geometry ----------
+  var HUD_TOP = 66;      // task queue + ctx meter band
+  var STATUS = 30;       // bottom goal/controls band
+  function playTop(){ return HUD_TOP; }
+  function playBot(){ return H - STATUS; }
+  function laneH(){ return (playBot() - playTop()) / 3; }
+  function laneY(i){ return playTop() + laneH() * (i + 0.5); }
+  function avatarX(){ return Math.round(W * 0.34); }
+
+  function rr(x,y,w,h,rad){
+    var r = Math.min(rad, w/2, h/2);
+    X.beginPath();
+    X.moveTo(x+r,y); X.arcTo(x+w,y,x+w,y+h,r); X.arcTo(x+w,y+h,x,y+h,r);
+    X.arcTo(x,y+h,x,y,r); X.arcTo(x,y,x+w,y,r); X.closePath();
+  }
+  function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+  function lerp(a,b,t){ return a + (b-a)*clamp(t,0,1); }
+  function seg(t,a,b){ return clamp((t-a)/(b-a),0,1); } // ramp helper
+
+  // ---------- sim state ----------
+  var LOOP = 22.0;
+  var haz = [];      // enemies on lanes
+  var stream = [];   // ambient assistant-lane tokens
+  var moments = [];  // ◇ quotes
+  var workWin = null;    // the docked task window (migrate db)
+  var tearWin = null;    // window torn by compaction
+  var subagent = null;   // ✳ helper
+  var zaps = [];         // subagent zap lines
+  var ships = [];        // shipped-window fly-off flashes
+  var hazTimer = 0, streamTimer = 0;
+  var compactDone = false, tearSpawned = false, subSpawned = false, subZapT = 0;
+  var shake = 0, avX = 0, avStun = 0;
+  var prevLoopT = 0;
+
+  var HAZ = ['👻','⏱','☢','🔧'];
+  var HAZLABEL = {'👻':'hallucination','⏱':'timeout','☢':'regression','🔧':'tool_error'};
+
+  var TASKS = [
+    { name:'fix the flaky test suite',  p:0, st:'run' },
+    { name:'migrate the database',      p:0, st:'run' },
+    { name:'answer the support queue',  p:0, st:'wait' },
+    { name:'write the postmortem',      p:0, st:'wait' },
+    { name:'remember what the task was',p:0, st:'wait' }
+  ];
+
+  function initSim(){
+    haz.length = 0; stream.length = 0; moments.length = 0; zaps.length = 0; ships.length = 0;
+    workWin = null; tearWin = null; subagent = null;
+    hazTimer = 0.6; streamTimer = 0;
+    compactDone = false; tearSpawned = false; subSpawned = false; subZapT = 0;
+    shake = 0; avStun = 0; avX = avatarX();
+    for (var i=0;i<TASKS.length;i++){ TASKS[i].p = 0; TASKS[i].forgotten = false; }
+    TASKS[0].st='run'; TASKS[1].st='run'; TASKS[2].st='wait'; TASKS[3].st='wait'; TASKS[4].st='wait';
+    // seed a little existing traffic so the belt never looks empty at loop start
+    for (var k=0;k<7;k++){
+      haz.push(mkHaz(W*0.5 + k*180 + Math.random()*80, (k%3)));
+    }
+    for (var s=0;s<16;s++){
+      stream.push(mkTok(Math.random()*W));
+    }
+  }
+
+  function mkHaz(x, lane){
+    var g = HAZ[(Math.random()*HAZ.length)|0];
+    return { x:x, lane:lane, g:g, label:HAZLABEL[g], bob:Math.random()*6.28, dead:false };
+  }
+  var TOKENS = ['def migrate()','SELECT *','assert ok','ctx+=','pytest -q','→ 200','rollback?','schema.up',
+    'retry(3)','flush()','TODO','await db','0xdeadbeef','commit','# fixme','yield','tok+=128','npm test'];
+  function mkTok(x){
+    return { x:x, t:TOKENS[(Math.random()*TOKENS.length)|0], a:0.10+Math.random()*0.16, sp:0.9+Math.random()*0.5 };
+  }
+  function mkMoment(txt, kind){
+    // kind: 'win' (green) or 'frust' (red)
+    return { x:W+60, txt:txt, kind:kind, life:1 };
+  }
+
+  // ---------- token / scroll economy ----------
+  function ctxLevel(t){
+    // base drift up, big surge 11..13.3, drain after compaction
+    var base = 0.30 + 0.03*Math.sin(t*0.7);
+    var surge = seg(t,11,12.6) * 0.60;
+    var drain = seg(t,13.5,14.2) * 0.72;         // compaction cleans it
+    var recover = seg(t,15,20) * 0.22;
+    var v = base + surge - drain + recover;
+    return clamp(v, 0.05, 0.99);
+  }
+  function scrollSpeed(t){
+    // px/sec; token spend (surge) accelerates the belt
+    var base = 82;
+    var spend = seg(t,11,12.4) * 96;
+    var post = (1 - seg(t,13.4,13.9)) * seg(t,11,12.4) * 0; // handled by ctx
+    var comp = (t>13.4 && t<13.9) ? 140 : 0;               // tape-skip lurch
+    return base + spend + comp;
+  }
+  // wall of forgetting width — advances right during surge, recedes after compaction
+  function wallWidth(t){
+    var base = 58 + 6*Math.sin(t*3.1);
+    var adv = seg(t,10.5,13.0) * 118;
+    var rec = seg(t,13.6,14.6) * 150;
+    return clamp(base + adv - rec, 30, 210);
+  }
+
+  // ---------- scripted queue progress ----------
+  function updateTasks(t){
+    // 0 flaky tests: worked early, ships ~9
+    TASKS[0].p = seg(t,1.2,9.0);
+    if (TASKS[0].p >= 0.999){ TASKS[0].st='done'; } else { TASKS[0].st='run'; }
+    // 1 migrate db: the docked window; fills 4.5..10, knocked back by compaction, resumes
+    var m = seg(t,4.5,10.0)*0.82;
+    if (t>=13.5) m = Math.max(0.5, 0.82) - seg(t,13.5,13.7)*0.30 + seg(t,15,20)*0.48;
+    TASKS[1].p = clamp(m,0,1);
+    TASKS[1].st = TASKS[1].p>=0.999 ? 'done' : 'run';
+    // 2 support queue: barely touched late
+    TASKS[2].p = seg(t,18,21)*0.22; TASKS[2].st = TASKS[2].p>0.01?'run':'wait';
+    // 3 postmortem: never started (this is the one that gets torn as a window)
+    TASKS[3].p = 0; TASKS[3].st='wait';
+    // 4 remember what the task was: forgotten by the wall at compaction
+    TASKS[4].p = 0;
+    if (t>=13.6){ TASKS[4].forgotten = true; TASKS[4].st='forgot'; }
+    else { TASKS[4].forgotten = false; TASKS[4].st='wait'; }
+  }
+
+  // ---------- avatar lane script ----------
+  function avatarLane(t){
+    if (t<2.0) return 1;
+    if (t<4.4) return 0;          // climb to user lane for the migrate window
+    if (t<10.4) return 0;         // heads-down on it
+    if (t<11.6) return 1;
+    if (t<13.4) return 2;         // dodge down during the surge
+    if (t<14.6) return 1;
+    if (t<20.0) return 2;         // ride with the subagent in the tool lane
+    return 1;
+  }
+  function headsDown(t){ return t>=4.6 && t<10.2; }
+
+  // ---------- main update ----------
+  var avYcur = 0;
+  function update(dt, t){
+    var sp = scrollSpeed(t);
+    var move = sp * dt;
+
+    // avatar y easing
+    var targetY = laneY(avatarLane(t));
+    if (avYcur === 0) avYcur = targetY;
+    avYcur += (targetY - avYcur) * clamp(dt*11,0,1);
+
+    // avatar x: knockback stun at ~17, then ease home
+    if (t>=17.0 && t<17.12 && avStun<=0){ avStun = 1.0; avX -= 70; }
+    avStun = Math.max(0, avStun - dt);
+    avX += (avatarX() - avX) * clamp(dt*3.2,0,1);
+
+    // wall shake / surge shake
+    shake = seg(t,11,12.4)*3 + (t>13.4&&t<13.95?7:0);
+
+    // hazards
+    hazTimer -= dt;
+    if (hazTimer<=0){ hazTimer = 0.85 + Math.random()*0.7; haz.push(mkHaz(W+40, (Math.random()*3)|0)); }
+    for (var i=haz.length-1;i>=0;i--){
+      var e = haz[i]; e.x -= move; e.bob += dt*4;
+      if (e.dead || e.x < wallWidth(t)-6){ haz.splice(i,1); }
+    }
+
+    // stream tokens
+    streamTimer -= dt;
+    if (streamTimer<=0){ streamTimer = 0.18+Math.random()*0.2; stream.push(mkTok(W+30)); }
+    for (var j=stream.length-1;j>=0;j--){
+      var s = stream[j]; s.x -= move * s.sp;
+      if (s.x < -60) stream.splice(j,1);
+    }
+
+    // work window (migrate the database) — spawn, drift, dock, ship
+    if (!workWin && t>=2.6 && t<10.4){ workWin = { x:W+40, lane:0, docked:false, shipped:false, p:0 }; }
+    if (workWin){
+      workWin.p = TASKS[1].p;
+      if (!workWin.docked){
+        workWin.x -= move;
+        if (workWin.x <= avX+2 && t>=4.5){ workWin.docked = true; }
+      } else if (!workWin.shipped){
+        workWin.x += (avX - workWin.x) * clamp(dt*8,0,1);
+        if (t>=10.2){
+          workWin.shipped = true;
+          ships.push({ x:workWin.x, y:laneY(0), life:1 });
+          workWin = null;
+        }
+      }
+    }
+
+    // an unfinished window (write the postmortem) spawns pre-compaction, gets torn
+    if (!tearSpawned && t>=12.0){ tearSpawned = true; tearWin = { x:W*0.62, lane:0, life:1, torn:false }; }
+    if (tearWin){
+      if (!tearWin.torn){ tearWin.x -= move; }
+      else { tearWin.life -= dt*2.2; tearWin.x -= move*1.6; }
+      if (tearWin.life<=0) tearWin = null;
+    }
+
+    // COMPACTION tape-skip at 13.5 — one hard jump
+    if (!compactDone && t>=13.5){
+      compactDone = true;
+      // skip the tape forward: everything lurches left
+      for (var a=0;a<haz.length;a++) haz[a].x -= 190;
+      for (var b=0;b<stream.length;b++) stream[b].x -= 190;
+      for (var c=0;c<moments.length;c++) moments[c].x -= 190;
+      if (tearWin){ tearWin.torn = true; }   // tear the unfinished window away
+    }
+
+    // subagent ✳ enters tool lane and holds near the avatar
+    if (!subSpawned && t>=14.8){ subSpawned = true; subagent = { x:W+30, lane:2, bob:0 }; }
+    if (subagent){
+      var homeX = avX - 46;
+      subagent.x += (homeX - subagent.x) * clamp(dt*2.4,0,1);
+      subagent.bob += dt*3;
+      // periodically zap the nearest hazard in the tool lane
+      subZapT -= dt;
+      if (subZapT<=0){
+        subZapT = 1.1;
+        var best=null, bd=1e9;
+        for (var z=0;z<haz.length;z++){ var hz=haz[z]; if (hz.lane===2 && hz.x>subagent.x){ var d=hz.x-subagent.x; if (d<bd){bd=d;best=hz;} } }
+        if (best && bd<W*0.5){ zaps.push({x1:subagent.x,y1:laneY(2),x2:best.x,y2:laneY(2),life:0.18}); best.dead=true; }
+      }
+      if (t>=20.2) subagent = null;
+    }
+    for (var q=zaps.length-1;q>=0;q--){ zaps[q].life-=dt; if (zaps[q].life<=0) zaps.splice(q,1); }
+
+    // ships fly off
+    for (var w=ships.length-1;w>=0;w--){ var sh=ships[w]; sh.y-=dt*70; sh.x+=dt*40; sh.life-=dt*1.3; if (sh.life<=0) ships.splice(w,1); }
+
+    // scheduled moments
+    scheduleMoment(t, 6.0,  'dry-run passed!', 'win');
+    scheduleMoment(t, 8.6,  'why is test_auth failing', 'frust');
+    scheduleMoment(t, 16.2, 'still broken. still. broken.', 'frust');
+    scheduleMoment(t, 19.2, 'ok it works. nobody touch anything.', 'win');
+    for (var mI=moments.length-1;mI>=0;mI--){ var mm=moments[mI]; mm.x -= move; if (mm.x < -260) moments.splice(mI,1); }
+
+    updateTasks(t);
+  }
+  var firedMoments = {};
+  function scheduleMoment(t, at, txt, kind){
+    var key = at+txt;
+    if (t>=at && t<at+0.05 && !firedMoments[key]){ firedMoments[key]=true; moments.push(mkMoment(txt,kind)); }
+  }
+
+  // ---------- draw ----------
+  function drawLanes(t){
+    var pt=playTop(), pb=playBot(), lh=laneH();
+    // lane tint bands
+    X.fillStyle='rgba(126,231,135,0.045)'; X.fillRect(0,pt,W,lh);       // USER (green)
+    X.fillStyle='rgba(0,0,0,0)';           X.fillRect(0,pt+lh,W,lh);    // ASSISTANT (neutral)
+    X.fillStyle='rgba(217,119,87,0.05)';   X.fillRect(0,pt+2*lh,W,lh);  // TOOL (clay)
+    // dashed dividers
+    X.strokeStyle=COL.border; X.lineWidth=1; X.setLineDash([4,6]);
+    X.beginPath(); X.moveTo(0,pt+lh); X.lineTo(W,pt+lh); X.moveTo(0,pt+2*lh); X.lineTo(W,pt+2*lh); X.stroke();
+    X.setLineDash([]);
+    // lane labels (right side, so they don't sit in the wall)
+    X.font='10px ui-monospace,Menlo,monospace'; X.textAlign='right'; X.textBaseline='middle';
+    X.fillStyle=COL.green; X.fillText('▲ USER', W-10, pt+12);
+    X.fillStyle=COL.dim;   X.fillText('ASSISTANT', W-10, pt+lh+12);
+    X.fillStyle=COL.clay;  X.fillText('▼ TOOL', W-10, pt+2*lh+12);
+  }
+
+  function drawStream(){
+    X.font='11px ui-monospace,Menlo,monospace'; X.textAlign='left'; X.textBaseline='middle';
+    var y = laneY(1);
+    for (var i=0;i<stream.length;i++){
+      var s=stream[i];
+      X.globalAlpha=s.a; X.fillStyle=COL.text;
+      X.fillText(s.t, s.x, y + ((i%3)-1)*10);
+    }
+    X.globalAlpha=1;
+  }
+
+  function drawHaz(){
+    X.textAlign='center'; X.textBaseline='middle';
+    for (var i=0;i<haz.length;i++){
+      var e=haz[i]; var y=laneY(e.lane)+Math.sin(e.bob)*3;
+      // little error chip behind it
+      X.font='9px ui-monospace,Menlo,monospace';
+      var lw = X.measureText(e.label).width+10;
+      X.fillStyle='rgba(244,112,103,0.10)'; rr(e.x-lw/2, y+13, lw, 13, 3); X.fill();
+      X.fillStyle=COL.red; X.fillText(e.label, e.x, y+20);
+      X.font='20px ui-monospace,Menlo,monospace';
+      X.fillText(e.g, e.x, y);
+    }
+  }
+
+  function drawTaskWindow(win, t){
+    // a small terminal card riding a lane
+    var y = laneY(win.lane);
+    var w=176, h=44, x=win.x-w/2, ty=y-h/2;
+    X.fillStyle=COL.panel; X.strokeStyle=win.docked?COL.green:COL.border; X.lineWidth=win.docked?1.5:1;
+    rr(x,ty,w,h,5); X.fill(); X.stroke();
+    // title bar
+    X.fillStyle=COL.sel; rr(x,ty,w,13,5); X.fill();
+    X.fillStyle=COL.clay; X.textAlign='left'; X.textBaseline='middle';
+    X.font='9px ui-monospace,Menlo,monospace';
+    X.fillStyle=win.docked?COL.green:COL.dim;
+    X.fillText((win.docked?'✻ working ':'◱ task ')+' ', x+7, ty+7);
+    // task name
+    X.fillStyle=COL.text; X.font='11px ui-monospace,Menlo,monospace';
+    X.fillText('migrate the database', x+7, ty+24);
+    // progress ▰▱
+    var cells=12, filled=Math.round(win.p*cells);
+    var bar=''; for (var i=0;i<cells;i++) bar += i<filled?'▰':'▱';
+    X.fillStyle=win.docked?COL.green:COL.dim; X.font='10px ui-monospace,Menlo,monospace';
+    X.fillText(bar+' '+Math.round(win.p*100)+'%', x+7, ty+36);
+    // docked tether to avatar
+    if (win.docked){
+      X.strokeStyle='rgba(126,231,135,0.4)'; X.setLineDash([2,3]);
+      X.beginPath(); X.moveTo(x+w/2, ty+h); X.lineTo(avX, avYcur-18); X.stroke(); X.setLineDash([]);
+    }
+  }
+
+  function drawTearWindow(win){
+    var y=laneY(win.lane), w=170,h=42,x=win.x-w/2,ty=y-h/2;
+    X.save();
+    if (win.torn){
+      X.globalAlpha=clamp(win.life,0,1);
+      // shredded slabs
+      for (var k=0;k<5;k++){
+        var sy=ty+k*(h/5); var off=(1-win.life)*(k%2?26:-26);
+        X.fillStyle=k%2?COL.red:COL.panel;
+        X.fillRect(x+off, sy, w, h/5-1);
+      }
+      X.fillStyle=COL.red; X.font='10px ui-monospace,Menlo,monospace'; X.textAlign='center'; X.textBaseline='middle';
+      X.fillText('▚▚ forgotten ▚▚', win.x, y);
+    } else {
+      X.fillStyle=COL.panel; X.strokeStyle=COL.border; rr(x,ty,w,h,5); X.fill(); X.stroke();
+      X.fillStyle=COL.sel; rr(x,ty,w,13,5); X.fill();
+      X.fillStyle=COL.dim; X.textAlign='left'; X.textBaseline='middle'; X.font='9px ui-monospace,Menlo,monospace';
+      X.fillText('◱ task', x+7, ty+7);
+      X.fillStyle=COL.text; X.font='11px ui-monospace,Menlo,monospace';
+      X.fillText('write the postmortem', x+7, ty+24);
+      X.fillStyle=COL.dim; X.font='10px ui-monospace,Menlo,monospace';
+      X.fillText('▱▱▱▱▱▱▱▱▱▱▱▱ 0%', x+7, ty+36);
+    }
+    X.restore();
+  }
+
+  function drawMoments(){
+    X.textAlign='left'; X.textBaseline='middle';
+    for (var i=0;i<moments.length;i++){
+      var m=moments[i]; var col = m.kind==='win'?COL.green:COL.red;
+      var y = laneY(1) - 2;
+      X.font='11px ui-monospace,Menlo,monospace';
+      var tw = X.measureText(m.txt).width;
+      var w = tw+30, x=m.x, h=20;
+      X.fillStyle='rgba(15,15,14,0.92)'; rr(x,y-h/2,w,h,4); X.fill();
+      X.strokeStyle=col; X.lineWidth=1; X.beginPath(); X.moveTo(x+1,y-h/2+2); X.lineTo(x+1,y+h/2-2); X.stroke();
+      X.fillStyle=col; X.fillText('◇', x+8, y);
+      X.fillStyle=COL.text; X.fillText(m.txt, x+22, y);
+    }
+  }
+
+  function drawSubagent(){
+    if (!subagent) return;
+    var y=laneY(2)+Math.sin(subagent.bob)*2;
+    // zaps
+    for (var i=0;i<zaps.length;i++){
+      var z=zaps[i]; X.globalAlpha=clamp(z.life/0.18,0,1);
+      X.strokeStyle=COL.clay; X.lineWidth=2; X.beginPath(); X.moveTo(z.x1,z.y1); X.lineTo(z.x2,z.y2); X.stroke();
+      X.globalAlpha=1;
+    }
+    // tiny helper terminal
+    var w=34,h=26,x=subagent.x-w/2,ty=y-h/2;
+    X.fillStyle=COL.panel; X.strokeStyle=COL.clay; X.lineWidth=1; rr(x,ty,w,h,4); X.fill(); X.stroke();
+    X.fillStyle=COL.clay; X.font='13px ui-monospace,Menlo,monospace'; X.textAlign='center'; X.textBaseline='middle';
+    X.fillText('✳', subagent.x, y-1);
+    X.fillStyle=COL.dim; X.font='8px ui-monospace,Menlo,monospace';
+    X.fillText('subagent', subagent.x, ty+h+7);
+  }
+
+  function drawShips(){
+    for (var i=0;i<ships.length;i++){
+      var s=ships[i]; X.globalAlpha=clamp(s.life,0,1);
+      X.fillStyle=COL.green; X.font='13px ui-monospace,Menlo,monospace'; X.textAlign='center'; X.textBaseline='middle';
+      X.fillText('✓ shipped', s.x, s.y);
+      X.globalAlpha=1;
+    }
+  }
+
+  function drawAvatar(t){
+    var x=avX, y=avYcur;
+    var w=58,h=42, bx=x-w/2, by=y-h/2;
+    var hd = headsDown(t);
+    var flick = (avStun>0 && (Math.floor(t*30)%2===0));
+    if (flick) return; // stun flicker
+    // antenna
+    X.strokeStyle=hd?COL.yellow:COL.clay; X.lineWidth=1.5;
+    X.beginPath(); X.moveTo(x, by-10); X.lineTo(x, by); X.stroke();
+    X.fillStyle=hd?COL.yellow:COL.green; X.beginPath(); X.arc(x, by-12, 2.6, 0, 6.29); X.fill();
+    // window body
+    X.fillStyle=COL.panel; X.strokeStyle=hd?COL.yellow:COL.green; X.lineWidth=1.5;
+    rr(bx,by,w,h,6); X.fill(); X.stroke();
+    // title bar
+    X.fillStyle=COL.sel; rr(bx,by,w,12,6); X.fill();
+    // traffic lights
+    var tl=['#f47067','#e3b341','#7ee787'];
+    for (var i=0;i<3;i++){ X.fillStyle=tl[i]; X.beginPath(); X.arc(bx+8+i*8, by+6, 2.4, 0, 6.29); X.fill(); }
+    // v2 tag
+    X.fillStyle=COL.dim; X.font='8px ui-monospace,Menlo,monospace'; X.textAlign='right'; X.textBaseline='middle';
+    X.fillText('v2', bx+w-6, by+6);
+    // >_ face with blinking cursor
+    X.fillStyle=hd?COL.yellow:COL.green; X.font='16px ui-monospace,Menlo,monospace'; X.textAlign='left'; X.textBaseline='middle';
+    X.fillText('>_', bx+9, by+26);
+    if (Math.floor(t*1.6)%2===0){ X.fillStyle=COL.text; X.fillRect(bx+33, by+20, 8, 12); }
+    // heads-down badge
+    if (hd){
+      X.fillStyle=COL.yellow; X.font='8px ui-monospace,Menlo,monospace'; X.textAlign='center'; X.textBaseline='middle';
+      X.fillText('heads-down', x, by+h+7);
+    }
+  }
+
+  function drawWall(t){
+    var ww = wallWidth(t);
+    // dark corrupt band
+    var grad = X.createLinearGradient(0,0,ww,0);
+    grad.addColorStop(0, 'rgba(30,6,6,0.98)');
+    grad.addColorStop(0.7,'rgba(40,10,10,0.72)');
+    grad.addColorStop(1, 'rgba(40,10,10,0)');
+    X.fillStyle=grad; X.fillRect(0,0,ww,H);
+    // flickering static squares
+    var n = 60;
+    for (var i=0;i<n;i++){
+      var sx=Math.random()*ww, sy=Math.random()*H, ss=1+Math.random()*3;
+      var r=Math.random();
+      X.fillStyle = r<0.5?'rgba(244,112,103,'+(0.15+Math.random()*0.5)+')'
+                   : (r<0.8?'rgba(222,218,210,'+(0.10+Math.random()*0.3)+')':'rgba(0,0,0,0.6)');
+      X.fillRect(sx,sy,ss,ss);
+    }
+    // garbled char columns
+    X.font='11px ui-monospace,Menlo,monospace'; X.textAlign='left'; X.textBaseline='top';
+    var glyphs='▚▞░▒▓█≠¿×◇#@';
+    for (var c=0;c<Math.floor(ww/14);c++){
+      if (Math.random()<0.5) continue;
+      var gx=c*14+2;
+      for (var gy=0; gy<H; gy+=14){
+        if (Math.random()<0.6) continue;
+        X.fillStyle='rgba(244,112,103,'+(0.2+Math.random()*0.5)+')';
+        X.fillText(glyphs[(Math.random()*glyphs.length)|0], gx, gy);
+      }
+    }
+    // jagged pulsing right edge
+    X.strokeStyle=COL.red; X.lineWidth=1.5; X.globalAlpha=0.5+0.4*Math.sin(t*8);
+    X.beginPath();
+    for (var y=0;y<=H;y+=10){ var ex=ww+ (Math.random()*10-5); if (y===0) X.moveTo(ex,y); else X.lineTo(ex,y); }
+    X.stroke(); X.globalAlpha=1;
+    // label
+    X.save(); X.translate(12, H*0.5); X.rotate(-Math.PI/2);
+    X.fillStyle=COL.red; X.font='10px ui-monospace,Menlo,monospace'; X.textAlign='center'; X.textBaseline='middle';
+    X.globalAlpha=0.85; X.fillText('◄ WALL OF FORGETTING', 0, 0); X.globalAlpha=1;
+    X.restore();
+  }
+
+  function drawHUD(t){
+    // top band background
+    X.fillStyle=COL.panel; X.fillRect(0,0,W,HUD_TOP);
+    X.strokeStyle=COL.border; X.lineWidth=1; X.beginPath(); X.moveTo(0,HUD_TOP+0.5); X.lineTo(W,HUD_TOP+0.5); X.stroke();
+
+    // --- task queue (top-left) ---
+    X.textAlign='left'; X.textBaseline='middle'; X.font='10px ui-monospace,Menlo,monospace';
+    X.fillStyle=COL.dim; X.fillText('TASK QUEUE', 12, 12);
+    var col2x = 12;
+    for (var i=0;i<TASKS.length;i++){
+      var tk=TASKS[i]; var yy=26+i*8;
+      if (yy>HUD_TOP-4) break;
+      var cells=8, fill=Math.round(tk.p*cells), bar='';
+      for (var b=0;b<cells;b++) bar += b<fill?'▰':'▱';
+      var glyph = tk.st==='done'?'☒':(tk.st==='forgot'?'▚':(tk.st==='run'?'☐':'·'));
+      var col = tk.st==='done'?COL.dim:(tk.st==='forgot'?COL.red:(tk.st==='run'?(i===1&&headsDown(t)?COL.green:COL.text):COL.dim));
+      X.fillStyle=col;
+      var nm = tk.name.length>26?tk.name.slice(0,25)+'…':tk.name;
+      X.fillText(glyph+' '+bar+' '+nm, col2x, yy);
+    }
+
+    // --- ctx meter (top-right) ---
+    var cv = ctxLevel(t);
+    var barW=150, bx=W-barW-16, by=14;
+    X.fillStyle=COL.dim; X.textAlign='right'; X.font='10px ui-monospace,Menlo,monospace';
+    X.fillText('CONTEXT / TOKENS', W-16, 8);
+    // frame
+    X.strokeStyle=COL.border; X.strokeRect(bx,by,barW,10);
+    var fillCol = cv>0.82?COL.red:(cv>0.6?COL.yellow:COL.green);
+    X.fillStyle=fillCol; X.fillRect(bx+1,by+1,(barW-2)*cv,8);
+    // compaction threshold marker
+    var thx=bx+ (barW)*0.85;
+    X.strokeStyle=COL.red; X.setLineDash([2,2]); X.beginPath(); X.moveTo(thx,by-2); X.lineTo(thx,by+12); X.stroke(); X.setLineDash([]);
+    X.fillStyle=COL.dim; X.textAlign='left'; X.font='8px ui-monospace,Menlo,monospace'; X.fillText('⚡', thx-3, by-6);
+    // pct + spend hint
+    X.textAlign='right'; X.font='10px ui-monospace,Menlo,monospace';
+    X.fillStyle=fillCol; X.fillText(Math.round(cv*100)+'% ctx', W-16, by+22);
+    var spending = t>11 && t<12.6;
+    X.fillStyle=spending?COL.red:COL.dim; X.font='9px ui-monospace,Menlo,monospace';
+    X.fillText(spending?'▲ spending — belt +'+Math.round(seg(t,11,12.4)*96)+'px/s':'belt '+Math.round(scrollSpeed(t))+'px/s', W-16, by+34);
+    // scroll direction arrow
+    X.fillStyle=COL.dim; X.font='9px ui-monospace,Menlo,monospace'; X.textAlign='left';
+    X.fillText('◄ session plays forward', 130, 12);
+  }
+
+  function drawStatus(t){
+    var y=H-STATUS;
+    X.fillStyle=COL.panel; X.fillRect(0,y,W,STATUS);
+    X.strokeStyle=COL.border; X.beginPath(); X.moveTo(0,y+0.5); X.lineTo(W,y+0.5); X.stroke();
+    X.textBaseline='middle'; X.font='11px ui-monospace,Menlo,monospace';
+    // goal
+    X.textAlign='left'; X.fillStyle=COL.dim;
+    X.fillText('◆ goal:', 12, y+STATUS/2);
+    X.fillStyle=COL.text;
+    var goal='"the tests are flaky again and the migration is due today — fix both, please"';
+    X.fillText(goal, 58, y+STATUS/2);
+    // controls
+    X.textAlign='right'; X.fillStyle=COL.dim; X.font='10px ui-monospace,Menlo,monospace';
+    X.fillText('↑/↓ hop lane   W hold work   C /compact   S subagent', W-12, y+STATUS/2);
+  }
+
+  function drawCompaction(t){
+    if (!(t>13.4 && t<14.5)) return;
+    var k = 1 - seg(t,13.4,14.5); // 1 → 0
+    // RGB-split slabs across the whole play area
+    X.save();
+    var bands=9;
+    for (var i=0;i<bands;i++){
+      var yy=playTop()+ (playBot()-playTop())*i/bands;
+      var hh=(playBot()-playTop())/bands;
+      var off=(Math.random()*40-20)*k;
+      X.globalAlpha=0.10*k;
+      X.fillStyle= i%3===0?'#f47067':(i%3===1?'#6cb6ff':'#7ee787');
+      X.fillRect(off, yy, W, hh);
+    }
+    X.globalAlpha=1;
+    // tear line
+    X.strokeStyle=COL.red; X.globalAlpha=0.6*k; X.lineWidth=2;
+    var ty=playTop()+(playBot()-playTop())*Math.random();
+    X.beginPath(); X.moveTo(0,ty); X.lineTo(W,ty); X.stroke(); X.globalAlpha=1;
+    // banner
+    var bw=330, bh=42, bxx=W/2-bw/2, byy=playTop()+18;
+    X.fillStyle='rgba(15,15,14,0.96)'; X.strokeStyle=COL.red; X.lineWidth=1.5;
+    var jx=(Math.random()*4-2), jy=(Math.random()*3-1.5);
+    rr(bxx+jx,byy+jy,bw,bh,4); X.fill(); X.stroke();
+    X.fillStyle=COL.red; X.textAlign='left'; X.textBaseline='top'; X.font='13px ui-monospace,Menlo,monospace';
+    X.fillText('⚡ compaction — the tape skips forward', bxx+12+jx, byy+8+jy);
+    X.fillStyle=COL.dim; X.font='11px ui-monospace,Menlo,monospace';
+    X.fillText('⎿  unfinished windows torn away · ctx flushed', bxx+12+jx, byy+24+jy);
+    X.restore();
+  }
+
+  // ---------- frame ----------
+  var start = performance.now(), last = start;
+  function frame(now){
+    var dt = Math.min(0.05, (now-last)/1000); last=now;
+    var loopT = ((now-start)/1000) % LOOP;
+    if (loopT < prevLoopT){ initSim(); firedMoments = {}; }  // wrapped
+    prevLoopT = loopT;
+
+    update(dt, loopT);
+
+    // clear
+    X.fillStyle=COL.bg; X.fillRect(0,0,W,H);
+
+    // screen shake wrap
+    X.save();
+    if (shake>0){ X.translate((Math.random()*2-1)*shake, (Math.random()*2-1)*shake*0.5); }
+
+    drawLanes(loopT);
+    drawStream();
+    drawMoments();
+    drawHaz();
+    if (tearWin) drawTearWindow(tearWin);
+    if (workWin) drawTaskWindow(workWin, loopT);
+    drawSubagent();
+    drawShips();
+    drawAvatar(loopT);
+    drawWall(loopT);
+    drawCompaction(loopT);
+
+    X.restore();
+
+    // HUD is not shaken
+    drawHUD(loopT);
+    drawStatus(loopT);
+
+    requestAnimationFrame(frame);
+  }
+
+  resize();
+  initSim();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
