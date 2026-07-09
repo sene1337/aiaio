@@ -150,9 +150,26 @@ export class UI {
     // process exit marker at the right edge
     this.drawExit(ctx, run);
 
-    // task stations + crates
+    // task stations + crates + session moments
     for (const s of run.stations) this.drawStation(ctx, run, s);
     for (const cr of run.crates) this.drawCrate(ctx, run, cr);
+    for (const m of run.moments) {
+      if (m.x < viewL - 60 || m.x > viewR + 60) continue;
+      const y = run.terrain.surfaceAt(m.x);
+      const near = Math.abs(m.x - run.avatar.x) < 220;
+      const color = m.kind === 'win' ? '#7ee787' : m.kind === 'frustration' ? '#f47067' : '#6cb6ff';
+      ctx.globalAlpha = m.seen ? 0.35 : near ? 0.95 : 0.55;
+      ctx.fillStyle = color;
+      ctx.font = '11px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('◇', m.x, y - 18 + (m.seen ? 0 : Math.sin(this.time * 2.5 + m.x) * 3));
+      if (near && !m.seen) {
+        ctx.font = `${10 / this.camZoom}px ui-monospace, monospace`;
+        ctx.fillText(`"${m.text.slice(0, 42)}${m.text.length > 42 ? '…' : ''}"`, m.x, y - 32);
+      }
+      ctx.globalAlpha = 1;
+      ctx.textAlign = 'left';
+    }
 
     // enemies
     for (const e of run.enemies) {
@@ -716,6 +733,8 @@ export class UI {
     }).join('') || '<li class="dim">no errors on record — a quiet session (three regressions will attend anyway)</li>';
     levelCol.innerHTML = `
       <h3>the level: session ${escapeHtml(s.sessionId)}${s.fromCard ? '' : ' <span class="dim">(generated)</span>'}</h3>
+      ${card.goal ? `<div class="stat-line" style="color:var(--yellow)">the mission, in your own words: "${escapeHtml(String(card.goal).slice(0, 120))}"</div>` : ''}
+      ${(card.moments?.length ?? 0) > 0 ? `<div class="stat-line dim">◇ ${card.moments!.length} real moments from the session stand along the timeline</div>` : ''}
       <div class="stat-line dim">${s.fromCard ? `history: ${escapeHtml(s.topErrorCategory)} ×${s.topErrorCount}, ${s.compactionEvents} compactions, ${s.restarts} restarts, token peak ${s.tokenPeak}` : 'random session — drop a SessionCard to run your real one'}</div>
       <div class="stat-line">timeline length scales with message_count · your errors spawn as creatures at points along it · behind you: the wall of forgetting</div>
       <h4>ENEMY ROSTER (from the real error log)</h4><ul>${roster}</ul>
@@ -736,8 +755,18 @@ export class UI {
          ${s.compactionEvents} real compaction${s.compactionEvents === 1 ? '' : 's'} on record — this run compacted ${run.ctx.compactions}×.
          ${s.tasksTotal > 0 ? `the real agent finished ${s.tasksCompleted}/${s.tasksTotal} of these tasks; you finished ${done.length}/${run.queue.tasks.length}.` : ''}</p>`
       : '<p class="dim">randomly generated session — run `npm run scan` and pick a real one for a personalized level.</p>';
+    // where in the real session the run ended
+    let placeBit = '';
+    if (run.moments.length > 0) {
+      const nearest = [...run.moments].sort((a, b) =>
+        Math.abs(a.x - run.avatar.x) - Math.abs(b.x - run.avatar.x))[0];
+      if (Math.abs(nearest.x - run.avatar.x) < run.terrain.width * 0.15) {
+        placeBit = `<p class="recap-summary dim">the run ended around the part of the session where: "${escapeHtml(nearest.text.slice(0, 90))}"</p>`;
+      }
+    }
     body.innerHTML = `
       <p class="recap-summary">SCORE ${over.score} — ${Math.floor(run.time)}s · ${run.kills} errors resolved · ${run.ctx.compactions} compactions</p>
+      ${placeBit}
       <div class="recap-cols"><div class="recap-col">
         <h3 style="color:#7ee787">${escapeHtml(run.name)}</h3>
         <p>tasks completed: ${done.length ? done.map((t) => escapeHtml(t.name)).join(', ') : 'none'}</p>

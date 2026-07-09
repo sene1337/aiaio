@@ -114,6 +114,39 @@ export function collectFiles(path, depth = 0) {
 // aggregation
 // ---------------------------------------------------------------------------
 
+/** pull human-readable text out of the many shapes agent logs store messages in */
+function messageText(obj) {
+  const m = obj.message ?? obj;
+  let content = m.content ?? m.text ?? null;
+  if (Array.isArray(content)) {
+    // Claude Code style: content blocks; tool_result-only "user" messages aren't asks
+    const textBlocks = content.filter((b) => b && b.type === 'text' && typeof b.text === 'string');
+    if (textBlocks.length === 0) return null;
+    content = textBlocks.map((b) => b.text).join(' ');
+  }
+  if (typeof content !== 'string') return null;
+  return content;
+}
+
+/** first non-empty line — multi-line blobs make terrible task names */
+function firstLine(text) {
+  return (text.split('\n').find((l) => l.trim().length > 0) ?? '').trim();
+}
+
+/** machine noise masquerading as human text (harness XML, skill preambles, etc.) */
+function looksLikeNoise(text) {
+  if (!text || text.length < 16) return true;
+  return /^<|^\[|^#|^Caveat:|^Error:|^Base directory for this skill|system-reminder|command-name|command-message|tool_result|task-id|tool-use-id|<local-command/i.test(text);
+}
+
+/** is this user text an actual ask (vs. meta noise, commands, tiny acks)? */
+function isSubstantiveAsk(text) {
+  return !looksLikeNoise(text);
+}
+
+const WIN_RE = /\b(fixed|works now|working now|deployed|shipped|all (tests? )?pass|done!|✅|perfect|nailed it)\b/i;
+const FRUSTRATION_RE = /\b(still broken|still fail|again\?|why is|not working|wtf|ugh|no[,.]? that)\b/i;
+
 export function extract(files) {
   const agg = {
     messages: 0,
@@ -126,25 +159,40 @@ export function extract(files) {
     modelSwitches: 0,
     firstTs: null,
     lastTs: null,
-    errors: new Map(),   // category -> { type, count, sample }
+    errors: new Map(),   // category -> { type, count, sample, ats: [] }
     tasks: new Map(),    // name -> { work_units, completed }
     lastModel: null,
+    // semantic layer: what the session was actually about
+    asks: [],            // { at, text } — substantive user messages, in order
+    moments: [],         // { at, kind, text } — wins/frustrations/notable lines
+    totalLines: 0,
   };
 
-  const noteError = (category, type, sample) => {
-    const cur = agg.errors.get(category) ?? { type, count: 0, sample: null };
+  const noteError = (category, type, sample, at) => {
+    const cur = agg.errors.get(category) ?? { type, count: 0, sample: null, ats: [] };
     cur.count++;
     if (!cur.sample && sample) cur.sample = redact(sample);
     if (!cur.type && type) cur.type = type;
+    if (typeof at === 'number' && cur.ats.length < 8) cur.ats.push(at);
     agg.errors.set(category, cur);
   };
 
+  // gather all lines first so every signal can carry its timeline position (0..1)
+  const allLines = [];
   for (const file of files) {
     let raw;
     try { raw = readFileSync(file, 'utf8'); } catch { continue; }
     for (const line of raw.split('\n')) {
       const trimmed = line.trim();
-      if (!trimmed) continue;
+      if (trimmed) allLines.push(trimmed);
+    }
+  }
+  agg.totalLines = allLines.length;
+
+  for (let li = 0; li < allLines.length; li++) {
+    const trimmed = allLines[li];
+    const at = allLines.length > 1 ? li / (allLines.length - 1) : 0;
+    {
       agg.messages++;
 
       let obj = null;
@@ -184,7 +232,21 @@ export function extract(files) {
           const msg = String(obj.error?.message ?? obj.error ?? obj.message ?? 'unknown error');
           const type = String(obj.error?.type ?? obj.error_type ?? obj.type ?? 'error');
           const category = classifyLine(msg + ' ' + type) ?? 'unknown';
-          noteError(category, type, msg);
+          noteError(category, type, msg, at);
+        }
+        // the semantic layer: what was actually asked and how it felt
+        const role = obj.role ?? obj.message?.role ?? (obj.type === 'user' ? 'user' : null);
+        const raw = messageText(obj);
+        const text = raw ? firstLine(raw) : null;
+        if (text && !looksLikeNoise(text)) {
+          if (role === 'user' && agg.asks.length < 40) {
+            agg.asks.push({ at, text: redact(text.slice(0, 160)) });
+          }
+          if (WIN_RE.test(text) && agg.moments.length < 24) {
+            agg.moments.push({ at, kind: 'win', text: redact(text.slice(0, 120)) });
+          } else if (FRUSTRATION_RE.test(text) && agg.moments.length < 24) {
+            agg.moments.push({ at, kind: 'frustration', text: redact(text.slice(0, 120)) });
+          }
         }
       }
 
@@ -197,7 +259,7 @@ export function extract(files) {
         if (category === 'recovery') agg.recoveries++;
         if (!obj || !(obj.error || obj.type === 'error' || obj.level === 'error')) {
           // avoid double counting lines already recorded as explicit errors
-          if (category !== 'recovery') noteError(category, category.toUpperCase(), trimmed);
+          if (category !== 'recovery') noteError(category, category.toUpperCase(), trimmed, at);
         }
       }
     }
@@ -218,11 +280,42 @@ export function buildCard(inputName, files, agg) {
       category,
       count: e.count,
       ...(e.sample ? { sample: e.sample } : {}),
+      ...(e.ats && e.ats.length ? { at: e.ats.map((a) => +a.toFixed(3)) } : {}),
     }));
-  const tasks = [...agg.tasks.entries()]
+  let tasks = [...agg.tasks.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
     .slice(0, 8)
     .map(([name, t]) => ({ name, work_units: t.work_units, completed: t.completed }));
+
+  // no structured tasks? the user's real asks ARE the task list.
+  if (tasks.length === 0 && agg.asks.length > 0) {
+    // pick up to 5 asks spread across the session, skipping near-duplicates
+    const chosen = [];
+    for (const ask of agg.asks) {
+      if (chosen.length >= 5) break;
+      const last = chosen[chosen.length - 1];
+      if (last && (ask.at - last.at < 0.06 || ask.text.slice(0, 30) === last.text.slice(0, 30))) continue;
+      chosen.push(ask);
+    }
+    tasks = chosen.map((ask, i) => {
+      // work is proportional to how much of the session this ask actually consumed
+      const span = (i + 1 < chosen.length ? chosen[i + 1].at : 1) - ask.at;
+      return {
+        name: ask.text.slice(0, 60),
+        work_units: Math.max(1, Math.min(6, Math.round(span * 14))),
+        completed: false,
+        at: +ask.at.toFixed(3),
+      };
+    });
+  }
+
+  // notable moments, thinned to 12 spread across the timeline
+  const moments = agg.moments
+    .sort((a, b) => a.at - b.at)
+    .filter((m, i, arr) => i === 0 || m.at - arr[i - 1].at > 0.02)
+    .slice(0, 12)
+    .map((m) => ({ at: +m.at.toFixed(3), kind: m.kind, text: m.text }));
+  const goal = agg.asks[0]?.text?.slice(0, 140);
 
   return {
     session_id: `${basename(inputName).replace(/\.[^.]+$/, '')}-${contentHash}`,
@@ -232,8 +325,10 @@ export function buildCard(inputName, files, agg) {
     ...(agg.tokenPeak > 0 ? { token_peak: agg.tokenPeak } : {}),
     compaction_events: agg.compactions,
     tool_calls: agg.toolCalls,
+    ...(goal ? { goal } : {}),
     ...(tasks.length > 0 ? { tasks } : {}),
     ...(errors.length > 0 ? { errors } : {}),
+    ...(moments.length > 0 ? { moments } : {}),
     regressions: agg.regressions,
     restarts: agg.restarts,
     recoveries: agg.recoveries,

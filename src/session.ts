@@ -9,6 +9,8 @@ export interface SessionCardTask {
   name?: string;
   work_units?: number;
   completed?: boolean;
+  /** 0..1 position in the session timeline where this ask actually happened */
+  at?: number;
 }
 
 export interface SessionCardError {
@@ -16,6 +18,15 @@ export interface SessionCardError {
   category?: string;  // normalized category, e.g. "timeout" | "hallucination" | ...
   count?: number;
   sample?: string;    // redacted, truncated sample line
+  /** 0..1 timeline positions where occurrences actually happened */
+  at?: number[];
+}
+
+/** a notable real line from the session, positioned on the timeline */
+export interface SessionCardMoment {
+  at?: number;
+  kind?: string; // "win" | "frustration" | ...
+  text?: string;
 }
 
 export interface SessionCard {
@@ -27,6 +38,9 @@ export interface SessionCard {
   tool_calls?: number;
   tasks?: SessionCardTask[];
   errors?: SessionCardError[];
+  /** first substantive user ask — what the session was FOR */
+  goal?: string;
+  moments?: SessionCardMoment[];
   regressions?: number;
   restarts?: number;
   recoveries?: number;
@@ -42,8 +56,13 @@ export const SESSION_CARD_SCHEMA = `{
   "token_peak": 0,           // -> context budget
   "compaction_events": 0,    // -> compaction threshold (more -> earlier amnesia)
   "tool_calls": 0,           // -> extra task work units / Distraction ammo
-  "tasks": [{ "name": "", "work_units": 1, "completed": false }],
-  "errors": [{ "type": "", "category": "timeout", "count": 1, "sample": "" }],
+  "goal": "",                // first real user ask — shown as the mission
+  "tasks": [{ "name": "", "work_units": 1, "completed": false, "at": 0.2 }],
+                             //   ↳ "at" = real 0..1 timeline position (station placement)
+  "errors": [{ "type": "", "category": "timeout", "count": 1, "sample": "", "at": [0.4] }],
+                             //   ↳ "at" = where occurrences happened (enemy spawns)
+  "moments": [{ "at": 0.5, "kind": "win", "text": "" }],
+                             //   ↳ real session lines standing in the world (◇ markers)
   "regressions": 0,          // -> Regression Cluster ammo bonus
   "restarts": 0,             // -> update frequency
   "recoveries": 0,           // -> Recovery Shield ammo
@@ -65,6 +84,8 @@ export interface GeneratedWeapon {
 export interface GeneratedTask {
   name: string;
   workUnits: number;
+  /** real timeline position (0..1) if the card knows it */
+  at?: number;
 }
 
 /** Everything the match needs for one player, derived from one card. */
@@ -206,8 +227,9 @@ export function loadoutFromCard(card: SessionCard, label: string): AgentLoadout 
   const cardTasks = (card.tasks ?? []).filter((t) => t && t.name);
   for (const t of cardTasks.slice(0, 5)) {
     tasks.push({
-      name: String(t.name).slice(0, 48),
+      name: String(t.name).slice(0, 60),
       workUnits: clamp(Math.floor(t.work_units ?? 2), 1, 6),
+      ...(typeof t.at === 'number' ? { at: clamp(t.at, 0, 1) } : {}),
     });
   }
   if (tasks.length === 0) {
@@ -305,15 +327,24 @@ export function parseSessionCard(text: string): SessionCard {
   card.recoveries = num(raw.recoveries);
   card.model_switches = num(raw.model_switches);
   card.stability_score = num(raw.stability_score);
+  card.goal = str(raw.goal);
   if (Array.isArray(raw.tasks)) {
     card.tasks = raw.tasks.slice(0, 12).map((t: any) => ({
       name: str(t?.name), work_units: num(t?.work_units), completed: t?.completed === true,
+      at: typeof t?.at === 'number' && t.at >= 0 && t.at <= 1 ? t.at : undefined,
     }));
   }
   if (Array.isArray(raw.errors)) {
     card.errors = raw.errors.slice(0, 24).map((e: any) => ({
       type: str(e?.type), category: str(e?.category), count: num(e?.count), sample: str(e?.sample),
+      at: Array.isArray(e?.at) ? e.at.filter((a: any) => typeof a === 'number' && a >= 0 && a <= 1).slice(0, 8) : undefined,
     }));
+  }
+  if (Array.isArray(raw.moments)) {
+    card.moments = raw.moments.slice(0, 12).map((m: any) => ({
+      at: typeof m?.at === 'number' && m.at >= 0 && m.at <= 1 ? m.at : undefined,
+      kind: str(m?.kind), text: str(m?.text),
+    })).filter((m: SessionCardMoment) => m.text);
   }
   return card;
 }
@@ -383,12 +414,20 @@ export const EXAMPLE_CHAOTIC: SessionCard = {
   token_peak: 198000,
   compaction_events: 6,
   tool_calls: 187,
+  goal: 'the tests are flaky again and the migration is due today — fix both, please',
   tasks: [
-    { name: 'fix the flaky test suite', work_units: 4, completed: false },
-    { name: 'migrate the database', work_units: 5, completed: false },
-    { name: 'answer the support queue', work_units: 3, completed: false },
-    { name: 'write the postmortem', work_units: 2, completed: false },
-    { name: 'remember what the task was', work_units: 2, completed: false },
+    { name: 'fix the flaky test suite', work_units: 4, completed: false, at: 0.12 },
+    { name: 'migrate the database', work_units: 5, completed: false, at: 0.34 },
+    { name: 'answer the support queue', work_units: 3, completed: false, at: 0.58 },
+    { name: 'write the postmortem', work_units: 2, completed: false, at: 0.76 },
+    { name: 'remember what the task was', work_units: 2, completed: false, at: 0.9 },
+  ],
+  moments: [
+    { at: 0.2, kind: 'frustration', text: 'why is test_auth failing when I did not touch auth' },
+    { at: 0.41, kind: 'win', text: 'migration dry-run passed! running it for real now' },
+    { at: 0.47, kind: 'frustration', text: 'the real migration is NOT the dry run apparently' },
+    { at: 0.66, kind: 'frustration', text: 'still broken. still. broken.' },
+    { at: 0.85, kind: 'win', text: 'ok it works. nobody touch anything.' },
   ],
   errors: [
     { type: 'HALLUCINATED_PATH', category: 'hallucination', count: 14, sample: 'edited src/utils/helpers.ts — file does not exist' },

@@ -95,6 +95,28 @@ Enemy count per category scales `√count` (max 5). Weapon ammo scales the same 
 from the same log — your worst error category is both your biggest threat and your
 deepest magazine.
 
+### The semantic layer — the level tells your session's story
+
+When a card carries them (the extractor mines all of this automatically):
+
+- **`goal`** — your first real ask, shown as the mission: *"the mission, in your
+  own words: …"*
+- **Tasks are your actual messages** — when logs have no structured tasks, your
+  substantive user asks become the task stations, named in your words, placed at
+  their **real timeline positions**, with work-units proportional to how much of
+  the session each ask actually consumed.
+- **Enemies spawn where the errors really happened** (`errors[].at`).
+- **◇ moments** — real wins ("ok it works. nobody touch anything.") and
+  frustrations ("still broken. still. broken.") stand in the world where they
+  happened; walk past one and the transcript quotes it.
+- **Compaction garbles your own words** — the banner corrupts real lines from the
+  session instead of canned filler, and the recap tells you where in the real
+  session your run ended.
+
+All heuristic, deterministic, on-machine — no LLM involved. Redaction applies to
+every snippet, but a card now contains fragments of your actual prompts: **skim
+before sharing.**
+
 ## `npm run scan` — your sessions become levels
 
 Auto-discovers agent session logs (`~/.claude/projects`, `~/.openclaw`,

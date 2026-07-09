@@ -80,6 +80,14 @@ export interface Station {
 
 export interface Crate { x: number; y: number; used: boolean; kind: 'patch' | 'model' }
 
+/** a real line from the session, standing in the world where it happened */
+export interface Moment {
+  x: number;
+  kind: string; // 'win' | 'frustration' | ...
+  text: string;
+  seen: boolean;
+}
+
 /** a spawned lower-model helper: weak, expensive, and corruptible */
 export interface SubAgent {
   x: number; y: number;
@@ -141,6 +149,8 @@ export class Run {
   stations: Station[] = [];
   crates: Crate[] = [];
   subagents: SubAgent[] = [];
+  moments: Moment[] = [];
+  goal: string | null = null;
   projectiles: Projectile[] = []; // owner 0 = player, 1 = enemies
   particles: Particle[] = [];
   lasers: LaserBeam[] = [];
@@ -222,10 +232,15 @@ export class Run {
 
     this.buildLevel(width);
     this.wallX = -260;
+    this.goal = this.card.goal ? String(this.card.goal).slice(0, 120) : null;
     this.pushBanner({
       kind: 'turn', ttl: 8,
       title: `▶ SESSION START — ${this.card.session_id ?? 'unknown'}`,
-      lines: ['reach process exit → · clear your task queue on the way', 'the wall of forgetting is behind you. it is always behind you.'],
+      lines: [
+        ...(this.goal ? [`the mission, in your own words: "${this.goal}"`] : []),
+        'reach process exit → · clear your task queue on the way',
+        'the wall of forgetting is behind you. it is always behind you.',
+      ],
     });
   }
 
@@ -235,12 +250,23 @@ export class Run {
 
   private buildLevel(width: number): void {
     const rng = this.rng.fork('level');
-    // task stations spread across the timeline in queue order
+    // task stations: at their REAL timeline positions when the card knows them,
+    // else spread across the timeline in queue order
     const n = this.queue.tasks.length;
     for (let i = 0; i < n; i++) {
-      const frac = 0.14 + (i + rng.range(0.1, 0.5)) * (0.72 / n);
+      const realAt = this.loadout.tasks[i]?.at;
+      const frac = typeof realAt === 'number'
+        ? Math.max(0.08, Math.min(0.92, realAt))
+        : 0.14 + (i + rng.range(0.1, 0.5)) * (0.72 / n);
       const x = Math.round(width * frac);
       this.stations.push({ x, y: this.terrain.surfaceAt(x), taskIndex: i, workAccum: 0 });
+    }
+
+    // moments: real session lines standing where they happened
+    for (const m of this.card.moments ?? []) {
+      if (!m.text) continue;
+      const frac = typeof m.at === 'number' ? Math.max(0.05, Math.min(0.97, m.at)) : rng.range(0.1, 0.9);
+      this.moments.push({ x: Math.round(width * frac), kind: m.kind ?? 'note', text: String(m.text).slice(0, 110), seen: false });
     }
 
     // enemies from the card's real errors, placed along the timeline
@@ -251,8 +277,12 @@ export class Run {
       const count = Math.max(1, Math.floor(err.count ?? 1));
       const spawnN = Math.max(1, Math.min(5, Math.ceil(Math.sqrt(count))));
       const source = err.sample ? `${cat} ×${count} — "${err.sample.slice(0, 70)}"` : `${cat} ×${count}`;
+      const realAts = (err.at ?? []).filter((a) => a > 0.12); // not right on spawn
       for (let i = 0; i < spawnN; i++) {
-        const x = Math.round(width * rng.range(0.18, 0.95));
+        // spawn where the error actually happened when the card knows it
+        const x = realAts.length > 0
+          ? Math.round(width * Math.max(0.15, Math.min(0.95, realAts[i % realAts.length])))
+          : Math.round(width * rng.range(0.18, 0.95));
         const floats = kind === 'hallucination_ghost' || kind === 'recovery_sprite';
         const y = this.terrain.surfaceAt(x) - (floats ? rng.range(60, 150) : 10);
         this.enemies.push(makeEnemy(kind, x, y, source));
@@ -344,6 +374,11 @@ export class Run {
     const lost: string[] = [];
     if (this.avatar.shield > 0) { lost.push(`shield buffer (${this.avatar.shield}) released`); this.avatar.shield = 0; }
     lost.push(...amnesia(this.queue, rng, 1 + this.ctx.compactions * 0.5, this.ctx.compactions));
+    // compaction eats YOUR OWN WORDS: garble a real line from the session
+    if (this.moments.length > 0) {
+      const m = rng.pick(this.moments);
+      lost.push(`"${m.text.slice(0, 80)}"`);
+    }
     const leap = 240 + this.ctx.compactions * 60;
     this.wallOwed += leap; // it glides in — you get to watch it coming
     lost.push(`the wall of forgetting surged ${leap}px closer`);
@@ -737,6 +772,16 @@ export class Run {
     this.stepEnemies(dt);
     this.stepSubagents(dt);
     this.stepProjectiles(dt);
+
+    // walking past a moment surfaces the real session line in the transcript
+    for (const m of this.moments) {
+      if (!m.seen && Math.abs(m.x - this.avatar.x) < 40) {
+        m.seen = true;
+        const glyph = m.kind === 'win' ? '◇✔' : m.kind === 'frustration' ? '◇✗' : '◇';
+        this.pushLog(`${glyph} here, back then: "${m.text}"`);
+        this.emit('moment', { kind: m.kind });
+      }
+    }
 
     // proximity
     this.nearStation = this.stations.find((s) => {

@@ -91,7 +91,8 @@ function main() {
   index.sort((a, b) => b.mtime - a.mtime);
   writeFileSync(join(outDir, 'index.json'), JSON.stringify(index, null, 2) + '\n');
   console.error(`\nwrote ${index.length} card(s) + index.json to public/cards/`);
-  console.error('cards contain short REDACTED log samples — skim them before sharing.');
+  console.error('NOTE: cards now include short REDACTED snippets of your actual prompts');
+  console.error('(tasks/goal/moments) — skim public/cards/*.json before sharing any of them.');
   console.error('start the game (npm run dev) and your sessions appear in the menu gallery.');
 }
 
