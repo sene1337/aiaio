@@ -25,7 +25,7 @@ sessions + random generation).
 
 ## Play
 
-- **←/→** move · **↑** jump · **space** fire (toward facing)
+- **←/→** move · **↑** jump · **↓** fast-fall (explore drilled craters) · **space** fire (toward facing)
 - **W (hold)** work the task at a station — you're rooted and **heads-down**
   (+25% damage taken) while working. Working is how you win; working is when
   you're weakest.

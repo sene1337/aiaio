@@ -80,7 +80,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   distraction_barrage: {
     id: 'distraction_barrage', name: 'Distraction Barrage', glyph: '📣',
     behavior: 'task_attack', tokenCost: 500, damage: 0, radius: 60, cooldown: 1,
-    flavor: '"quick question—" Knocks the target off their current task and wipes recent progress. No HP damage.',
+    flavor: '"quick question—" Stuns every error within range for ~4s while they stop to read the ping. No damage.',
   },
   unknown_error: {
     id: 'unknown_error', name: 'Unknown Error', glyph: '❓',

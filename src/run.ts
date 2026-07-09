@@ -115,7 +115,7 @@ export interface RunOver {
 }
 
 export interface RunInput {
-  left: boolean; right: boolean; work: boolean;
+  left: boolean; right: boolean; work: boolean; down: boolean;
 }
 
 export interface RunSetup {
@@ -223,7 +223,7 @@ export class Run {
     this.buildLevel(width);
     this.wallX = -260;
     this.pushBanner({
-      kind: 'turn', ttl: 3,
+      kind: 'turn', ttl: 8,
       title: `▶ SESSION START — ${this.card.session_id ?? 'unknown'}`,
       lines: ['reach process exit → · clear your task queue on the way', 'the wall of forgetting is behind you. it is always behind you.'],
     });
@@ -349,7 +349,7 @@ export class Run {
     lost.push(`the wall of forgetting surged ${leap}px closer`);
     drainAfterCompaction(this.ctx, rng);
     this.pushBanner({
-      kind: 'compaction', ttl: 3.6,
+      kind: 'compaction', ttl: 5,
       title: '⚡ COMPACTION',
       lines: compactionSummary(lost, rng),
     });
@@ -429,12 +429,16 @@ export class Run {
       return;
     }
     if (slot.def.behavior === 'task_attack') {
-      // solo repurpose: distract YOUR OWN errors — stuns enemies nearby
+      // solo repurpose: distract YOUR OWN errors — a real stun, visibly
       let stunned = 0;
       for (const e of this.enemies) {
-        if (!e.dead && !e.def.friendly && Math.abs(e.x - a.x) < 420) { e.cooldown = Math.max(e.cooldown, 3.5); e.stateTimer = -3.5; stunned++; }
+        if (!e.dead && !e.def.friendly && Math.abs(e.x - a.x) < 420) {
+          e.stunnedUntil = this.time + 4;
+          stunned++;
+        }
       }
       this.pushLog(`📣 distraction barrage — ${stunned} error${stunned === 1 ? '' : 's'} stopped to read the ping`);
+      this.emit('distraction', { stunned });
       return;
     }
     if (slot.def.behavior === 'hitscan') {
@@ -488,7 +492,7 @@ export class Run {
       this.ctx.threshold = Math.min(0.92, this.ctx.threshold + 0.05);
       a.shield += 25;
       this.pushBanner({
-        kind: 'update', ttl: 3.6,
+        kind: 'update', ttl: 6.5,
         title: `◈ NEW MODEL RELEASED — now running v${a.model}`,
         lines: [
           `context window enlarged: +${extra} budget, compaction threshold raised`,
@@ -547,8 +551,9 @@ export class Run {
             sourceLine: `unlocked by ${result.version}`, cooldownLeft: 0,
           });
         }
-        this.pushBanner({ kind: 'update', ttl: 3.2, title: `⬆ INSTALLED ${result.version}`, lines: result.notes });
+        this.pushBanner({ kind: 'update', ttl: 6.5, title: `⬆ INSTALLED ${result.version}`, lines: result.notes });
         this.pushLog(`⬆ installed ${result.version} (${result.netBuff ? 'net buff' : 'ouch'})`);
+        for (const note of result.notes) this.pushLog(`  ⎿ ${note}`); // patch notes re-readable in the transcript
         this.emit('update_install', { version: result.version, netBuff: result.netBuff });
         break;
       }
@@ -607,7 +612,7 @@ export class Run {
     }
     this.ctx.used = Math.round(this.ctx.budget * 0.18);
     this.pushBanner({
-      kind: 'info', ttl: 2.4,
+      kind: 'info', ttl: 3.5,
       title: '✂ /compact — conversation summarized cleanly',
       lines: ['meter drained · nothing forgotten · the wall did not surge', 'compact early, compact often.'],
     });
@@ -621,7 +626,7 @@ export class Run {
     sa.corruptedAt = this.time;
     this.pushLog(`👻 ${sa.label} was corrupted by ${cause} — it works for the errors now`);
     this.pushBanner({
-      kind: 'compaction', ttl: 2.6,
+      kind: 'compaction', ttl: 4,
       title: `⚠ SUBAGENT CORRUPTED — ${sa.label}`,
       lines: [`cause: ${cause}`, 'it is now targeting YOU. terminate it or outrun it.'],
     });
@@ -798,8 +803,8 @@ export class Run {
       this.burn(RUN_COST.movePer10px);
     }
 
-    // gravity
-    a.vy += 460 * dt;
+    // gravity (+ fast-fall on ↓ so drilled craters are explorable)
+    a.vy += (460 + (input.down && !a.onGround ? 900 : 0)) * dt;
     a.y += a.vy * dt;
     const surf = this.terrain.surfaceAt(a.x);
     if (a.y >= surf - 8) {
@@ -825,7 +830,7 @@ export class Run {
         t.forgotten = true;
         t.progress = 0;
         this.pushBanner({
-          kind: 'compaction', ttl: 3,
+          kind: 'compaction', ttl: 4,
           title: '▓ FORGOTTEN',
           lines: [`the wall took "${t.name}" — that task no longer exists`],
         });
@@ -915,6 +920,9 @@ export class Run {
       if (grounded.includes(e.def.kind)) {
         e.y = this.terrain.surfaceAt(e.x) - 10;
       }
+
+      // stunned errors are busy reading the ping — no moving, no attacking
+      if (e.stunnedUntil > this.time) continue;
 
       switch (e.def.kind) {
         case 'timeout_blob':

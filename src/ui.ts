@@ -157,7 +157,7 @@ export class UI {
     // enemies
     for (const e of run.enemies) {
       if (e.dead || e.x < viewL - 60 || e.x > viewR + 60) continue;
-      this.drawEnemy(ctx, e);
+      this.drawEnemy(ctx, e, e.stunnedUntil > run.time);
     }
 
     // the agent + its subagents
@@ -371,10 +371,11 @@ export class UI {
     ctx.textAlign = 'left';
   }
 
-  private drawEnemy(ctx: CanvasRenderingContext2D, e: import('./enemies').Enemy): void {
+  private drawEnemy(ctx: CanvasRenderingContext2D, e: import('./enemies').Enemy, stunned = false): void {
     ctx.save();
     ctx.translate(e.x, e.y);
-    const phase = e.def.kind === 'hallucination_ghost' ? 0.45 + 0.4 * Math.abs(Math.sin(e.stateTimer * 1.8)) : 1;
+    let phase = e.def.kind === 'hallucination_ghost' ? 0.45 + 0.4 * Math.abs(Math.sin(e.stateTimer * 1.8)) : 1;
+    if (stunned) phase = Math.min(phase, 0.75);
     ctx.globalAlpha = phase;
     const size = e.mini ? 8 : 12;
     ctx.fillStyle = '#161615';
@@ -397,6 +398,14 @@ export class UI {
     ctx.font = `${10 / this.camZoom}px ui-monospace, monospace`;
     ctx.globalAlpha = phase * 0.7;
     ctx.fillText(e.def.name + (e.mini ? '·mini' : ''), 0, -size - 12);
+    // stunned: busy reading the ping
+    if (stunned) {
+      ctx.globalAlpha = 0.95;
+      ctx.fillStyle = '#e3b341';
+      ctx.font = `${11 / this.camZoom}px ui-monospace, monospace`;
+      const bob = Math.sin(this.time * 5) * 2;
+      ctx.fillText('…?!', 0, -size - 24 + bob);
+    }
     ctx.restore();
   }
 
@@ -556,6 +565,7 @@ export class UI {
         ${run.subagents.filter((s) => !s.corrupted).length > 0 ? `<span class="badge" style="color:#7ee787">✳ subs ×${run.subagents.filter((s) => !s.corrupted).length}</span>` : ''}
         ${run.subagents.some((s) => s.corrupted) ? `<span class="badge" style="color:var(--red)">☓ ROGUE ×${run.subagents.filter((s) => s.corrupted).length}</span>` : ''}
         ${a.headsDown ? '<span class="badge" style="color:var(--red)">⌨ heads-down</span>' : ''}
+        ${a.aimJitter > 0.5 ? '<span class="badge" style="color:var(--yellow)">〜 aim drift (patch regression)</span>' : ''}
       </div>
       <div class="meter">proc <span class="tbar" style="color:${hpFrac > 0.35 ? '#7ee787' : 'var(--red)'}">${textBar(hpFrac)}</span> <span class="val">${Math.max(0, Math.round(a.hp))}/${a.maxHp}</span></div>
       <div class="meter">ctx  <span class="tbar" style="color:${overThresh ? 'var(--red)' : 'var(--blue)'}">${textBar(ctxF)}</span> <span class="val">${run.ctx.used}/${run.ctx.budget}</span> · compact @${Math.round(run.ctx.threshold * 100)}% · ${run.ctx.compactions}⚡</div>

@@ -163,6 +163,7 @@ function currentInput(): RunInput {
     left: held.has('ArrowLeft') || held.has('a') || held.has('A'),
     right: held.has('ArrowRight') || held.has('d') || held.has('D'),
     work: held.has('w') || held.has('W'),
+    down: held.has('ArrowDown'),
   };
 }
 
