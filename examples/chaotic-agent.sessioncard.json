@@ -1,0 +1,28 @@
+{
+  "session_id": "chaotic-agent-b00m",
+  "duration_ms": 14400000,
+  "message_count": 412,
+  "token_peak": 198000,
+  "compaction_events": 6,
+  "tool_calls": 187,
+  "tasks": [
+    { "name": "fix the flaky test suite", "work_units": 4, "completed": false },
+    { "name": "migrate the database", "work_units": 5, "completed": false },
+    { "name": "answer the support queue", "work_units": 3, "completed": false },
+    { "name": "write the postmortem", "work_units": 2, "completed": false },
+    { "name": "remember what the task was", "work_units": 2, "completed": false }
+  ],
+  "errors": [
+    { "type": "HALLUCINATED_PATH", "category": "hallucination", "count": 14, "sample": "edited src/utils/helpers.ts — file does not exist" },
+    { "type": "ETIMEDOUT", "category": "timeout", "count": 22, "sample": "bash command killed by watchdog at 600s" },
+    { "type": "REGRESSION", "category": "regression", "count": 9, "sample": "test_auth passed on main, fails on branch — again" },
+    { "type": "AGENT_RESTART", "category": "restart", "count": 4, "sample": "process exited 137, relaunching agent loop" },
+    { "type": "CTX_OVERFLOW", "category": "context_overflow", "count": 6, "sample": "context window exceeded; compacting conversation" },
+    { "type": "TOOL_DENIED", "category": "tool_error", "count": 11, "sample": "permission denied: rm -rf suggestion rejected by user" }
+  ],
+  "regressions": 9,
+  "restarts": 4,
+  "recoveries": 2,
+  "model_switches": 3,
+  "stability_score": 24
+}

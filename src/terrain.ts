@@ -1,0 +1,139 @@
+// Per-pixel destructible terrain. A solid-mask Uint8Array is the source of truth
+// for collision; an offscreen canvas mirrors it for rendering. Explosions carve
+// real craters into both.
+
+import { Rng } from './rng';
+import { TerrainParams } from './session';
+
+export class Terrain {
+  readonly width: number;
+  readonly height: number;
+  readonly jaggedness: number;
+  readonly canvas: OffscreenCanvas | HTMLCanvasElement;
+  private ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
+  private mask: Uint8Array; // 1 = solid
+
+  constructor(params: TerrainParams) {
+    this.width = params.width;
+    this.height = params.height;
+    this.jaggedness = params.jaggedness;
+    this.mask = new Uint8Array(this.width * this.height);
+    this.canvas = typeof OffscreenCanvas !== 'undefined'
+      ? new OffscreenCanvas(this.width, this.height)
+      : (() => { const c = document.createElement('canvas'); c.width = this.width; c.height = this.height; return c; })();
+    this.ctx = this.canvas.getContext('2d') as any;
+    this.generate(new Rng(params.seed));
+  }
+
+  private generate(rng: Rng): void {
+    // midpoint-displacement heightline; jaggedness controls displacement decay
+    const n = 257;
+    const heights = new Float32Array(n);
+    heights[0] = this.height * rng.range(0.45, 0.7);
+    heights[n - 1] = this.height * rng.range(0.45, 0.7);
+    let step = n - 1;
+    let disp = this.height * (0.18 + this.jaggedness * 0.30);
+    while (step > 1) {
+      for (let i = 0; i < n - 1; i += step) {
+        const mid = i + step / 2;
+        heights[mid] = (heights[i] + heights[i + step]) / 2 + rng.range(-disp, disp);
+      }
+      step /= 2;
+      disp *= 0.5 + this.jaggedness * 0.12; // jaggeder sessions decay slower
+    }
+    // clamp so tanks always have somewhere to stand
+    const minY = this.height * 0.28;
+    const maxY = this.height * 0.88;
+    for (let i = 0; i < n; i++) heights[i] = Math.max(minY, Math.min(maxY, heights[i]));
+
+    // fill the mask below the surface line
+    for (let x = 0; x < this.width; x++) {
+      const t = (x / (this.width - 1)) * (n - 1);
+      const i = Math.floor(t);
+      const frac = t - i;
+      const surf = Math.round(heights[i] * (1 - frac) + heights[Math.min(i + 1, n - 1)] * frac);
+      for (let y = surf; y < this.height; y++) this.mask[y * this.width + x] = 1;
+    }
+
+    // paint: dark memory-block ground with a phosphor edge and corrupted speckles
+    const img = this.ctx.createImageData(this.width, this.height);
+    const d = img.data;
+    for (let x = 0; x < this.width; x++) {
+      let surfaceY = -1;
+      for (let y = 0; y < this.height; y++) {
+        if (this.mask[y * this.width + x]) { surfaceY = y; break; }
+      }
+      if (surfaceY < 0) continue;
+      for (let y = surfaceY; y < this.height; y++) {
+        const p = (y * this.width + x) * 4;
+        const depth = (y - surfaceY);
+        if (depth < 3) {
+          d[p] = 80; d[p + 1] = 255; d[p + 2] = 140; d[p + 3] = 255; // phosphor top edge
+        } else {
+          const band = Math.floor(y / 14) % 2 === 0 ? 6 : 0; // faint memory-row banding
+          d[p] = 18 + band; d[p + 1] = 46 + band; d[p + 2] = 30 + band; d[p + 3] = 255;
+        }
+      }
+    }
+    this.ctx.putImageData(img, 0, 0);
+
+    // corrupted glyph speckles buried in the ground
+    const speckleRng = new Rng(rng.int(0, 0xffffff));
+    this.ctx.font = '10px monospace';
+    const glyphs = ['0', '1', '▓', '░', '╳', 'e', 'f', '?'];
+    for (let i = 0; i < this.width / 10; i++) {
+      const x = speckleRng.int(0, this.width - 1);
+      const y = speckleRng.int(0, this.height - 1);
+      if (this.solidAt(x, y) && this.solidAt(x, y - 8)) {
+        this.ctx.fillStyle = speckleRng.chance(0.7) ? 'rgba(60,140,90,0.35)' : 'rgba(255,176,32,0.22)';
+        this.ctx.fillText(speckleRng.pick(glyphs), x, y);
+      }
+    }
+  }
+
+  solidAt(x: number, y: number): boolean {
+    const xi = Math.round(x), yi = Math.round(y);
+    if (xi < 0 || xi >= this.width) return false;
+    if (yi >= this.height) return true; // bottom of the world is solid
+    if (yi < 0) return false;
+    return this.mask[yi * this.width + xi] === 1;
+  }
+
+  /** topmost solid y at column x (or height if column is empty) */
+  surfaceAt(x: number): number {
+    const xi = Math.max(0, Math.min(this.width - 1, Math.round(x)));
+    for (let y = 0; y < this.height; y++) {
+      if (this.mask[y * this.width + xi]) return y;
+    }
+    return this.height;
+  }
+
+  /** carve a crater: update mask + rendered canvas, leave a scorched rim */
+  carve(cx: number, cy: number, r: number): void {
+    const r2 = r * r;
+    const x0 = Math.max(0, Math.floor(cx - r)), x1 = Math.min(this.width - 1, Math.ceil(cx + r));
+    const y0 = Math.max(0, Math.floor(cy - r)), y1 = Math.min(this.height - 1, Math.ceil(cy + r));
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        const dx = x - cx, dy = y - cy;
+        if (dx * dx + dy * dy <= r2) this.mask[y * this.width + x] = 0;
+      }
+    }
+    const ctx = this.ctx as CanvasRenderingContext2D;
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    // scorched rim on remaining solid pixels just outside the crater
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.strokeStyle = 'rgba(255,120,40,0.5)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + 1, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+}

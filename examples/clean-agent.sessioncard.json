@@ -1,0 +1,24 @@
+{
+  "session_id": "clean-agent-7f3a",
+  "duration_ms": 2700000,
+  "message_count": 84,
+  "token_peak": 96000,
+  "compaction_events": 0,
+  "tool_calls": 61,
+  "tasks": [
+    { "name": "triage the morning inbox", "work_units": 2, "completed": true },
+    { "name": "compile weekly report", "work_units": 3, "completed": true },
+    { "name": "update the device registry", "work_units": 2, "completed": true },
+    { "name": "archive stale branches", "work_units": 2, "completed": false }
+  ],
+  "errors": [
+    { "type": "ETIMEDOUT", "category": "timeout", "count": 3, "sample": "tool call web_fetch timed out after 30000ms" },
+    { "type": "RETRY_OK", "category": "recovery", "count": 5, "sample": "retry 2/3 succeeded, resuming task" },
+    { "type": "LINT_FALSE_POSITIVE", "category": "false_positive", "count": 2, "sample": "flagged import as unused; it was used" }
+  ],
+  "regressions": 0,
+  "restarts": 0,
+  "recoveries": 5,
+  "model_switches": 1,
+  "stability_score": 86
+}
