@@ -7,6 +7,8 @@ import {
   SessionCard, parseSessionCard, loadoutFromCard, randomCard,
   EXAMPLE_CLEAN, EXAMPLE_CHAOTIC, SESSION_CARD_SCHEMA,
 } from './session';
+import { qa } from './telemetry';
+import { audio } from './audio';
 
 type ScreenId = 'menu' | 'briefing' | 'match' | 'recap';
 
@@ -110,8 +112,37 @@ function prepareRun(card: SessionCard): void {
   run = new Run({ loadout, card, name });
   (window as any).__aiaio = run; // debug/testing handle
   recapShown = false;
+  qa.startRun(String(card.session_id ?? 'unknown'), loadout.cardSummary.fromCard);
+  run.emit = (type, data = {}) => {
+    qa.event(type, data);
+    ui.fx(type, data);
+    routeAudio(type, data);
+  };
   ui.buildBriefing(loadout, card, name);
   showScreen('briefing');
+}
+
+function routeAudio(type: string, data: Record<string, unknown>): void {
+  switch (type) {
+    case 'fire': {
+      const w = String(data.weapon ?? '');
+      if (w === 'debug_zap') audio.zap();
+      else if (w === 'false_positive_laser') audio.laser();
+      else audio.fire(w === 'context_nuke' || w === 'timeout_mortar' || w === 'regression_cluster');
+      break;
+    }
+    case 'explosion': audio.explode(Number(data.radius) || 20); break;
+    case 'damage': audio.hurt(); break;
+    case 'compaction': audio.compaction(); break;
+    case 'work_tick': audio.taskTick(); break;
+    case 'task_done': audio.taskDone(); break;
+    case 'task_eaten': audio.taskEaten(); break;
+    case 'update_install': audio.update(data.netBuff === true); break;
+    case 'pickup': audio.pickup(); break;
+    case 'weapon_select': audio.select(); break;
+    case 'death': audio.death(); break;
+    case 'win': audio.win(data.perfect === true); break;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -128,11 +159,25 @@ function currentInput(): RunInput {
   };
 }
 
+const FEATURE_KEYS: Record<string, string> = {
+  ' ': 'fire', 'ArrowUp': 'jump', 'ArrowLeft': 'move', 'ArrowRight': 'move',
+  'a': 'move', 'd': 'move', 'w': 'work', 'u': 'update', '[': 'weapon_cycle', ']': 'weapon_cycle',
+};
+
 function wireKeyboard(): void {
   window.addEventListener('keydown', (e) => {
     held.add(e.key);
+    audio.ensure(); // first gesture unlocks the AudioContext
+    if (e.key === 'm' || e.key === 'M') {
+      const muted = audio.toggleMute();
+      qa.event('mute_toggle', { muted });
+      return;
+    }
     if (!run || run.over || $('screen-match').classList.contains('hidden')) return;
     const k = e.key;
+    const feature = FEATURE_KEYS[k.toLowerCase()] ?? FEATURE_KEYS[k];
+    if (feature) qa.firstUseOf(feature);
+    if (/^[1-9]$/.test(k)) qa.firstUseOf('weapon_number');
     if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(k)) e.preventDefault();
     switch (k) {
       case ' ': run.fire(); break;
@@ -144,6 +189,7 @@ function wireKeyboard(): void {
         if (/^[1-9]$/.test(k)) run.selectWeapon(parseInt(k, 10) - 1);
     }
   });
+  window.addEventListener('click', () => audio.ensure());
   window.addEventListener('keyup', (e) => held.delete(e.key));
   window.addEventListener('blur', () => held.clear());
 }
@@ -153,6 +199,7 @@ function wireKeyboard(): void {
 // ---------------------------------------------------------------------------
 
 let lastT = 0;
+let snapshotAccum = 0;
 
 function frame(t: number): void {
   const dt = Math.min(0.05, (t - lastT) / 1000 || 0.016);
@@ -160,6 +207,19 @@ function frame(t: number): void {
   if (run && !$('screen-match').classList.contains('hidden')) {
     run.step(dt, currentInput());
     ui.render(run, dt);
+    // QA snapshot every 2s: position, vitals, wall gap — the learning-curve data
+    snapshotAccum += dt;
+    if (snapshotAccum >= 2 && !run.over) {
+      snapshotAccum = 0;
+      qa.event('snapshot', {
+        x: Math.round(run.avatar.x), pct: Math.round((run.avatar.x / run.terrain.width) * 100),
+        hp: Math.round(run.avatar.hp), shield: Math.round(run.avatar.shield),
+        ctx: run.ctx.used, wallGap: Math.round(run.avatar.x - run.wallX),
+        working: run.working, weapon: run.weapons[run.selected].def.id,
+      });
+    }
+    // wall proximity heartbeat (self rate-limited)
+    if (!run.over && run.avatar.x - run.wallX < 240) audio.wallHeartbeat();
     if (run.over && !recapShown && !run.bannerActive) {
       recapShown = true;
       const r = run;
@@ -180,6 +240,7 @@ function frame(t: number): void {
 
 function main(): void {
   ui = new UI();
+  (window as any).__ui = ui; // debug/testing handle
   wireCardSlot();
   wireKeyboard();
   loadGallery();
@@ -205,6 +266,12 @@ function main(): void {
   });
   $('modal-schema').addEventListener('click', (e) => {
     if (e.target === $('modal-schema')) $('modal-schema').classList.add('hidden');
+  });
+
+  // don't lose the tail of a play session when the tab closes
+  window.addEventListener('pagehide', () => qa.flush());
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') qa.flush();
   });
 
   showScreen('menu');

@@ -44,10 +44,28 @@ export class UI {
   private lastPrompt = '';
   private garbleRng = new Rng('ui-garble');
   private time = 0;
+  // effect state
+  private shakeMag = 0;
+  private glitchTtl = 0;
+  private hitFlashTtl = 0;
+  private muzzleTtl = 0;
+  private fxRng = new Rng('fx');
 
   constructor() {
     this.canvas = $('game-canvas') as HTMLCanvasElement;
     this.ctx = this.canvas.getContext('2d')!;
+  }
+
+  /** visual reactions to game events (wired from main alongside audio + telemetry) */
+  fx(type: string, data: Record<string, unknown> = {}): void {
+    switch (type) {
+      case 'explosion': this.shakeMag = Math.min(14, this.shakeMag + (Number(data.radius) || 20) / 6); break;
+      case 'fire': this.muzzleTtl = 0.09; this.shakeMag = Math.min(14, this.shakeMag + 1.2); break;
+      case 'damage': this.hitFlashTtl = 0.3; this.shakeMag = Math.min(14, this.shakeMag + 3); break;
+      case 'compaction': this.glitchTtl = 1.0; this.shakeMag = Math.min(16, this.shakeMag + 9); break;
+      case 'task_eaten': this.glitchTtl = Math.max(this.glitchTtl, 0.5); break;
+      case 'death': this.glitchTtl = 1.4; this.shakeMag = 16; break;
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -91,11 +109,31 @@ export class UI {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
 
+    // decay effects
+    this.shakeMag = Math.max(0, this.shakeMag - 26 * dt);
+    this.glitchTtl = Math.max(0, this.glitchTtl - dt);
+    this.hitFlashTtl = Math.max(0, this.hitFlashTtl - dt);
+    this.muzzleTtl = Math.max(0, this.muzzleTtl - dt);
+
     ctx.save();
+    if (this.shakeMag > 0.2) {
+      ctx.translate(this.fxRng.range(-this.shakeMag, this.shakeMag), this.fxRng.range(-this.shakeMag, this.shakeMag));
+    }
     ctx.translate(W / 2, H / 2);
     ctx.scale(this.camZoom, this.camZoom);
     ctx.translate(-this.camX, -this.camY);
     const viewL = this.camX - viewW / 2, viewR = this.camX + viewW / 2;
+
+    // ambient memory motes drifting up through the session
+    ctx.font = '10px monospace';
+    for (let i = 0; i < 26; i++) {
+      const seedX = (i * 379 + 131) % 1000 / 1000;
+      const mx = viewL + ((seedX * viewW + this.time * (6 + (i % 5) * 3)) % viewW);
+      const my = ((i * 613 + 89) % 1000 / 1000) * run.terrain.height - ((this.time * (4 + (i % 3) * 2)) % run.terrain.height);
+      const wrapped = ((my % run.terrain.height) + run.terrain.height) % run.terrain.height;
+      ctx.fillStyle = i % 4 === 0 ? 'rgba(217,119,87,0.10)' : 'rgba(126,231,135,0.08)';
+      ctx.fillText(['0', '1', '·', '▪', ':'][i % 5], mx, wrapped);
+    }
 
     // faint memory grid
     ctx.strokeStyle = 'rgba(126,231,135,0.05)';
@@ -175,6 +213,30 @@ export class UI {
 
     ctx.restore();
 
+    // screen-space effects (post-world)
+    if (this.glitchTtl > 0) {
+      // horizontal band displacement — the canvas tearing itself apart
+      const bands = 5 + Math.floor(this.glitchTtl * 6);
+      for (let i = 0; i < bands; i++) {
+        const by = Math.floor(this.fxRng.range(0, H - 14));
+        const bh = Math.floor(this.fxRng.range(3, 14));
+        const off = Math.round(this.fxRng.range(-28, 28) * this.glitchTtl);
+        ctx.drawImage(c, 0, by, W, bh, off, by, W, bh);
+      }
+      if (this.fxRng.chance(0.3)) {
+        ctx.fillStyle = `rgba(244,112,103,${0.06 * this.glitchTtl})`;
+        ctx.fillRect(0, 0, W, H);
+      }
+    }
+    if (this.hitFlashTtl > 0) {
+      const a = this.hitFlashTtl / 0.3;
+      const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.75);
+      vg.addColorStop(0, 'rgba(244,112,103,0)');
+      vg.addColorStop(1, `rgba(244,112,103,${0.28 * a})`);
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, 0, W, H);
+    }
+
     // DOM refresh
     if (run.dirty !== this.lastDirty) {
       this.lastDirty = run.dirty;
@@ -214,6 +276,17 @@ export class UI {
       if (y === 0) ctx.moveTo(run.wallX + wob, y); else ctx.lineTo(run.wallX + wob, y);
     }
     ctx.stroke();
+    // corruption tendrils reaching ahead of the wall
+    ctx.font = '11px monospace';
+    const trng = new Rng(1 + Math.floor(this.time * 4));
+    for (let i = 0; i < 7; i++) {
+      const ty = (i + 0.5) * (h / 7) + Math.sin(this.time * 2 + i * 1.7) * 30;
+      const reach = 40 + trng.range(0, 90) * Math.abs(Math.sin(this.time * 1.3 + i));
+      for (let d = 0; d < reach; d += 12) {
+        ctx.fillStyle = `rgba(244,112,103,${Math.max(0, 0.5 - d / reach * 0.5)})`;
+        ctx.fillText(trng.pick(CORRUPT_GLYPHS), run.wallX + d, ty + Math.sin(d * 0.12 + this.time * 6) * 6);
+      }
+    }
     // label riding the wall
     ctx.fillStyle = 'rgba(244,112,103,0.9)';
     ctx.font = `${12 / this.camZoom}px ui-monospace, monospace`;
@@ -336,6 +409,11 @@ export class UI {
       ctx.moveTo(0, -8);
       ctx.lineTo(a.facing * 15, -10);
       ctx.stroke();
+      if (this.muzzleTtl > 0) {
+        ctx.fillStyle = `rgba(255,243,214,${this.muzzleTtl / 0.09})`;
+        ctx.font = '12px monospace';
+        ctx.fillText(a.facing === 1 ? '»' : '«', a.facing * 18 - 4, -6);
+      }
     }
     // body + dome + face
     ctx.fillStyle = dead ? '#333' : '#1c1f1c';
@@ -392,6 +470,7 @@ export class UI {
       `<span><span class="sb-key">w</span> hold to work</span>` +
       `<span><span class="sb-key">u</span> install</span>` +
       `<span><span class="sb-key">[ ]</span>/<span class="sb-key">1-9</span> weapons</span>` +
+      `<span><span class="sb-key">m</span> mute</span>` +
       `<span class="sb-right">aiaio session-run · ${run.kills} errors resolved · ${run.ctx.compactions}⚡</span>`;
   }
 

@@ -32,6 +32,9 @@ sessions + random generation).
 - **U** install an update at a ⬆ crate (risk roll: patch-note buffs OR nerfs)
 - **[ ] / 1-9** switch weapons — slot 1 is the **∞ print-debug zapper**
   (you can never run out of print statements; you can never win with them alone)
+- **M** mute — all audio is synthesized WebAudio (chip/glitch, zero assets):
+  compaction is a stuttering descent into static, the wall has a heartbeat when
+  it's close, tasks chime when they ship.
 
 ### The systems
 
@@ -78,6 +81,16 @@ menu**. No JSON hunting.
 
 You can also drop any SessionCard `.json` on the menu, or build one by hand:
 `node scripts/extract-sessioncard.mjs <dir-or-jsonl> -o card.json`.
+
+## QA telemetry (dev mode)
+
+Playing via `npm run dev` records gameplay telemetry to `qa-logs/*.jsonl`
+(gitignored): every fire/work/damage/compaction/death event, first-use timing per
+control, and a snapshot every 2s (position, vitals, wall gap, selected weapon).
+It's for analyzing how the game is actually learned and played — balance from
+evidence, not vibes. The events POST to a dev-server-only endpoint on localhost;
+**production builds have no endpoint and no network calls** — telemetry falls
+back to a localStorage ring buffer (`localStorage.getItem('aiaio-qa')`).
 
 ## SessionCard schema
 

@@ -115,6 +115,8 @@ export class Run {
   nearCrate: Crate | null = null;
   over: RunOver | null = null;
   dirty = 0;
+  /** single event stream: main wires this to telemetry + audio + visual fx */
+  emit: (type: string, data?: Record<string, unknown>) => void = () => { /* wired by main */ };
 
   private recentDamage: Array<{ t: number; dmg: number }> = [];
   private headsDownTimer = 0;
@@ -270,6 +272,7 @@ export class Run {
       this.avatar.hp = Math.max(0, this.avatar.hp - d);
       this.recentDamage.push({ t: this.time, dmg: d });
       this.pushLog(`💢 took ${d} from ${source} (${Math.round(this.avatar.hp)} hp)`);
+      this.emit('damage', { amount: d, source, headsDown: this.avatar.headsDown, hp: Math.round(this.avatar.hp) });
       if (this.avatar.hp <= 0) this.finish(false, 'killed');
     }
     this.dirty++;
@@ -290,6 +293,7 @@ export class Run {
       lines: compactionSummary(lost, rng),
     });
     this.pushLog('⚡ compaction — memory lost, the wall surged');
+    this.emit('compaction', { n: this.ctx.compactions, leap, wallGap: Math.round(this.avatar.x - this.wallX) });
   }
 
   private finish(won: boolean, reason: RunOver['reason']): void {
@@ -308,6 +312,10 @@ export class Run {
         ? 'PERFECT CLEAR — every task done, process exited 0'
         : `SESSION SURVIVED — exit 0, but ${this.queue.tasks.length - tasksDone} task(s) left behind`;
     this.over = { won, reason, headline, score, perfect };
+    this.emit(won ? 'win' : 'death', {
+      reason, score, perfect, time: Math.round(this.time), x: Math.round(this.avatar.x),
+      tasksDone, tasksTotal: this.queue.tasks.length, kills: this.kills, compactions: this.ctx.compactions,
+    });
     this.dirty++;
   }
 
@@ -316,10 +324,15 @@ export class Run {
   // -------------------------------------------------------------------------
 
   selectWeapon(i: number): void {
-    if (i >= 0 && i < this.weapons.length) { this.selected = i; this.dirty++; }
+    if (i >= 0 && i < this.weapons.length && i !== this.selected) {
+      this.selected = i;
+      this.emit('weapon_select', { index: i, weapon: this.weapons[i].def.id, via: 'number' });
+      this.dirty++;
+    }
   }
   cycleWeapon(dir: number): void {
     this.selected = (this.selected + dir + this.weapons.length) % this.weapons.length;
+    this.emit('weapon_select', { index: this.selected, weapon: this.weapons[this.selected].def.id, via: 'cycle' });
     this.dirty++;
   }
 
@@ -336,6 +349,7 @@ export class Run {
     if (slot.ammo !== Infinity) slot.ammo--;
     slot.cooldownLeft = slot.def.behavior === 'hitscan' ? 1.4 : slot.def.behavior === 'ballistic' && slot.def.id === 'debug_zap' ? 0.18 : 0.5;
     this.spendTokens(slot.def.tokenCost / RUN_COST.fireDivisor);
+    this.emit('fire', { weapon: slot.def.id, ammoLeft: slot.ammo === Infinity ? -1 : slot.ammo });
 
     const a = this.avatar;
     const jitter = a.aimJitter > 0 ? this.rng.range(-a.aimJitter, a.aimJitter) * 4 : 0;
@@ -413,6 +427,7 @@ export class Run {
     }
     this.pushBanner({ kind: 'update', ttl: 3.2, title: `⬆ INSTALLED ${result.version}`, lines: result.notes });
     this.pushLog(`⬆ installed ${result.version} (${result.netBuff ? 'net buff' : 'ouch'})`);
+    this.emit('update_install', { version: result.version, netBuff: result.netBuff });
   }
 
   // -------------------------------------------------------------------------
@@ -464,8 +479,10 @@ export class Run {
         this.spendTokens(RUN_COST.workTick);
         const line = workTask(this.queue);
         this.pushLog(`⌨ ${line}`);
+        this.emit('work_tick', { task: this.queue.tasks[st.taskIndex].name });
         if (this.queue.tasks[st.taskIndex].done) {
           this.pushBanner({ kind: 'info', ttl: 2, title: '✔ TASK COMPLETE', lines: [this.queue.tasks[st.taskIndex].name] });
+          this.emit('task_done', { task: this.queue.tasks[st.taskIndex].name, at: Math.round(this.time) });
         }
       }
     } else {
@@ -521,6 +538,7 @@ export class Run {
           lines: [`the wall took "${t.name}" — that task no longer exists`],
         });
         this.pushLog(`▓ the wall of forgetting ate "${t.name}"`);
+        this.emit('task_eaten', { task: t.name, at: Math.round(this.time) });
       }
     }
     // wall proximity warning + damage inside it
@@ -554,6 +572,7 @@ export class Run {
       this.kills++;
       this.spawnParticles(e.x, e.y, 26, e.def.color);
       this.pushLog(`✔ resolved ${e.def.name}${e.mini ? ' (mini)' : ''}`);
+      this.emit('kill', { enemy: e.def.kind, mini: e.mini });
       if (e.def.kind === 'regression_splitter' && !e.mini) {
         for (let i = 0; i < 2; i++) {
           const m = makeEnemy('regression_splitter', e.x + this.rng.range(-24, 24), e.y - 8, e.sourceLine, true);
@@ -668,6 +687,7 @@ export class Run {
           e.dead = true;
           if (this.rng.chance(0.5)) { a.hp = Math.min(a.maxHp, a.hp + 18); this.pushLog('➕ recovery sprite: +18 hp — retry succeeded'); }
           else { a.shield += 14; this.pushLog('➕ recovery sprite: +14 shield'); }
+          this.emit('pickup', { kind: 'recovery' });
           this.dirty++;
         } else {
           const cd = this.touchCooldowns.get(e) ?? 0;
@@ -768,6 +788,7 @@ export class Run {
   private explodeAt(x: number, y: number, radius: number, damage: number, weaponId: string, directEnemy: Enemy | null = null): void {
     this.terrain.carve(x, y, Math.min(radius, 60));
     this.spawnParticles(x, y, Math.min(30, Math.round(radius * 0.6)), '#d97757');
+    this.emit('explosion', { radius: Math.round(radius), weapon: weaponId, x: Math.round(x), y: Math.round(y) });
     const dmgMult = this.avatar.damageMult;
     if (directEnemy) this.damageEnemy(directEnemy, Math.round(damage * 1.15 * dmgMult), true);
     for (const e of this.enemies) {
