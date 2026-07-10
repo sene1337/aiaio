@@ -274,7 +274,7 @@ export class UI {
       ctx.fillStyle = `rgba(126,231,135,${pulse})`;
       ctx.fillText('[y/n]', pt.x, y - 8);
       ctx.font = `${10 / this.camZoom}px ui-monospace, monospace`;
-      ctx.fillText(run.nearPermTerminal ? '[U — grant permission]' : '✳ subagent permission', pt.x, y - 36);
+      ctx.fillText(run.nearPermTerminal ? '[U: grant permission]' : '✳ subagent permission', pt.x, y - 36);
       ctx.textAlign = 'left';
     }
     for (const m of run.moments) {
@@ -578,7 +578,7 @@ export class UI {
     }
     if (!cr.used && run.nearCrate === cr) {
       ctx.font = `${11 / this.camZoom}px ui-monospace, monospace`;
-      ctx.fillText(cr.kind === 'model' ? '[U — upgrade the model]' : '[U to install update]', cr.x, y - 28);
+      ctx.fillText(cr.kind === 'model' ? '[U: upgrade the model]' : '[U to install update]', cr.x, y - 28);
     }
     ctx.globalAlpha = 1;
     ctx.textAlign = 'left';
@@ -856,15 +856,15 @@ export class UI {
     let html: string;
     let menuMode = false;
     if (run.over) {
-      html = `<span class="spin">✻</span> <span class="spin-verb">${run.over.won ? 'session complete' : 'process terminated'}</span> <span class="spin-hint">— recap incoming</span>`;
+      html = `<span class="spin">✻</span> <span class="spin-verb">${run.over.won ? 'session complete' : 'process terminated'}</span> <span class="spin-hint">(recap incoming)</span>`;
     } else if (run.crateMenu) {
       menuMode = true;
-      html = `<div class="menu-title">⬆ crate — choose one:</div>` + run.crateMenu.options.map((o, i) =>
-        `<div class="menu-opt"><span class="sb-key">${i + 1}</span> ${escapeHtml(o.label)} <span class="dim">— ${escapeHtml(o.desc)}</span></div>`
+      html = `<div class="menu-title">⬆ crate: choose one</div>` + run.crateMenu.options.map((o, i) =>
+        `<div class="menu-opt"><span class="sb-key">${i + 1}</span> ${escapeHtml(o.label)} <span class="dim">· ${escapeHtml(o.desc)}</span></div>`
       ).join('');
     } else if (run.summarizing > 0) {
       const g = ['✂', '✻', '✂', '✽'][Math.floor(this.time * 8) % 4];
-      html = `<span class="spin">${g}</span> <span class="spin-verb">Summarizing conversation…</span> <span class="spin-hint">(heads-down — /compact in progress)</span>`;
+      html = `<span class="spin">${g}</span> <span class="spin-verb">Summarizing conversation…</span> <span class="spin-hint">(heads-down, /compact in progress)</span>`;
     } else {
       const slot = run.weapons[run.selected];
       const ammo = slot.ammo === Infinity ? '∞' : `×${slot.ammo}`;
@@ -873,12 +873,12 @@ export class UI {
       if (run.working && run.nearStation) {
         bits.push(`<span style="color:var(--yellow)">⌨ working "${escapeHtml(run.queue.tasks[run.nearStation.taskIndex].name)}"…</span>`);
       } else if (run.nearStation) {
-        bits.push(`<span style="color:#7ee787">hold W — "${escapeHtml(run.queue.tasks[run.nearStation.taskIndex].name)}"</span>`);
+        bits.push(`<span style="color:#7ee787">hold W: "${escapeHtml(run.queue.tasks[run.nearStation.taskIndex].name)}"</span>`);
       }
-      if (run.nearPermTerminal) bits.push('<span style="color:#7ee787">✳ U — grant Task tool (unlock subagents)</span>');
+      if (run.nearPermTerminal) bits.push('<span style="color:#7ee787">✳ U grants the Task tool (unlocks subagents)</span>');
       if (run.nearCrate) bits.push(`<span style="color:${run.nearCrate.kind === 'model' ? 'var(--blue)' : 'var(--yellow)'}">${run.nearCrate.kind === 'model' ? '◈' : '⬆'} U to install</span>`);
       if (slot.def.id === 'context_nuke') bits.push('<span style="color:var(--red)">⚠ floods 25% of YOUR context</span>');
-      if (run.insideWall) bits.push('<span style="color:var(--red)">▓ INSIDE THE FORGETTING — bleeding, weapons spraying</span>');
+      if (run.insideWall) bits.push('<span style="color:var(--red)">▓ INSIDE THE FORGETTING: bleeding, weapons spraying</span>');
       if (run.compactCd <= 0 && run.ctx.used > run.ctx.budget * 0.4) bits.push('<span class="dim">✂ C to /compact</span>');
       html = `<span class="pcaret">&gt;</span> ${slot.def.glyph} ${kebab(slot.def.name)} ${ammo}` +
         (bits.length ? ' · ' + bits.join(' · ') : '') +
@@ -928,8 +928,8 @@ export class UI {
       ${campaignLine}
       <div class="stat-line">stability ${loadout.stability}/100 · hardening ${(loadout.hardening * 100).toFixed(0)}%</div>
       <div class="stat-line">context budget ${loadout.tokenBudget} · compaction at ${(loadout.compactionThreshold * 100).toFixed(0)}% (each one makes the wall LEAP)</div>
-      ${loadout.stability < 45 ? '<div class="handicap-note">⚑ HANDICAP: low stability — starting shield + damage bonus. struggling agents get armor.</div>' : ''}
-      <h4>TASK QUEUE (stations along the timeline — work them before the wall does)</h4><ul>${tasks}</ul>
+      ${loadout.stability < 45 ? '<div class="handicap-note">⚑ HANDICAP: low stability grants a starting shield + damage bonus. struggling agents get armor.</div>' : ''}
+      <h4>TASK QUEUE (stations along the timeline. work them before the wall does)</h4><ul>${tasks}</ul>
       <h4>LOADOUT (+ ∞ print-debug zapper)</h4><ul>${weapons}</ul>
     `;
     cols.appendChild(agentCol);
@@ -945,13 +945,13 @@ export class UI {
       const def = ENEMY_DEFS[kind];
       const count = Math.max(1, Math.floor(err.count ?? 1));
       const spawnN = briefAlloc[ei];
-      return `<li>${def.glyph} ${def.name} ×${spawnN}<span class="wsrc">⎿ ${escapeHtml(err.category || err.type || '')} ×${count}${err.sample ? ` — "${escapeHtml(err.sample.slice(0, 60))}"` : ''}</span><span class="wsrc dim">${escapeHtml(def.flavor)}</span></li>`;
-    }).join('') || '<li class="dim">no errors on record — a quiet session (three regressions will attend anyway)</li>';
+      return `<li>${def.glyph} ${def.name} ×${spawnN}<span class="wsrc">⎿ ${escapeHtml(err.category || err.type || '')} ×${count}${err.sample ? `: "${escapeHtml(err.sample.slice(0, 60))}"` : ''}</span><span class="wsrc dim">${escapeHtml(def.flavor)}</span></li>`;
+    }).join('') || '<li class="dim">no errors on record. a quiet session (three regressions will attend anyway)</li>';
     levelCol.innerHTML = `
       <h3>the level: session ${escapeHtml(s.sessionId)}${s.fromCard ? '' : ' <span class="dim">(generated)</span>'}</h3>
       ${card.goal ? `<div class="stat-line" style="color:var(--yellow)">the mission, in your own words: "${escapeHtml(String(card.goal).slice(0, 120))}"</div>` : ''}
       ${(card.moments?.length ?? 0) > 0 ? `<div class="stat-line dim">◇ ${card.moments!.length} real moments from the session stand along the timeline</div>` : ''}
-      <div class="stat-line dim">${s.fromCard ? `history: ${escapeHtml(s.topErrorCategory)} ×${s.topErrorCount}, ${s.compactionEvents} compactions, ${s.restarts} restarts, token peak ${s.tokenPeak}` : 'random session — drop a SessionCard to run your real one'}</div>
+      <div class="stat-line dim">${s.fromCard ? `history: ${escapeHtml(s.topErrorCategory)} ×${s.topErrorCount}, ${s.compactionEvents} compactions, ${s.restarts} restarts, token peak ${s.tokenPeak}` : 'random session. drop a SessionCard to run your real one'}</div>
       <div class="stat-line">timeline length scales with message_count · your errors spawn as creatures at points along it · behind you: the wall of forgetting</div>
       <h4>ENEMY ROSTER (from the real error log)</h4><ul>${roster}</ul>
     `;
@@ -985,9 +985,9 @@ export class UI {
     const undone = run.queue.tasks.filter((t) => !t.done && !t.forgotten);
     const cardBits = s.fromCard
       ? `<p class="dim">real session ${escapeHtml(s.sessionId)}: top error was ${escapeHtml(s.topErrorCategory)} ×${s.topErrorCount};
-         ${s.compactionEvents} real compaction${s.compactionEvents === 1 ? '' : 's'} on record — this run compacted ${run.ctx.compactions}×.
+         ${s.compactionEvents} real compaction${s.compactionEvents === 1 ? '' : 's'} on record; this run compacted ${run.ctx.compactions}×.
          ${s.tasksTotal > 0 ? `the real agent finished ${s.tasksCompleted}/${s.tasksTotal} of these tasks; you finished ${done.length}/${run.queue.tasks.length}.` : ''}</p>`
-      : '<p class="dim">randomly generated session — run `npm run scan` and pick a real one for a personalized level.</p>';
+      : '<p class="dim">randomly generated session. run `npm run scan` and pick a real one for a personalized level.</p>';
     // where in the real session the run ended
     let placeBit = '';
     if (run.moments.length > 0) {
@@ -1005,7 +1005,7 @@ export class UI {
       : '';
     body.innerHTML = `
       ${rankBit}
-      <p class="recap-summary">SCORE ${over.score} — ${Math.floor(run.time)}s · ${run.kills} errors resolved · ${run.ctx.compactions} compactions</p>
+      <p class="recap-summary">SCORE ${over.score} · ${Math.floor(run.time)}s · ${run.kills} errors resolved · ${run.ctx.compactions} compactions</p>
       ${placeBit}
       <div class="recap-cols"><div class="recap-col">
         <h3 style="color:#7ee787">${escapeHtml(run.name)}</h3>
@@ -1013,7 +1013,7 @@ export class UI {
         ${eaten.length ? `<p style="color:var(--red)">eaten by the wall: ${eaten.map((t) => escapeHtml(t.name)).join(', ')}</p>` : ''}
         ${undone.length ? `<p class="dim">left undone: ${undone.map((t) => escapeHtml(t.name)).join(', ')}</p>` : ''}
         <p>hp ${Math.max(0, Math.round(run.avatar.hp))}/100 · ${run.ctx.compactions} compactions${run.ctx.compactions > 2 ? ' (memory was… negotiable)' : ''}</p>
-        ${run.awards.length ? `<p style="color:var(--yellow)">🏆 ${run.awards.map((a) => `${escapeHtml(a.title)} <span class="dim">— ${escapeHtml(a.desc)}</span>`).join('<br/>🏆 ')}</p>` : ''}
+        ${run.awards.length ? `<p style="color:var(--yellow)">🏆 ${run.awards.map((a) => `${escapeHtml(a.title)} <span class="dim">· ${escapeHtml(a.desc)}</span>`).join('<br/>🏆 ')}</p>` : ''}
         ${cardBits}
       </div></div>
     `;

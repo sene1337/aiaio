@@ -27,7 +27,7 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
   timeout_blob: {
     kind: 'timeout_blob', name: 'timeout-blob', glyph: '⏱', hp: 34, touchDamage: 8,
     color: '#e3b341', friendly: false,
-    flavor: 'tanky, slow, lobs shots that detonate late — exactly when you stopped worrying',
+    flavor: 'tanky, slow, lobs shots that detonate late, exactly when you stopped worrying',
   },
   hallucination_ghost: {
     kind: 'hallucination_ghost', name: 'hallucination-ghost', glyph: '👻', hp: 16, touchDamage: 12,
@@ -52,7 +52,7 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
   tool_turret: {
     kind: 'tool_turret', name: 'tool-turret', glyph: '🔧', hp: 26, touchDamage: 6,
     color: '#ff9440', friendly: false,
-    flavor: 'fires interrupt bolts — get hit while working and you lose task progress',
+    flavor: 'fires interrupt bolts. get hit while working and you lose task progress',
   },
   overflow_emitter: {
     kind: 'overflow_emitter', name: 'overflow-emitter', glyph: '📈', hp: 30, touchDamage: 10,
@@ -62,7 +62,7 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
   recovery_sprite: {
     kind: 'recovery_sprite', name: 'recovery-sprite', glyph: '➕', hp: 1, touchDamage: 0,
     color: '#7ee787', friendly: true,
-    flavor: 'friendly. retry 2/3 succeeded — touch it for hp/shield',
+    flavor: 'friendly. retry 2/3 succeeded. touch it for hp/shield',
   },
 };
 

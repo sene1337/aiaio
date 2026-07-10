@@ -46,11 +46,11 @@ export function difficulty(e: LevelEntry): number {
 export interface Tier { index: number; name: string; min: number }
 
 export const TIERS: Tier[] = [
-  { index: 0, name: 'tier-1 — onboarding', min: 0 },
-  { index: 1, name: 'tier-2 — daily-driver', min: 25 },
-  { index: 2, name: 'tier-3 — incident-response', min: 42 },
-  { index: 3, name: 'tier-4 — production-outage', min: 58 },
-  { index: 4, name: 'tier-5 — the-forgetting', min: 74 },
+  { index: 0, name: 'tier-1: onboarding', min: 0 },
+  { index: 1, name: 'tier-2: daily-driver', min: 25 },
+  { index: 2, name: 'tier-3: incident-response', min: 42 },
+  { index: 3, name: 'tier-4: production-outage', min: 58 },
+  { index: 4, name: 'tier-5: the-forgetting', min: 74 },
 ];
 
 export function tierOf(diff: number): Tier {

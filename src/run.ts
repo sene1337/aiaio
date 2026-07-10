@@ -302,7 +302,7 @@ export class Run {
       const gap = 45 - this.loadout.stability;
       this.avatar.shield = Math.round(10 + gap * 0.6);
       this.avatar.damageMult = 1 + gap * 0.006;
-      this.pushLog(`⚑ handicap: +${this.avatar.shield} shield, ×${this.avatar.damageMult.toFixed(2)} damage — ` +
+      this.pushLog(`⚑ handicap: +${this.avatar.shield} shield, ×${this.avatar.damageMult.toFixed(2)} damage. ` +
         `stability ${this.loadout.stability}/100. struggling agents get armor.`);
     }
 
@@ -312,7 +312,7 @@ export class Run {
     // weapons: infinite debug-zap first, then the error-log arsenal
     this.weapons = [{
       def: WEAPONS.debug_zap, ammo: Infinity, statRoll: 1,
-      sourceLine: 'standard issue — every agent can print', cooldownLeft: 0,
+      sourceLine: 'standard issue. every agent can print', cooldownLeft: 0,
     }];
     for (const w of this.loadout.weapons) {
       if (w.id === 'timeout_mortar' && w.sourceLine.startsWith('baseline')) continue; // zap covers the baseline now
@@ -329,7 +329,7 @@ export class Run {
     this.goal = this.card.goal ? String(this.card.goal).slice(0, 120) : null;
     this.pushBanner({
       kind: 'turn', ttl: 8,
-      title: `▶ SESSION START — ${this.card.session_id ?? 'unknown'}`,
+      title: `▶ SESSION START: ${this.card.session_id ?? 'unknown'}`,
       lines: [
         ...(this.goal ? [`the mission, in your own words: "${this.goal}"`] : []),
         'reach process exit → · clear your task queue on the way',
@@ -387,7 +387,7 @@ export class Run {
       const count = Math.max(1, Math.floor(err.count ?? 1));
       const spawnN = spawnAlloc[ei];
       if (spawnN <= 0) continue;
-      const source = err.sample ? `${cat} ×${count} — "${err.sample.slice(0, 70)}"` : `${cat} ×${count}`;
+      const source = err.sample ? `${cat} ×${count}: "${err.sample.slice(0, 70)}"` : `${cat} ×${count}`;
       const realAts = (err.at ?? []).filter((a) => a > 0.12); // not right on spawn
       for (let i = 0; i < spawnN; i++) {
         // spawn where the error actually happened when the card knows it
@@ -404,7 +404,7 @@ export class Run {
       for (let i = 0; i < 3; i++) {
         const x = Math.round(width * rng.range(0.3, 0.9));
         this.enemies.push(makeEnemy('regression_splitter', x, this.terrain.surfaceAt(x) - 10,
-          'no errors on record — these three came anyway'));
+          'no errors on record. these three came anyway'));
       }
     }
     // recoveries → a couple of skittish friendly sprites (they flee — recovery
@@ -505,7 +505,7 @@ export class Run {
       title: '⚡ COMPACTION',
       lines: compactionSummary(lost, rng),
     });
-    this.pushLog('⚡ compaction — memory lost, the wall surged');
+    this.pushLog('⚡ compaction. memory lost, the wall surged');
     this.emit('compaction', { n: this.ctx.compactions, leap, wallGap: Math.round(this.avatar.x - this.wallX) });
   }
 
@@ -516,7 +516,7 @@ export class Run {
     const award: Award = { id: String(id), ...def };
     this.awards.push(award);
     this.pushBanner({ kind: 'update', ttl: 5, title: `🏆 AWARD: ${def.title}`, lines: [def.desc] });
-    this.pushLog(`🏆 award unlocked: ${def.title} — ${def.desc}`);
+    this.pushLog(`🏆 award unlocked: ${def.title}. ${def.desc}`);
     this.emit('award', { id, title: def.title, line: def.line });
   }
 
@@ -534,10 +534,10 @@ export class Run {
       (won ? Math.max(0, 1200 - Math.round(this.time) * 4) : 0) -
       this.ctx.compactions * 150);
     const headline = !won
-      ? (reason === 'wall' ? 'FORGOTTEN — the wall took the whole process' : 'PROCESS KILLED — exit code 137')
+      ? (reason === 'wall' ? 'FORGOTTEN: the wall took the whole process' : 'PROCESS KILLED: exit code 137')
       : perfect
-        ? 'PERFECT CLEAR — every task done, process exited 0'
-        : `SESSION SURVIVED — exit 0, but ${this.queue.tasks.length - tasksDone} task(s) left behind`;
+        ? 'PERFECT CLEAR: every task done, process exited 0'
+        : `SESSION SURVIVED: exit 0, but ${this.queue.tasks.length - tasksDone} task(s) left behind`;
     this.over = { won, reason, headline, score, perfect };
     this.emit(won ? 'win' : 'death', {
       reason, score, perfect, time: Math.round(this.time), x: Math.round(this.avatar.x),
@@ -571,7 +571,7 @@ export class Run {
   fire(): void {
     if (this.over || this.working) return;
     const slot = this.weapons[this.selected];
-    if (slot.ammo <= 0) { this.pushLog(`${slot.def.name}: out of ammo (zap never is — press 1)`); return; }
+    if (slot.ammo <= 0) { this.pushLog(`${slot.def.name}: out of ammo (zap never is; press 1)`); return; }
     if (slot.cooldownLeft > 0) return;
     // the ∞ zapper overheats into a THINK pause — you can never run out of
     // print statements, but you can print yourself into a corner
@@ -586,7 +586,7 @@ export class Run {
         this.zapThink = ZAP_THINK_SECS;
         this.zapHeat = 0;
         this.popups.push({ x: this.avatar.x, y: this.avatar.y - 40, text: '✳ thinking…', ttl: ZAP_THINK_SECS, maxTtl: ZAP_THINK_SECS, big: false, color: '#e3b341' });
-        this.pushLog('✳ zapper spent — thinking… (8-shot burst exhausted)');
+        this.pushLog('✳ zapper spent, thinking… (8-shot burst exhausted)');
       }
     }
     if (slot.ammo !== Infinity) slot.ammo--;
@@ -600,7 +600,7 @@ export class Run {
     const inWall = this.insideWall;
     if (inWall) {
       jitter += this.rng.range(-65, 65);
-      if (this.rng.chance(0.3)) this.pushLog('▓ weapons spraying — targeting data is corrupted in here');
+      if (this.rng.chance(0.3)) this.pushLog('▓ weapons spraying. targeting data is corrupted in here');
     }
 
     if (slot.def.behavior === 'support') {
@@ -620,8 +620,8 @@ export class Run {
           stunned++;
         }
       }
-      this.popups.push({ x: a.x, y: a.y - 44, text: '@here — quick question', ttl: 1.4, maxTtl: 1.4, big: false, color: '#e3b341' });
-      this.pushLog(`📣 distraction barrage — ${stunned} error${stunned === 1 ? '' : 's'} stopped to read the ping`);
+      this.popups.push({ x: a.x, y: a.y - 44, text: '@here: quick question', ttl: 1.4, maxTtl: 1.4, big: false, color: '#e3b341' });
+      this.pushLog(`📣 distraction barrage: ${stunned} error${stunned === 1 ? '' : 's'} stopped to read the ping`);
       this.emit('distraction', { stunned, x: a.x, y: a.y - 10 });
       return;
     }
@@ -694,13 +694,13 @@ export class Run {
       a.shield += 25;
       this.pushBanner({
         kind: 'update', ttl: 6.5,
-        title: `◈ NEW MODEL RELEASED — now running v${a.model}`,
+        title: `◈ NEW MODEL RELEASED: now running v${a.model}`,
         lines: [
           `context window enlarged: +${extra} budget, compaction threshold raised`,
           '+25 shield · you remember more. you are not necessarily smarter.',
         ],
       });
-      this.pushLog(`◈ model upgrade — v${a.model}, +${extra} context`);
+      this.pushLog(`◈ model upgrade: v${a.model}, +${extra} context`);
       this.emit('model_upgrade', { model: a.model });
       return;
     }
@@ -710,8 +710,8 @@ export class Run {
 
   private openCrateMenu(crate: Crate): void {
     const pool: CrateOption[] = [
-      { id: 'cached_sub', label: '/restore cached-subagent', desc: 'no upkeep drip — prebaked context (still corruptible)' },
-      { id: 'tune_context', label: '/tune context-manager', desc: 'compaction threshold +5% — overflow later' },
+      { id: 'cached_sub', label: '/restore cached-subagent', desc: 'no upkeep drip, prebaked context (still corruptible)' },
+      { id: 'tune_context', label: '/tune context-manager', desc: 'compaction threshold +5%, overflow later' },
       { id: 'shield', label: '/patch shield-buffer', desc: '+30 shield' },
       { id: 'resupply', label: '/restock error-log', desc: '+2 ammo on every finite weapon' },
     ];
@@ -724,7 +724,7 @@ export class Run {
       if (!picks.some((p) => p.id === c.id)) picks.push(c);
     }
     this.crateMenu = { crate, options: picks };
-    this.pushLog('⬆ crate opened — choose with 1/2/3');
+    this.pushLog('⬆ crate opened. choose with 1/2/3');
     this.dirty++;
   }
 
@@ -763,7 +763,7 @@ export class Run {
         break;
       case 'tune_context':
         this.ctx.threshold = Math.min(0.92, this.ctx.threshold + 0.05);
-        this.pushLog(`⬆ context manager tuned — overflow now at ${Math.round(this.ctx.threshold * 100)}%`);
+        this.pushLog(`⬆ context manager tuned: overflow now at ${Math.round(this.ctx.threshold * 100)}%`);
         break;
       case 'shield':
         a.shield += 30;
@@ -771,7 +771,7 @@ export class Run {
         break;
       case 'resupply':
         for (const w of this.weapons) if (w.ammo !== Infinity) w.ammo += 2;
-        this.pushLog('⬆ error log restocked — +2 ammo across the arsenal');
+        this.pushLog('⬆ error log restocked: +2 ammo across the arsenal');
         break;
     }
     this.emit('crate_choice', { choice: opt.id });
@@ -784,10 +784,10 @@ export class Run {
     this.subagentsUnlocked = true;
     this.pushBanner({
       kind: 'info', ttl: 4,
-      title: '✳ PERMISSION GRANTED — Task tool',
+      title: '✳ PERMISSION GRANTED: Task tool',
       lines: ['S now spawns subagents (900tk + upkeep).', 'delegate responsibly. or don\'t. I\'m a banner, not a cop.'],
     });
-    this.pushLog('✳ Task tool granted — subagents unlocked (S)');
+    this.pushLog('✳ Task tool granted. S spawns subagents now');
     this.emit('perm_granted', {});
   }
 
@@ -795,11 +795,11 @@ export class Run {
   spawnSubagent(cached = false): void {
     if (this.over) return;
     if (!this.subagentsUnlocked && !cached) {
-      this.pushLog('⛔ permission denied: Task tool not granted — find the [y/n] terminal');
+      this.pushLog('⛔ permission denied: Task tool not granted. find the [y/n] terminal');
       return;
     }
     const alive = this.subagents.length;
-    if (alive >= 2) { this.pushLog('🤖 subagent limit reached (2 concurrent — rate limits)'); return; }
+    if (alive >= 2) { this.pushLog('🤖 subagent limit reached (2 concurrent, rate limits)'); return; }
     if (!cached) this.spendTokens(RUN_COST.subagentSpawn);
     this.subagents.push({
       x: this.avatar.x - 20, y: this.avatar.y - 46,
@@ -808,8 +808,8 @@ export class Run {
       label: `${cached ? 'cache' : 'sub'}-${this.rng.int(100, 999)}`,
     });
     this.pushLog(cached
-      ? '🤖 cached subagent restored — prebaked context, no upkeep drip'
-      : '🤖 subagent spawned — weaker model, burns tokens while it lives');
+      ? '🤖 cached subagent restored: prebaked context, no upkeep drip'
+      : '🤖 subagent spawned: weaker model, burns tokens while it lives');
     this.emit('subagent_spawn', { alive: alive + 1, cached });
   }
 
@@ -817,7 +817,7 @@ export class Run {
   voluntaryCompact(): void {
     if (this.over || this.summarizing > 0) return;
     if (this.compactCd > 0) { this.pushLog(`✂ /compact on cooldown (${Math.ceil(this.compactCd)}s)`); return; }
-    if (contextFrac(this.ctx) < 0.25) { this.pushLog('✂ /compact: context nearly empty — nothing worth summarizing'); return; }
+    if (contextFrac(this.ctx) < 0.25) { this.pushLog('✂ /compact: context nearly empty, nothing worth summarizing'); return; }
     this.compactCd = 20;
     this.summarizing = 1.4;
     this.avatar.headsDown = true; // eyes on the summary, not the sky
@@ -826,16 +826,16 @@ export class Run {
     this.burn(RUN_COST.voluntaryCompact); // the summarization pass itself costs tokens…
     if (this.ctx.compactions > before) {
       // …and if you ran it too late, it tips you over: involuntary compaction. compact early.
-      this.pushLog('✂ /compact ran too late — the summary pass itself overflowed the window');
+      this.pushLog('✂ /compact ran too late. the summary pass itself overflowed the window');
       return;
     }
     this.ctx.used = Math.round(this.ctx.budget * 0.18);
     this.pushBanner({
       kind: 'info', ttl: 3.5,
-      title: '✂ /compact — conversation summarized cleanly',
+      title: '✂ /compact: conversation summarized cleanly',
       lines: ['meter drained · nothing forgotten · the wall did not surge', 'compact early, compact often.'],
     });
-    this.pushLog('✂ /compact — clean summary, breathing room restored');
+    this.pushLog('✂ /compact: clean summary, breathing room restored');
     this.emit('voluntary_compact', {});
   }
 
@@ -843,10 +843,10 @@ export class Run {
     if (sa.corrupted) return;
     sa.corrupted = true;
     sa.corruptedAt = this.time;
-    this.pushLog(`👻 ${sa.label} was corrupted by ${cause} — it works for the errors now`);
+    this.pushLog(`👻 ${sa.label} was corrupted by ${cause}. it works for the errors now`);
     this.pushBanner({
       kind: 'compaction', ttl: 4,
-      title: `⚠ SUBAGENT CORRUPTED — ${sa.label}`,
+      title: `⚠ SUBAGENT CORRUPTED: ${sa.label}`,
       lines: [`cause: ${cause}`, 'it is now targeting YOU. terminate it or outrun it.'],
     });
     this.emit('subagent_corrupted', { cause });
@@ -1076,7 +1076,7 @@ export class Run {
         this.pushBanner({
           kind: 'compaction', ttl: 4,
           title: '▓ FORGOTTEN',
-          lines: [`the wall took "${t.name}" — that task no longer exists`],
+          lines: [`the wall took "${t.name}". that task no longer exists`],
         });
         this.pushLog(`▓ the wall of forgetting ate "${t.name}"`);
         this.emit('task_eaten', { task: t.name, at: Math.round(this.time) });
@@ -1087,7 +1087,7 @@ export class Run {
       if (sa.hp > 0 && sa.x < this.wallX) {
         sa.hp = 0;
         this.subsEatenByWall++;
-        this.pushLog(`▓ the wall ate ${sa.label} — lower models don't survive the forgetting`);
+        this.pushLog(`▓ the wall ate ${sa.label}. lower models don't survive the forgetting`);
         this.emit('subagent_eaten', { corrupted: sa.corrupted });
         if (this.subsEatenByWall >= 2) this.grantAward('cost_center');
       }
@@ -1096,7 +1096,7 @@ export class Run {
     const gap = this.avatar.x - this.wallX;
     if (gap < 220 && !this.wallWarned) {
       this.wallWarned = true;
-      this.pushLog('⚡ context pressure critical — the wall is RIGHT THERE');
+      this.pushLog('⚡ context pressure critical. the wall is RIGHT THERE');
     }
     if (gap > 300) this.wallWarned = false;
     if (gap < 0) {
@@ -1153,7 +1153,7 @@ export class Run {
           }
         }
         this.hitstop = Math.max(this.hitstop, direct ? 0.085 : 0.03);
-        this.pushLog(`✔ ${word.toLowerCase() || 'resolved'}: ${e.def.name}${e.mini ? ' (mini)' : ''}${direct ? ' — direct hit' : ''}`);
+        this.pushLog(`✔ ${word.toLowerCase() || 'resolved'}: ${e.def.name}${e.mini ? ' (mini)' : ''}${direct ? ' (direct hit)' : ''}`);
       }
       this.emit('kill', { enemy: e.def.kind, mini: e.mini, direct, x: e.x, y: e.y, by });
       if (e.def.kind === 'regression_splitter' && !e.mini) {
@@ -1277,7 +1277,7 @@ export class Run {
             if (dist < 500) {
               // it spams your context — which moves the wall, because everything does
               this.burn(RUN_COST.emitterSpam);
-              if (this.rng.chance(0.12)) this.pushLog('📈 overflow-emitter is spamming your context — kill it');
+              if (this.rng.chance(0.12)) this.pushLog('📈 overflow-emitter is spamming your context. kill it');
             }
           }
           break;
@@ -1304,7 +1304,7 @@ export class Run {
       if (dx * dx + dy * dy < 24 * 24) {
         if (e.def.friendly) {
           e.dead = true;
-          if (this.rng.chance(0.5)) { a.hp = Math.min(a.maxHp, a.hp + 10); this.pushLog('➕ recovery sprite: +10 hp — retry succeeded'); }
+          if (this.rng.chance(0.5)) { a.hp = Math.min(a.maxHp, a.hp + 10); this.pushLog('➕ recovery sprite: +10 hp, retry succeeded'); }
           else { a.shield += 8; this.pushLog('➕ recovery sprite: +8 shield'); }
           this.emit('pickup', { kind: 'recovery' });
           this.dirty++;
@@ -1473,10 +1473,10 @@ export class Run {
       this.pushBanner({
         kind: 'compaction', ttl: 3,
         title: '💥 NUKE SELF-FLOOD',
-        lines: [`${flood} tokens dumped into YOUR context — meter at ${pct}%`,
+        lines: [`${flood} tokens dumped into YOUR context. meter at ${pct}%`,
                 `the wall owes you ~${Math.round(flood * PX_PER_TOKEN)}px for that`],
       });
-      this.pushLog(`💥 context nuke — glorious. it flooded ${flood}tk into your own meter (${pct}%).`);
+      this.pushLog(`💥 context nuke: glorious. it flooded ${flood}tk into your own meter (${pct}%).`);
     }
     // self splash
     const dSelf = Math.hypot(this.avatar.x - x, this.avatar.y - 6 - y);

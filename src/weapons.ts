@@ -40,7 +40,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   debug_zap: {
     id: 'debug_zap', name: 'Print-Debug Zapper', glyph: '»',
     behavior: 'ballistic', tokenCost: 90, damage: 9, radius: 14, cooldown: 0,
-    flavor: "console.log('pew') — infinite ammo, mild insight. you can never run out of print statements.",
+    flavor: "console.log('pew'). infinite ammo, mild insight. you can never run out of print statements.",
   },
   timeout_mortar: {
     id: 'timeout_mortar', name: 'Timeout Mortar', glyph: '⏱',
@@ -70,7 +70,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   context_nuke: {
     id: 'context_nuke', name: 'Context Window Nuke', glyph: '💥',
     behavior: 'ballistic', tokenCost: 2400, damage: 48, radius: 110, cooldown: 3,
-    flavor: 'Floods EVERYONE’s context toward compaction — yours included. Situational awareness not found.',
+    flavor: 'Floods EVERYONE’s context toward compaction, yours included. Situational awareness not found.',
   },
   recovery_shield: {
     id: 'recovery_shield', name: 'Recovery Shield', glyph: '🛡',

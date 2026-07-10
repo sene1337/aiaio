@@ -47,7 +47,7 @@ function setCard(card: SessionCard, sourceName: string): void {
   const status = $('card-status-0');
   status.classList.add('loaded');
   const errs = (card.errors ?? []).reduce((s, e) => s + (e.count ?? 1), 0);
-  status.textContent = `✔ ${sourceName} — "${card.session_id ?? '?'}", ${errs} errors, ` +
+  status.textContent = `✔ ${sourceName}: "${card.session_id ?? '?'}", ${errs} errors, ` +
     `${card.tasks?.length ?? 0} tasks, stability ${card.stability_score ?? 'n/a'}`;
 }
 
@@ -119,7 +119,7 @@ async function loadGallery(): Promise<void> {
       const head = document.createElement('div');
       head.className = 'hint';
       head.style.textAlign = 'left';
-      head.textContent = `THE VAULT — ${entries.length} sessions · ${clearedTotal} cleared (type to filter):`;
+      head.textContent = `THE VAULT · ${entries.length} sessions · ${clearedTotal} cleared (type to filter):`;
       box.appendChild(head);
       const input = document.createElement('input');
       input.id = 'gallery-filter';
@@ -148,7 +148,7 @@ async function loadGallery(): Promise<void> {
           const need = 2 - entries.filter((e) =>
             tierOf(difficulty(e)).index === tier.index - 1 && isCleared(getProgress(e.session_id))).length;
           folder.innerHTML = `<span class="caret">${isOpen ? '▾' : '▸'}</span><span class="cmd-name dim">🔒 ${escapeHtml(tier.name)}/</span>` +
-            `<span class="cmd-desc">clear ${Math.max(1, need)} more in ${escapeHtml(TIERS[tier.index - 1].name.split(' — ')[0])}</span>`;
+            `<span class="cmd-desc">clear ${Math.max(1, need)} more in ${escapeHtml(TIERS[tier.index - 1].name.split(': ')[0])}</span>`;
         } else {
           folder.innerHTML = `<span class="caret">${isOpen ? '▾' : '▸'}</span><span class="cmd-name">${escapeHtml(tier.name)}/</span>` +
             `<span class="cmd-desc">${bucket.length} levels · ${cleared} cleared</span>`;
@@ -195,7 +195,7 @@ async function loadGallery(): Promise<void> {
           const more = document.createElement('div');
           more.className = 'hint';
           more.style.textAlign = 'left';
-          more.textContent = `  …${bucket.length - PER_FOLDER} more in this tier — filter to find them`;
+          more.textContent = `  …${bucket.length - PER_FOLDER} more in this tier. filter to find them`;
           box.appendChild(more);
         }
       }
@@ -205,7 +205,7 @@ async function loadGallery(): Promise<void> {
     refreshVault = () => render((document.getElementById('gallery-filter') as HTMLInputElement)?.value ?? '');
     render('');
   } catch {
-    box.innerHTML = '<div class="hint" style="text-align:left">no scanned sessions — run <b>npm run scan</b> to auto-build cards from your OpenClaw / Claude Code / Hermes sessions, or drop a card above.</div>';
+    box.innerHTML = '<div class="hint" style="text-align:left">no scanned sessions. run <b>npm run scan</b> to auto-build cards from your OpenClaw / Claude Code / Hermes sessions, or drop a card above.</div>';
   }
 }
 
@@ -391,7 +391,7 @@ function wireKeyboard(): void {
     }
     if (e.key === 'v' || e.key === 'V') {
       const on = observer.toggleVoice();
-      run?.pushLog(`☏ observer voice ${on ? 'on' : 'off — the judgment continues in text'}`);
+      run?.pushLog(`☏ observer voice ${on ? 'on' : 'off. the judgment continues in text'}`);
       qa.event('voice_toggle', { on });
       return;
     }
@@ -446,7 +446,7 @@ function frame(t: number): void {
         run.pushBanner({
           kind: 'compaction', ttl: 6,
           title: '☠ SEGFAULT (recovered)',
-          lines: ['a frame crashed and was skipped — if this repeats, reload', String(err).slice(0, 90)],
+          lines: ['a frame crashed and was skipped. if this repeats, reload', String(err).slice(0, 90)],
         });
       } catch { /* even the banner failed; the loop survives anyway */ }
     }
@@ -511,7 +511,7 @@ function main(): void {
     document.body.innerHTML = `
       <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center;background:#0f0f0e;color:#dedad2;font-family:ui-monospace,Menlo,monospace">
         <div style="color:#d97757;font-size:28px;letter-spacing:0.2em">AIAIO</div>
-        <div style="max-width:420px;font-size:14px;line-height:1.7">this beta needs a <b>desktop + keyboard</b> —
+        <div style="max-width:420px;font-size:14px;line-height:1.7">this beta needs a <b>desktop + keyboard</b>.
         it's a game about replaying your agent sessions, and the controls are all keys.</div>
         <div style="color:#8f8b82;font-size:12px;max-width:420px;line-height:1.7">bookmark it for your laptop:
         clone the repo, <code>npm run scan</code> your own sessions, and play your actual history.</div>

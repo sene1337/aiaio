@@ -44,7 +44,7 @@ const ROLLS: RollDef[] = [
     nerf: (t) => { t.damageMult *= 0.85; },
   },
   {
-    buffNote: 'optimized token usage — actions cost 20% fewer tokens',
+    buffNote: 'optimized token usage: actions cost 20% fewer tokens',
     nerfNote: 'telemetry added to every action (+25% token cost). for your benefit.',
     buff: (t) => { t.tokenCostMult *= 0.8; },
     nerf: (t) => { t.tokenCostMult *= 1.25; },

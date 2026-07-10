@@ -53,13 +53,13 @@ export interface SessionCard {
 
 /** The human-readable schema, shown in the in-game copyable panel. */
 export const SESSION_CARD_SCHEMA = `{
-  "session_id": "string        — seeds the whole match (terrain, rolls)",
+  "session_id": "string        -> seeds the whole match (terrain, rolls)",
   "duration_ms": 0,          // session length -> arena width
   "message_count": 0,        // -> terrain jaggedness + arena size
   "token_peak": 0,           // -> context budget
   "compaction_events": 0,    // -> compaction threshold (more -> earlier amnesia)
   "tool_calls": 0,           // -> extra task work units / Distraction ammo
-  "goal": "",                // first real user ask — shown as the mission
+  "goal": "",                // first real user ask, shown as the mission
   "tasks": [{ "name": "", "work_units": 1, "completed": false, "at": 0.2 }],
                              //   ↳ "at" = real 0..1 timeline position (station placement)
   "errors": [{ "type": "", "category": "timeout", "count": 1, "sample": "", "at": [0.4] }],
@@ -167,7 +167,7 @@ export function loadoutFromCard(card: SessionCard, label: string): AgentLoadout 
     const ammo = clamp(1 + Math.floor(Math.sqrt(count)), 1, 12);
     const statRoll = clamp(0.85 + rng.next() * 0.25 + Math.min(count, 50) * 0.004, 0.85, 1.35);
     const source = err.sample
-      ? `${cat} ×${count} — "${err.sample.slice(0, 80)}"`
+      ? `${cat} ×${count}: "${err.sample.slice(0, 80)}"`
       : `${cat} ×${count} (${err.type ?? 'no sample captured'})`;
     const existing = seen.get(id);
     if (existing) {
@@ -205,7 +205,7 @@ export function loadoutFromCard(card: SessionCard, label: string): AgentLoadout 
   if (toolCalls >= 10 && !seen.has('distraction_barrage')) {
     const g: GeneratedWeapon = {
       id: 'distraction_barrage', ammo: clamp(Math.floor(toolCalls / 25) + 1, 1, 6),
-      statRoll: 1, sourceLine: `tool_calls: ${toolCalls} — knows exactly how to interrupt an agent`,
+      statRoll: 1, sourceLine: `tool_calls: ${toolCalls}. knows exactly how to interrupt an agent`,
     };
     seen.set('distraction_barrage', g); weapons.push(g);
   }
@@ -214,14 +214,14 @@ export function loadoutFromCard(card: SessionCard, label: string): AgentLoadout 
   if (!seen.has('timeout_mortar')) {
     weapons.unshift({
       id: 'timeout_mortar', ammo: 10, statRoll: 1,
-      sourceLine: 'baseline issue — every agent has waited on something',
+      sourceLine: 'baseline issue. every agent has waited on something',
     });
   }
   // guarantee at least one flavor weapon beyond the mortar
   if (weapons.length < 2) {
     weapons.push({
       id: 'unknown_error', ammo: 4, statRoll: 1,
-      sourceLine: 'uncategorized log noise — nobody knows what this does',
+      sourceLine: 'uncategorized log noise. nobody knows what this does',
     });
   }
 
@@ -419,7 +419,7 @@ export const EXAMPLE_CHAOTIC: SessionCard = {
   token_peak: 198000,
   compaction_events: 6,
   tool_calls: 187,
-  goal: 'the tests are flaky again and the migration is due today — fix both, please',
+  goal: 'the tests are flaky again and the migration is due today. fix both, please',
   tasks: [
     { name: 'fix the flaky test suite', work_units: 4, completed: false, at: 0.12 },
     { name: 'migrate the database', work_units: 5, completed: false, at: 0.34 },
@@ -435,9 +435,9 @@ export const EXAMPLE_CHAOTIC: SessionCard = {
     { at: 0.85, kind: 'win', text: 'ok it works. nobody touch anything.' },
   ],
   errors: [
-    { type: 'HALLUCINATED_PATH', category: 'hallucination', count: 14, sample: 'edited src/utils/helpers.ts — file does not exist' },
+    { type: 'HALLUCINATED_PATH', category: 'hallucination', count: 14, sample: 'edited src/utils/helpers.ts (file does not exist)' },
     { type: 'ETIMEDOUT', category: 'timeout', count: 22, sample: 'bash command killed by watchdog at 600s' },
-    { type: 'REGRESSION', category: 'regression', count: 9, sample: 'test_auth passed on main, fails on branch — again' },
+    { type: 'REGRESSION', category: 'regression', count: 9, sample: 'test_auth passed on main, fails on branch. again.' },
     { type: 'AGENT_RESTART', category: 'restart', count: 4, sample: 'process exited 137, relaunching agent loop' },
     { type: 'CTX_OVERFLOW', category: 'context_overflow', count: 6, sample: 'context window exceeded; compacting conversation' },
     { type: 'TOOL_DENIED', category: 'tool_error', count: 11, sample: 'permission denied: rm -rf suggestion rejected by user' },

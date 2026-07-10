@@ -82,7 +82,7 @@ const LINES: Record<string, Pool> = {
     '{n} compactions. The wall is not chasing you. You are feeding it.',
   ],
   task_done: [
-    '"{task}" — shipped. Noting the date for the postmortem.',
+    '"{task}" shipped. Noting the date for the postmortem.',
     'One task down. The economy of this victory: questionable. The victory: real.',
     '"{task}" complete. Somewhere, a real version of you never finished this.',
     '"{task}" done. Do not check the acceptance criteria. Keep moving.',
@@ -263,7 +263,7 @@ export class Observer {
     const slots = {
       when: meta.when ?? 'an undated day',
       harness: meta.harness ?? 'an unidentified harness',
-      goal: (meta.goal ?? 'no recorded goal — off to a great start').slice(0, 90),
+      goal: (meta.goal ?? 'no recorded goal, which is off to a great start').slice(0, 90),
       topError: meta.topError,
       topCount: meta.topErrorCount,
       compactions: meta.compactions,
@@ -295,7 +295,7 @@ export class Observer {
   cycleVoice(): string {
     if (!('speechSynthesis' in window)) return 'no speech synthesis available';
     const voices = window.speechSynthesis.getVoices().filter((v) => v.lang.startsWith('en'));
-    if (voices.length === 0) return 'no voices loaded yet — try again in a second';
+    if (voices.length === 0) return 'no voices loaded yet. try again in a second';
     const currentName = localStorage.getItem('aiaio-voice-name') ?? this.voice?.name ?? '';
     const idx = voices.findIndex((v) => v.name === currentName);
     this.voice = voices[(idx + 1) % voices.length];

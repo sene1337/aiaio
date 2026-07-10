@@ -68,7 +68,7 @@ export function compactionSummary(lostLines: string[], rng: Rng): string[] {
     'the user asked about… something?',
     'there was definitely a plan here',
     'previous 47 messages: [summarized as "stuff happened"]',
-    'aim solution found earlier — solution not retained',
+    'aim solution found earlier. solution not retained',
     'important warning from turn 12: █████ ██ ███',
   ];
   const lines: string[] = [rng.pick(openers)];

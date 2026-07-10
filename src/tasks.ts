@@ -82,7 +82,7 @@ export function amnesia(q: TaskQueue, rng: Rng, severity: number, priorCompactio
       t.done = false;
       t.progress = t.workUnits - 1; // one unit of re-verification needed
       t.forgotten = true;
-      lines.push(`completed task "${t.name}" un-verified — did we actually ship that?`);
+      lines.push(`completed task "${t.name}" un-verified. did we actually ship that?`);
     }
   }
   const t = q.tasks[q.current];
@@ -98,7 +98,7 @@ export function amnesia(q: TaskQueue, rng: Rng, severity: number, priorCompactio
       const chosen = rng.pick(pickFrom.length ? pickFrom : candidates);
       if (t && !t.done) t.forgotten = true;
       q.current = chosen.i;
-      lines.push(`forgot which task it was on — now "${chosen.x.name}"?`);
+      lines.push(`forgot which task it was on. "${chosen.x.name}", maybe?`);
     }
   }
   return lines;
@@ -127,7 +127,7 @@ export function distract(q: TaskQueue, rng: Rng, hardening: number): string[] {
       lines.push(`agent wandered off to "${chosen.x.name}"`);
     }
   } else {
-    lines.push('distraction fizzled — no active task to derail');
+    lines.push('distraction fizzled: no active task to derail');
   }
   return lines;
 }
