@@ -61,6 +61,20 @@ export interface Popup {
   color: string;
 }
 
+// what does an agent fire? its own output. payload pools per weapon —
+// plus a chance to fire a fragment of the REAL log line the weapon came from.
+const PAYLOADS: Record<string, string[]> = {
+  debug_zap: ['log("here")', 'print(x)', 'dbg!', 'echo $?', 'console.log', 'puts "hm"'],
+  timeout_mortar: ['await…', 'sleep(30s)', 'retry(3)', 'poll()'],
+  hallucination_missile: ['src/utils.ts', './helpers.js', 'fs.read(?)', 'docs/plan.md'],
+  regression_cluster: ['git revert', 'bisect bad', 'rerun ci'],
+  restart_thrash: ['kill -9', '^C', 'exit 137', 'reboot'],
+  context_nuke: ['[500k tokens]', 'FULL TRANSCRIPT', '<the whole repo>'],
+  unknown_error: ['undefined', 'NaN', '??', 'panic!'],
+  subagent_zap: ['✳'],
+};
+const CLUSTER_HASHES = ['a3f9c2', 'e4d3ec', '9b01f7', 'c524b2', '7ee787', 'd97757'];
+
 const KILL_WORDS: Record<string, string> = {
   timeout_blob: 'RESOLVED',
   hallucination_ghost: 'GROUNDED',
@@ -542,6 +556,18 @@ export class Run {
       return;
     }
 
+    // the payload: authored ammo, or (1 in 4) a fragment of the weapon's REAL source log line
+    const payload = (): string => {
+      const quote = slot.sourceLine.match(/"([^"]{6,})"/)?.[1];
+      if (quote && this.rng.chance(0.25)) {
+        // snap the fragment to word boundaries so ammo reads like words, not shrapnel
+        const words = quote.split(/\s+/).filter((w) => w.length > 0);
+        const wi = this.rng.int(0, Math.max(0, words.length - 2));
+        const frag = words.slice(wi, wi + 3).join(' ').slice(0, 16);
+        if (frag.length >= 4) return frag;
+      }
+      return this.rng.pick(PAYLOADS[slot.def.id] ?? PAYLOADS.unknown_error);
+    };
     const mk = (vx: number, vy: number): Projectile => ({
       x: a.x + a.facing * 14, y: a.y - 12,
       vx: vx * a.facing + jitter + (inWall ? this.rng.range(-50, 50) : 0),
@@ -550,6 +576,7 @@ export class Run {
       driftAx: slot.def.behavior === 'drift' ? this.rng.range(-60, 60) : 0,
       fuseTime: slot.def.behavior === 'fuse' ? 1.0 : -1,
       landed: false, bomblet: false, trail: [], age: 0,
+      label: payload(),
     });
     if (slot.def.behavior === 'burst') {
       for (let i = 0; i < 3; i++) this.projectiles.push(mk(300 + this.rng.range(-40, 40), -60 + this.rng.range(-40, 40)));
@@ -747,7 +774,7 @@ export class Run {
           this.projectiles.push({
             x: sa.x, y: sa.y, vx: (dx / len) * 300, vy: (dy / len) * 300,
             owner: 1, weaponId: 'subagent_zap', driftAx: 0, fuseTime: -1,
-            landed: false, bomblet: true, trail: [], age: 0,
+            landed: false, bomblet: true, trail: [], age: 0, label: '☓',
           });
         }
       } else {
@@ -775,7 +802,7 @@ export class Run {
             this.projectiles.push({
               x: sa.x, y: sa.y, vx: (dx / len) * 320, vy: (dy / len) * 320,
               owner: 0, weaponId: 'subagent_zap', driftAx: 0, fuseTime: -1,
-              landed: false, bomblet: true, trail: [], age: 0,
+              landed: false, bomblet: true, trail: [], age: 0, label: '✳',
             });
           }
         }
@@ -1066,7 +1093,7 @@ export class Run {
             this.projectiles.push({
               x: e.x, y: e.y - 10, vx: dx * 0.55, vy: -180,
               owner: 1, weaponId: 'timeout_mortar', driftAx: 0, fuseTime: 0.9,
-              landed: false, bomblet: false, trail: [], age: 0,
+              landed: false, bomblet: false, trail: [], age: 0, label: 'ETIMEDOUT',
             });
           }
           break;
@@ -1125,7 +1152,7 @@ export class Run {
             this.projectiles.push({
               x: e.x, y: e.y - 8, vx: (dx / len) * 260, vy: (dy / len) * 260 - 20,
               owner: 1, weaponId: 'tool_bolt', driftAx: 0, fuseTime: -1,
-              landed: false, bomblet: true, trail: [], age: 0,
+              landed: false, bomblet: true, trail: [], age: 0, label: 'EPERM',
             });
           }
           break;
@@ -1276,24 +1303,27 @@ export class Run {
     const statRoll = slot?.statRoll ?? 1;
     if (def.behavior === 'cluster' && !p.bomblet) {
       const rng = this.rng.fork('cl' + Math.round(p.x));
-      this.explodeAt(p.x, p.y, def.radius * 0.7, def.damage * statRoll * 0.7, def.id, directEnemy);
+      this.explodeAt(p.x, p.y, def.radius * 0.7, def.damage * statRoll * 0.7, def.id, directEnemy, p.label);
       const n = rng.int(3, 4);
       for (let i = 0; i < n; i++) {
         spawnInto.push({
           x: p.x, y: p.y - 6, vx: rng.range(-140, 140), vy: rng.range(-220, -120),
           owner: 0, weaponId: p.weaponId, driftAx: 0, fuseTime: -1,
           landed: false, bomblet: true, trail: [], age: 0,
+          label: rng.pick(CLUSTER_HASHES), // regressions split into commit hashes
         });
       }
       return;
     }
     const scale = p.bomblet ? 0.6 : 1;
-    this.explodeAt(p.x, p.y, def.radius * scale, def.damage * statRoll * scale, def.id, directEnemy);
+    this.explodeAt(p.x, p.y, def.radius * scale, def.damage * statRoll * scale, def.id, directEnemy, p.label);
   }
 
-  private explodeAt(x: number, y: number, radius: number, damage: number, weaponId: string, directEnemy: Enemy | null = null): void {
+  private explodeAt(x: number, y: number, radius: number, damage: number, weaponId: string, directEnemy: Enemy | null = null, label?: string): void {
     this.terrain.carve(x, y, Math.min(radius, 60));
-    this.spawnParticles(x, y, Math.min(30, Math.round(radius * 0.6)), '#d97757');
+    // impacts scatter the payload's own characters — your words, everywhere
+    this.spawnParticles(x, y, Math.min(30, Math.round(radius * 0.6)), '#d97757',
+      label ? [...label.replace(/\s/g, '')] : undefined);
     this.emit('explosion', { radius: Math.round(radius), weapon: weaponId, x: Math.round(x), y: Math.round(y) });
     const dmgMult = this.avatar.damageMult;
     if (directEnemy) this.damageEnemy(directEnemy, Math.round(damage * 1.15 * dmgMult), true);
@@ -1332,8 +1362,10 @@ export class Run {
     this.dirty++;
   }
 
-  private spawnParticles(x: number, y: number, n: number, color: string): void {
-    const chars = ['E', 'R', '0', '1', '▓', '░', '!', '?'];
+  private spawnParticles(x: number, y: number, n: number, color: string, charsOverride?: string[]): void {
+    const chars = charsOverride && charsOverride.length > 0
+      ? charsOverride
+      : ['E', 'R', '0', '1', '▓', '░', '!', '?'];
     const rng = this.rng.fork('pt' + this.particles.length + Math.round(x));
     for (let i = 0; i < n; i++) {
       const ang = rng.range(0, Math.PI * 2);
@@ -1341,7 +1373,7 @@ export class Run {
       this.particles.push({
         x, y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 50,
         life: rng.range(0.4, 1.1), maxLife: 1.1,
-        char: rng.pick(chars), color, size: rng.range(8, 13),
+        char: charsOverride ? chars[i % chars.length] : rng.pick(chars), color, size: rng.range(8, 13),
       });
     }
   }

@@ -201,22 +201,53 @@ export class UI {
     this.drawAvatar(ctx, run);
     this.drawSubagents(ctx, run);
 
-    // projectiles
+    // projectiles: the payload IS the projectile — text in flight, with a
+    // comet-trail of its own characters
     for (const proj of run.projectiles) {
-      ctx.strokeStyle = proj.owner === 0 ? 'rgba(126,231,135,0.35)' : 'rgba(227,179,65,0.4)';
-      ctx.lineWidth = 1.5 / this.camZoom;
-      ctx.beginPath();
-      for (let i = 0; i < proj.trail.length; i++) {
-        const t = proj.trail[i];
-        if (i === 0) ctx.moveTo(t.x, t.y); else ctx.lineTo(t.x, t.y);
-      }
-      ctx.stroke();
-      if (proj.landed) {
-        const blink = Math.sin(this.time * 20) > 0;
-        ctx.fillStyle = blink ? '#f47067' : '#e3b341';
-        ctx.beginPath(); ctx.arc(proj.x, proj.y, 4, 0, Math.PI * 2); ctx.fill();
+      const color = proj.owner === 0 ? '#d3f9d8' : '#ffe2a8';
+      if (proj.label) {
+        const chars = [...proj.label.replace(/\s/g, '')];
+        ctx.font = '9px monospace';
+        for (let i = Math.max(0, proj.trail.length - 8); i < proj.trail.length; i++) {
+          const t = proj.trail[i];
+          const fade = (i - (proj.trail.length - 8)) / 8;
+          ctx.globalAlpha = Math.max(0.06, fade * 0.5);
+          ctx.fillStyle = proj.owner === 0 ? '#7ee787' : '#e3b341';
+          ctx.fillText(chars[i % chars.length], t.x, t.y);
+        }
+        ctx.globalAlpha = 1;
+        if (proj.landed) {
+          // fused payload sits there, blinking, thinking about detonating
+          const blink = Math.sin(this.time * 20) > 0;
+          ctx.fillStyle = blink ? '#f47067' : '#e3b341';
+          ctx.font = 'bold 11px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText(proj.label, proj.x, proj.y - 6);
+          ctx.textAlign = 'left';
+        } else {
+          // the payload text flies oriented along its velocity
+          ctx.save();
+          ctx.translate(proj.x, proj.y);
+          ctx.rotate(Math.atan2(proj.vy, proj.vx) * 0.35); // partial tilt — readable but dynamic
+          ctx.font = 'bold 11px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = 'rgba(0,0,0,0.6)';
+          ctx.fillText(proj.label, 1, 1);
+          ctx.fillStyle = color;
+          ctx.fillText(proj.label, 0, 0);
+          ctx.restore();
+          ctx.textAlign = 'left';
+        }
       } else {
-        ctx.fillStyle = proj.owner === 0 ? '#d3f9d8' : '#ffe2a8';
+        ctx.strokeStyle = proj.owner === 0 ? 'rgba(126,231,135,0.35)' : 'rgba(227,179,65,0.4)';
+        ctx.lineWidth = 1.5 / this.camZoom;
+        ctx.beginPath();
+        for (let i = 0; i < proj.trail.length; i++) {
+          const t = proj.trail[i];
+          if (i === 0) ctx.moveTo(t.x, t.y); else ctx.lineTo(t.x, t.y);
+        }
+        ctx.stroke();
+        ctx.fillStyle = proj.landed ? '#f47067' : color;
         ctx.beginPath(); ctx.arc(proj.x, proj.y, 3, 0, Math.PI * 2); ctx.fill();
       }
     }
@@ -616,7 +647,7 @@ export class UI {
       `<span><span class="sb-key">c</span> /compact${run.compactCd > 0 ? ` (${Math.ceil(run.compactCd)}s)` : ''}</span>` +
       `<span><span class="sb-key">[ ]</span>/<span class="sb-key">1-9</span> weapons</span>` +
       `<span><span class="sb-key">m</span> mute</span>` +
-      `<span><span class="sb-key">v</span> voice</span>` +
+      `<span><span class="sb-key">v</span> voice · <span class="sb-key">⇧v</span> next voice</span>` +
       `<span class="sb-right">aiaio session-run · ${run.kills} errors resolved · ${run.ctx.compactions}⚡</span>`;
   }
 

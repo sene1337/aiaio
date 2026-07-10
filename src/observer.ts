@@ -37,6 +37,14 @@ const LINES: Record<string, Pool> = {
     'A context nuke. Twenty-five percent of your memory, gone, on purpose. I admire the honesty.',
     'That explosion was mostly aimed at yourself, statistically speaking.',
   ],
+  nuke_2: [
+    'A second nuke. The first one was a choice. This is a lifestyle.',
+    'Two nukes. Your context window is now more of a suggestion.',
+  ],
+  nuke_3: [
+    'Nuke number {n}. I have stopped logging these as anomalies.',
+    '{n} nukes. At this point the wall is basically a co-author.',
+  ],
   compaction_1: [
     'First compaction. The summary is fine. The summary is always fine.',
     'You have been summarized. Some of that was probably important.',
@@ -120,6 +128,7 @@ export class Observer {
   private lastProgressAt = 0;
   private wallWarned = false;
   private voice: SpeechSynthesisVoice | null = null;
+  private nukeCount = 0;
 
   bindSink(sink: (line: string) => void): void {
     this.sink = sink;
@@ -139,13 +148,38 @@ export class Observer {
     this.lastByEvent.clear();
     this.lastProgressAt = 0;
     this.wallWarned = false;
+    this.nukeCount = 0;
     this.remark('run_start', {}, 2);
+  }
+
+  /** Shift+V: cycle through the system's English voices; speaks a sample. */
+  cycleVoice(): string {
+    if (!('speechSynthesis' in window)) return 'no speech synthesis available';
+    const voices = window.speechSynthesis.getVoices().filter((v) => v.lang.startsWith('en'));
+    if (voices.length === 0) return 'no voices loaded yet — try again in a second';
+    const currentName = localStorage.getItem('aiaio-voice-name') ?? this.voice?.name ?? '';
+    const idx = voices.findIndex((v) => v.name === currentName);
+    this.voice = voices[(idx + 1) % voices.length];
+    localStorage.setItem('aiaio-voice-name', this.voice.name);
+    // sample it immediately, interrupting anything in-flight
+    window.speechSynthesis.cancel();
+    const wasOn = this.voiceOn;
+    this.voiceOn = true;
+    this.speak(`Voice check. I will be judging you as ${this.voice.name.replace(/\(.*\)/, '').trim()}.`);
+    this.voiceOn = wasOn;
+    return this.voice.name;
   }
 
   onEvent(type: string, data: Record<string, unknown>): void {
     switch (type) {
       case 'explosion':
-        if (data.weapon === 'context_nuke') this.remark('nuke', {}, 2);
+        if (data.weapon === 'context_nuke') {
+          this.nukeCount++;
+          const pool = this.nukeCount >= 3 ? 'nuke_3' : this.nukeCount === 2 ? 'nuke_2' : 'nuke';
+          // each escalation tier is its own gap key — repeats don't get muted,
+          // they get judged. priority 3: self-nuking always deserves comment.
+          this.remark(pool, { n: this.nukeCount }, 3);
+        }
         break;
       case 'compaction': {
         const n = Number(data.n) || 1;
@@ -238,7 +272,10 @@ export class Observer {
       if (synth.speaking) return; // never talk over yourself; the text is in the transcript
       if (!this.voice) {
         const voices = synth.getVoices();
-        this.voice = voices.find((v) => /Samantha|Daniel|Alex|Karen|Moira/.test(v.name))
+        const savedName = localStorage.getItem('aiaio-voice-name');
+        this.voice = (savedName ? voices.find((v) => v.name === savedName) : undefined)
+          ?? voices.find((v) => /Premium|Enhanced/.test(v.name) && v.lang.startsWith('en'))
+          ?? voices.find((v) => /Samantha|Daniel|Alex|Karen|Moira/.test(v.name))
           ?? voices.find((v) => v.lang.startsWith('en')) ?? null;
       }
       const u = new SpeechSynthesisUtterance(text);

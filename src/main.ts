@@ -195,6 +195,12 @@ function wireKeyboard(): void {
       qa.event('mute_toggle', { muted });
       return;
     }
+    if ((e.key === 'v' || e.key === 'V') && e.shiftKey) {
+      const name = observer.cycleVoice();
+      run?.pushLog(`☏ observer voice → ${name}`);
+      qa.event('voice_cycle', { name });
+      return;
+    }
     if (e.key === 'v' || e.key === 'V') {
       const on = observer.toggleVoice();
       run?.pushLog(`☏ observer voice ${on ? 'on' : 'off — the judgment continues in text'}`);
