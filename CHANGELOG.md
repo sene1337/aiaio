@@ -5,6 +5,15 @@ All notable changes to AIAIO are documented here. Format follows
 [semver](https://semver.org/) (minor = new player-facing capability,
 patch = fixes and copy).
 
+## [2.3.1] — 2026-07-10
+
+### Fixed
+- Enrichment now tolerates local models (ollama / LM Studio) that emit bare
+  control characters inside JSON strings — discovered live when a Hermes
+  agent's qwen2.5:14b enrichment run failed against strict JSON.parse.
+- Hermes session scanning reads the live `~/.hermes/state.db` (newer Hermes
+  layout) instead of only the legacy `state/state.db` and stale snapshots.
+
 ## [2.3.0] — 2026-07-10
 
 ### Added
@@ -76,6 +85,7 @@ The artillery duel is retired: the session IS the level.
 - Initial artillery prototype: turn-based duel, SessionCard schema, extractor,
   task queue, compaction. Retired same day for being a Scorched Earth clone.
 
+[2.3.1]: https://github.com/sene1337/aiaio/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/sene1337/aiaio/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/sene1337/aiaio/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/sene1337/aiaio/compare/v2.0.0...v2.1.0

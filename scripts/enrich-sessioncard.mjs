@@ -70,11 +70,44 @@ ${excerpt}
 """`;
 }
 
+/**
+ * Escape bare control characters inside string literals. Local models
+ * (ollama/LM Studio) often emit literal newlines inside JSON strings, which
+ * strict JSON.parse rejects; whitespace between tokens is left alone.
+ */
+function sanitizeControlChars(s) {
+  let out = '';
+  let inStr = false;
+  let esc = false;
+  for (const ch of s) {
+    if (!inStr) {
+      if (ch === '"') inStr = true;
+      out += ch;
+      continue;
+    }
+    if (esc) { out += ch; esc = false; continue; }
+    if (ch === '\\') { out += ch; esc = true; continue; }
+    if (ch === '"') { inStr = false; out += ch; continue; }
+    const code = ch.charCodeAt(0);
+    if (code < 0x20) {
+      out += code === 10 ? '\\n' : code === 9 ? '\\t' : code === 13 ? '\\r' : ' ';
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
 function extractJson(text) {
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
   if (start === -1 || end <= start) throw new Error('no JSON object in model output');
-  return JSON.parse(text.slice(start, end + 1));
+  const slice = text.slice(start, end + 1);
+  try {
+    return JSON.parse(slice);
+  } catch {
+    return JSON.parse(sanitizeControlChars(slice));
+  }
 }
 
 /** whitelist merge: narrative fields only, re-redacted and capped */

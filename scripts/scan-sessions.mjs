@@ -64,7 +64,11 @@ function findJsonl(dir, depth = 0, out = [], tally = null) {
  */
 function dumpHermesSessions() {
   const outDir = join(process.cwd(), 'session-dumps', 'hermes');
-  const candidates = [join(homedir(), '.hermes', 'state', 'state.db')];
+  // newer Hermes keeps the live db at ~/.hermes/state.db; older at state/state.db
+  const candidates = [
+    join(homedir(), '.hermes', 'state.db'),
+    join(homedir(), '.hermes', 'state', 'state.db'),
+  ];
   try {
     const snapRoot = join(homedir(), '.hermes', 'state-snapshots');
     for (const d of readdirSync(snapRoot).sort().reverse().slice(0, 1)) {
