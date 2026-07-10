@@ -83,9 +83,11 @@ function main() {
           .sort()
           .pop();
         if (enriched) file = enriched;
-        // raw error counts mislead (spawns cap at √count≤5/category) — show real threat
-        const enemies = (card.errors ?? [])
-          .reduce((s, e) => s + Math.max(1, Math.min(5, Math.ceil(Math.sqrt(e.count ?? 1)))), 0);
+        // real threat estimate: mirrors the ramped global budget in
+        // src/enemies.ts allocateSpawns() — keep the curve in sync
+        const errTotal = (card.errors ?? []).reduce((s, e) => s + Math.max(1, e.count ?? 1), 0);
+        const enemies = errTotal === 0 ? 0
+          : Math.max(4, Math.min(30, Math.round(4 + 4.5 * Math.log2(1 + errTotal / 6))));
         index.push({
           file,
           session_id: card.session_id,

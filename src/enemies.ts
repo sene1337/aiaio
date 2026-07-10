@@ -85,6 +85,49 @@ export function categoryToEnemy(category: string): EnemyKind {
   return 'regression_splitter'; // unknown errors regress; it's tradition
 }
 
+/**
+ * Spawn allocation with a real difficulty RAMP (playtest finding: √count capped
+ * at 5/category saturates by ~25 errors, making levels bimodal easy/hard).
+ * Hostile enemies come from a global budget on a log curve of total errors,
+ * distributed proportionally (per-category cap 8, min 1). Friendly recovery
+ * spawns keep the old gentle √ formula.
+ * NOTE: scripts/scan-sessions.mjs duplicates the budget curve for the gallery
+ * display — keep them in sync.
+ */
+export function allocateSpawns(
+  errors: Array<{ category: string; count: number }>,
+): number[] {
+  const hostileIdx = errors.map((e, i) => ({ ...e, i, kind: categoryToEnemy(e.category) }))
+    .filter((e) => !ENEMY_DEFS[e.kind].friendly);
+  const out = errors.map((e) => {
+    const kind = categoryToEnemy(e.category);
+    return ENEMY_DEFS[kind].friendly ? Math.max(1, Math.min(4, Math.ceil(Math.sqrt(e.count)))) : 0;
+  });
+  const total = hostileIdx.reduce((s, e) => s + Math.max(1, e.count), 0);
+  if (total === 0) return out;
+  const budget = Math.max(4, Math.min(30, Math.round(4 + 4.5 * Math.log2(1 + total / 6))));
+  // proportional allocation: min 1, cap 8 per category
+  let allocated = 0;
+  for (const e of hostileIdx) {
+    const n = Math.max(1, Math.min(8, Math.round((Math.max(1, e.count) / total) * budget)));
+    out[e.i] = n;
+    allocated += n;
+  }
+  // trim overshoot from the biggest allocations; top up undershoot the same way
+  const byAlloc = () => hostileIdx.slice().sort((a, b) => out[b.i] - out[a.i]);
+  while (allocated > budget) {
+    const target = byAlloc().find((e) => out[e.i] > 1);
+    if (!target) break;
+    out[target.i]--; allocated--;
+  }
+  while (allocated < budget) {
+    const target = byAlloc().reverse().find((e) => out[e.i] < 8);
+    if (!target) break;
+    out[target.i]++; allocated++;
+  }
+  return out;
+}
+
 /** live enemy instance */
 export interface Enemy {
   def: EnemyDef;

@@ -14,7 +14,7 @@ import {
 } from './context';
 import { rollUpdate, UpdateTarget } from './updates';
 import { AgentLoadout, SessionCard } from './session';
-import { Enemy, EnemyKind, makeEnemy, categoryToEnemy, ENEMY_DEFS } from './enemies';
+import { Enemy, EnemyKind, makeEnemy, categoryToEnemy, ENEMY_DEFS, allocateSpawns } from './enemies';
 import { hashString } from './rng';
 
 export const RUN_COST = {
@@ -294,13 +294,19 @@ export class Run {
       this.moments.push({ x: Math.round(width * frac), kind: m.kind ?? 'note', text: String(m.text).slice(0, 110), seen: false });
     }
 
-    // enemies from the card's real errors, placed along the timeline
+    // enemies from the card's real errors, placed along the timeline;
+    // spawn counts come from the ramped global budget (see allocateSpawns)
     const errors = (this.card.errors ?? []).filter((e) => e && (e.category || e.type));
-    for (const err of errors) {
+    const spawnAlloc = allocateSpawns(errors.map((e) => ({
+      category: e.category || e.type || 'unknown', count: Math.max(1, Math.floor(e.count ?? 1)),
+    })));
+    for (let ei = 0; ei < errors.length; ei++) {
+      const err = errors[ei];
       const cat = err.category || err.type || 'unknown';
       const kind = categoryToEnemy(cat);
       const count = Math.max(1, Math.floor(err.count ?? 1));
-      const spawnN = Math.max(1, Math.min(5, Math.ceil(Math.sqrt(count))));
+      const spawnN = spawnAlloc[ei];
+      if (spawnN <= 0) continue;
       const source = err.sample ? `${cat} ×${count} — "${err.sample.slice(0, 70)}"` : `${cat} ×${count}`;
       const realAts = (err.at ?? []).filter((a) => a > 0.12); // not right on spawn
       for (let i = 0; i < spawnN; i++) {
@@ -951,13 +957,13 @@ export class Run {
     return null;
   }
 
-  damageEnemy(e: Enemy, dmg: number, direct: boolean): void {
+  damageEnemy(e: Enemy, dmg: number, direct: boolean, by: 'player' | 'sub' = 'player'): void {
     if (e.dead) return;
     e.hp -= dmg;
     if (e.hp <= 0) {
       e.dead = true;
       this.kills++;
-      this.spawnParticles(e.x, e.y, 20, e.def.color);
+      this.spawnParticles(e.x, e.y, by === 'sub' ? 10 : 20, e.def.color);
       // letter-scatter: the enemy's own name flies apart
       const nameRng = this.rng.fork('scatter' + Math.round(e.x));
       const chars = [...e.def.name];
@@ -970,17 +976,23 @@ export class Run {
           char: chars[i], color: e.def.color, size: e.mini ? 9 : 12,
         });
       }
-      // kill-word popup + hitstop (bigger on a direct hit)
+      // kill feedback: YOUR kills get the spectacle; a subagent's kill is a
+      // modest "delegated" note — the intern doesn't get the fireworks budget
       const word = KILL_WORDS[e.def.kind] ?? 'RESOLVED';
-      if (word) {
-        this.popups.push({ x: e.x, y: e.y - 26, text: word, ttl: 0.9, maxTtl: 0.9, big: false, color: e.def.color });
-        if (direct) {
-          this.popups.push({ x: e.x, y: e.y - 48, text: '⊕ DIRECT HIT', ttl: 1.1, maxTtl: 1.1, big: true, color: '#dedad2' });
+      if (by === 'sub') {
+        this.popups.push({ x: e.x, y: e.y - 26, text: '✳ delegated', ttl: 0.8, maxTtl: 0.8, big: false, color: '#7ee787' });
+        this.pushLog(`✳ subagent resolved ${e.def.name}${e.mini ? ' (mini)' : ''}`);
+      } else {
+        if (word) {
+          this.popups.push({ x: e.x, y: e.y - 26, text: word, ttl: 0.9, maxTtl: 0.9, big: false, color: e.def.color });
+          if (direct) {
+            this.popups.push({ x: e.x, y: e.y - 48, text: '⊕ DIRECT HIT', ttl: 1.1, maxTtl: 1.1, big: true, color: '#dedad2' });
+          }
         }
+        this.hitstop = Math.max(this.hitstop, direct ? 0.085 : 0.03);
+        this.pushLog(`✔ ${word.toLowerCase() || 'resolved'}: ${e.def.name}${e.mini ? ' (mini)' : ''}${direct ? ' — direct hit' : ''}`);
       }
-      this.hitstop = Math.max(this.hitstop, direct ? 0.085 : 0.03);
-      this.pushLog(`✔ ${word.toLowerCase() || 'resolved'}: ${e.def.name}${e.mini ? ' (mini)' : ''}${direct ? ' — direct hit' : ''}`);
-      this.emit('kill', { enemy: e.def.kind, mini: e.mini, direct, x: e.x, y: e.y });
+      this.emit('kill', { enemy: e.def.kind, mini: e.mini, direct, x: e.x, y: e.y, by });
       if (e.def.kind === 'regression_splitter' && !e.mini) {
         for (let i = 0; i < 2; i++) {
           const m = makeEnemy('regression_splitter', e.x + this.rng.range(-24, 24), e.y - 8, e.sourceLine, true);
@@ -1195,12 +1207,13 @@ export class Run {
     }
     // player ordnance
     if (p.weaponId === 'subagent_zap') {
-      // loyal subagent zap: small, precise, no terrain damage
+      // loyal subagent zap: small, precise, no terrain damage — and its kills
+      // are attributed to the sub (modest effect, no player spectacle)
       this.spawnParticles(p.x, p.y, 5, '#7ee787');
-      if (directEnemy) this.damageEnemy(directEnemy, 5, true);
+      if (directEnemy) this.damageEnemy(directEnemy, 5, true, 'sub');
       else {
         const near = this.enemyAt(p.x, p.y, 12);
-        if (near) this.damageEnemy(near, 5, false);
+        if (near) this.damageEnemy(near, 5, false, 'sub');
       }
       return;
     }

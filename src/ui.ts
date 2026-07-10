@@ -8,7 +8,7 @@ import { garble } from './context';
 import { Rng } from './rng';
 import { AgentLoadout, SessionCard } from './session';
 import { WEAPONS } from './weapons';
-import { ENEMY_DEFS, categoryToEnemy, EnemyKind } from './enemies';
+import { ENEMY_DEFS, categoryToEnemy, EnemyKind, allocateSpawns } from './enemies';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -70,6 +70,11 @@ export class UI {
       case 'kill': {
         const x = Number(data.x) || 0, y = Number(data.y) || 0;
         const direct = data.direct === true;
+        if (data.by === 'sub') {
+          // delegated kill: one small soft green ring, no flash, no shake
+          this.rings.push({ x, y, maxR: 26, ttl: 0.35, maxTtl: 0.35, color: '#7ee787' });
+          break;
+        }
         this.rings.push({ x, y, maxR: direct ? 64 : 40, ttl: 0.45, maxTtl: 0.45, color: '#dedad2' });
         if (direct) {
           this.rings.push({ x, y, maxR: 96, ttl: 0.6, maxTtl: 0.6, color: '#e3b341' });
@@ -786,11 +791,14 @@ export class UI {
     const levelCol = document.createElement('div');
     levelCol.className = 'briefing-col p1';
     const errors = (card.errors ?? []).filter((e) => e && (e.category || e.type));
-    const roster = errors.map((err) => {
+    const briefAlloc = allocateSpawns(errors.map((e) => ({
+      category: e.category || e.type || 'unknown', count: Math.max(1, Math.floor(e.count ?? 1)),
+    })));
+    const roster = errors.map((err, ei) => {
       const kind = categoryToEnemy((err.category || err.type || 'unknown')) as EnemyKind;
       const def = ENEMY_DEFS[kind];
       const count = Math.max(1, Math.floor(err.count ?? 1));
-      const spawnN = Math.max(1, Math.min(5, Math.ceil(Math.sqrt(count))));
+      const spawnN = briefAlloc[ei];
       return `<li>${def.glyph} ${def.name} ×${spawnN}<span class="wsrc">⎿ ${escapeHtml(err.category || err.type || '')} ×${count}${err.sample ? ` — "${escapeHtml(err.sample.slice(0, 60))}"` : ''}</span><span class="wsrc dim">${escapeHtml(def.flavor)}</span></li>`;
     }).join('') || '<li class="dim">no errors on record — a quiet session (three regressions will attend anyway)</li>';
     levelCol.innerHTML = `

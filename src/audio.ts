@@ -91,6 +91,12 @@ class Audio {
 
   hurt(): void { this.tone(220, 70, 0.14, 'sawtooth', 0.8); this.noise(0.07, 1200, 0.5); }
 
+  /** a subagent's kill: polite little chirp — the intern closed a ticket */
+  subKill(): void {
+    this.tone(740, 740, 0.05, 'triangle', 0.35);
+    this.tone(988, 988, 0.06, 'triangle', 0.3, 0.06);
+  }
+
   /** a kill deserves punctuation; a DIRECT-HIT kill deserves an exclamation */
   kill(direct: boolean): void {
     this.tone(130, 42, 0.22, 'sine', 1);          // thump
