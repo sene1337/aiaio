@@ -122,6 +122,7 @@ function main() {
   mkdirSync(outDir, { recursive: true });
 
   const index = [];
+  const sources = {}; // card file -> absolute source log path (for auto-enrich)
   const usedNames = new Set();
   const seenBasenames = new Set(); // sessions get copied around — scan each once
   for (const root of roots) {
@@ -148,11 +149,17 @@ function main() {
         card.harness = harness;
         card.when = new Date(f.mtime).toISOString().slice(0, 10);
         if ((card.message_count ?? 0) < 10) continue; // skip trivial stubs
+        // QUALITY GATE (Brad's call): only sessions with REAL extractable human
+        // work become levels. Cron/heartbeat/machine runs and ask-less sessions
+        // are excluded entirely — the game never fakes personalization.
+        if (/^(cron_|routine|routing-eval|heartbeat|request_dump|healthcheck)/i.test(basename(f.path))) continue;
+        if (!card.tasks || card.tasks.length === 0) continue;
         let slug = card.session_id.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 60);
         while (usedNames.has(slug)) slug += '-2';
         usedNames.add(slug);
         let file = `${slug}.json`;
         writeFileSync(join(outDir, file), JSON.stringify(card, null, 2) + '\n');
+        sources[file] = f.path;
         // if this session has been agent-enriched (see docs/ENRICH.md), the gallery
         // gets that version — matched by session stem, since the content hash
         // suffix changes whenever the log grows
@@ -190,6 +197,12 @@ function main() {
   }
   index.sort((a, b) => b.mtime - a.mtime);
   writeFileSync(join(outDir, 'index.json'), JSON.stringify(index, null, 2) + '\n');
+  // card-file -> source-log mapping for dev-mode auto-enrichment (gitignored;
+  // absolute paths never go into shareable cards)
+  try {
+    mkdirSync(join(process.cwd(), 'qa-logs'), { recursive: true });
+    writeFileSync(join(process.cwd(), 'qa-logs', 'sources.json'), JSON.stringify(sources, null, 2) + '\n');
+  } catch { /* best effort */ }
   console.error(`\nwrote ${index.length} card(s) + index.json to public/cards/`);
   console.error('NOTE: cards now include short REDACTED snippets of your actual prompts');
   console.error('(tasks/goal/moments) — skim public/cards/*.json before sharing any of them.');

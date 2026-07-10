@@ -110,30 +110,47 @@ export class Terrain {
 
   /** carve a crater: update mask + rendered canvas, leave a scorched rim */
   carve(cx: number, cy: number, r: number): void {
+    // DATA CORRUPTION, not artillery craters: terrain is deleted in blocky
+    // 6px cells with jittered ragged edges (a chunk of the buffer got freed),
+    // and surviving edge cells keep faint corrupted-glyph residue.
+    const CELL = 6;
     const r2 = r * r;
-    const x0 = Math.max(0, Math.floor(cx - r)), x1 = Math.min(this.width - 1, Math.ceil(cx + r));
-    const y0 = Math.max(0, Math.floor(cy - r)), y1 = Math.min(this.height - 1, Math.ceil(cy + r));
-    for (let y = y0; y <= y1; y++) {
-      for (let x = x0; x <= x1; x++) {
-        const dx = x - cx, dy = y - cy;
-        if (dx * dx + dy * dy <= r2) this.mask[y * this.width + x] = 0;
-      }
-    }
     const ctx = this.ctx as CanvasRenderingContext2D;
+    const seed = new Rng(((Math.round(cx) * 7919 + Math.round(cy)) >>> 0) || 1);
+    const edgeCells: Array<{ x: number; y: number }> = [];
+
     ctx.save();
     ctx.globalCompositeOperation = 'destination-out';
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fill();
+    const c0x = Math.floor((cx - r) / CELL), c1x = Math.ceil((cx + r) / CELL);
+    const c0y = Math.floor((cy - r) / CELL), c1y = Math.ceil((cy + r) / CELL);
+    for (let gy = c0y; gy <= c1y; gy++) {
+      for (let gx = c0x; gx <= c1x; gx++) {
+        const px = gx * CELL + CELL / 2, py = gy * CELL + CELL / 2;
+        const d2 = (px - cx) * (px - cx) + (py - cy) * (py - cy);
+        if (d2 > r2) continue;
+        const edge = d2 > r2 * 0.55;
+        // ~40% of rim cells survive, making the hole blocky and ragged
+        if (edge && seed.chance(0.4)) { edgeCells.push({ x: px, y: py }); continue; }
+        for (let y = Math.max(0, gy * CELL); y < Math.min(this.height, (gy + 1) * CELL); y++) {
+          for (let x = Math.max(0, gx * CELL); x < Math.min(this.width, (gx + 1) * CELL); x++) {
+            this.mask[y * this.width + x] = 0;
+          }
+        }
+        ctx.fillRect(gx * CELL, gy * CELL, CELL, CELL);
+      }
+    }
     ctx.restore();
-    // scorched rim on remaining solid pixels just outside the crater
+
+    // corrupted residue on surviving edge cells — freed memory, not scorch
     ctx.save();
     ctx.globalCompositeOperation = 'source-atop';
-    ctx.strokeStyle = 'rgba(255,120,40,0.5)';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r + 1, 0, Math.PI * 2);
-    ctx.stroke();
+    ctx.font = '7px monospace';
+    const glyphs = ['▒', '░', '0', '1', 'x', '?'];
+    for (const cell of edgeCells) {
+      if (!this.solidAt(cell.x, cell.y)) continue;
+      ctx.fillStyle = seed.chance(0.6) ? 'rgba(244,112,103,0.5)' : 'rgba(126,231,135,0.35)';
+      ctx.fillText(seed.pick(glyphs), cell.x - 3, cell.y + 3);
+    }
     ctx.restore();
   }
 }

@@ -75,6 +75,21 @@ const PAYLOADS: Record<string, string[]> = {
 };
 const CLUSTER_HASHES = ['a3f9c2', 'e4d3ec', '9b01f7', 'c524b2', '7ee787', 'd97757'];
 
+// flight visuals: clean animated symbol streams (words are for impact splashes)
+const FLIGHT: Record<string, { head: string[]; trail: string[] }> = {
+  debug_zap: { head: ['»'], trail: ['»', '›', '·'] },
+  timeout_mortar: { head: ['⏳', '⌛'], trail: ['○', '·'] },
+  hallucination_missile: { head: ['?', '¿'], trail: ['?', '·', ' '] },
+  regression_cluster: { head: ['#'], trail: ['#', '＃', '·'] },
+  restart_thrash: { head: ['↻', '↺'], trail: ['~', '·'] },
+  context_nuke: { head: ['█', '▓'], trail: ['▓', '▒', '░'] },
+  unknown_error: { head: ['⣾', '⣽', '⣻', '⢿', '⡿', '⣟', '⣯', '⣷'], trail: ['·'] },
+  subagent_zap: { head: ['✳'], trail: ['·'] },
+  tool_bolt: { head: ['⚙'], trail: ['·'] },
+  bomblet: { head: ['¤'], trail: ['·'] },
+  rogue_zap: { head: ['☓'], trail: ['·'] },
+};
+
 // awards of shame: spectacular failures deserve institutional recognition
 export interface Award { id: string; title: string; desc: string; line: string }
 const AWARDS: Record<string, Omit<Award, 'id'>> = {
@@ -329,6 +344,17 @@ export class Run {
 
   private buildLevel(width: number): void {
     const rng = this.rng.fork('level');
+    // interactables must not stack visually — nudge to >= 110px apart
+    const occupied: number[] = [];
+    const place = (x: number): number => {
+      let nx = Math.max(60, Math.min(width - 80, x));
+      let guard = 0;
+      while (occupied.some((ox) => Math.abs(ox - nx) < 110) && guard++ < 60) nx += 110;
+      nx = Math.min(width - 80, nx);
+      occupied.push(nx);
+      return nx;
+    };
+
     // task stations: at their REAL timeline positions when the card knows them,
     // else spread across the timeline in queue order
     const n = this.queue.tasks.length;
@@ -337,7 +363,7 @@ export class Run {
       const frac = typeof realAt === 'number'
         ? Math.max(0.08, Math.min(0.92, realAt))
         : 0.14 + (i + rng.range(0.1, 0.5)) * (0.72 / n);
-      const x = Math.round(width * frac);
+      const x = place(Math.round(width * frac));
       this.stations.push({ x, y: this.terrain.surfaceAt(x), taskIndex: i, workAccum: 0 });
     }
 
@@ -381,9 +407,10 @@ export class Run {
           'no errors on record — these three came anyway'));
       }
     }
-    // recoveries → extra friendly sprites
+    // recoveries → a couple of skittish friendly sprites (they flee — recovery
+    // is never where you need it)
     const recoveries = Math.floor(this.card.recoveries ?? 0);
-    for (let i = 0; i < Math.min(3, Math.ceil(recoveries / 2)); i++) {
+    for (let i = 0; i < Math.min(2, Math.ceil(recoveries / 3)); i++) {
       const x = Math.round(width * rng.range(0.25, 0.9));
       this.enemies.push(makeEnemy('recovery_sprite', x, this.terrain.surfaceAt(x) - rng.range(40, 90),
         `recoveries: ${recoveries} on record`));
@@ -392,16 +419,16 @@ export class Run {
     // patch crates from restarts + model_switches (risk rolls)
     const crateN = Math.max(1, Math.min(4, Math.floor((this.card.restarts ?? 0) + (this.card.model_switches ?? 0))));
     for (let i = 0; i < crateN; i++) {
-      const x = Math.round(width * rng.range(0.2, 0.88));
+      const x = place(Math.round(width * rng.range(0.2, 0.88)));
       this.crates.push({ x, y: this.terrain.surfaceAt(x) - 10, used: false, kind: 'patch' });
     }
     // one ◈ MODEL UPGRADE crate mid-to-late level — the "new model released" moment
-    const mx = Math.round(width * rng.range(0.5, 0.78));
+    const mx = place(Math.round(width * rng.range(0.5, 0.78)));
     this.crates.push({ x: mx, y: this.terrain.surfaceAt(mx) - 10, used: false, kind: 'model' });
 
     // the Task-tool permission terminal, early in the timeline: delegation
     // must be granted, not assumed
-    const px = Math.round(width * rng.range(0.09, 0.16));
+    const px = place(Math.round(width * rng.range(0.09, 0.16)));
     this.permTerminal = { x: px, y: this.terrain.surfaceAt(px), claimed: false };
   }
 
@@ -584,7 +611,8 @@ export class Run {
       return;
     }
     if (slot.def.behavior === 'task_attack') {
-      // solo repurpose: distract YOUR OWN errors — a real stun, visibly
+      // solo repurpose: distract YOUR OWN errors — a real stun, VISIBLY:
+      // an @here ping wave radiates out to the stun radius
       let stunned = 0;
       for (const e of this.enemies) {
         if (!e.dead && !e.def.friendly && Math.abs(e.x - a.x) < 420) {
@@ -592,8 +620,9 @@ export class Run {
           stunned++;
         }
       }
+      this.popups.push({ x: a.x, y: a.y - 44, text: '@here — quick question', ttl: 1.4, maxTtl: 1.4, big: false, color: '#e3b341' });
       this.pushLog(`📣 distraction barrage — ${stunned} error${stunned === 1 ? '' : 's'} stopped to read the ping`);
-      this.emit('distraction', { stunned });
+      this.emit('distraction', { stunned, x: a.x, y: a.y - 10 });
       return;
     }
     if (slot.def.behavior === 'hitscan') {
@@ -632,6 +661,7 @@ export class Run {
       fuseTime: slot.def.behavior === 'fuse' ? 1.0 : -1,
       landed: false, bomblet: false, trail: [], age: 0,
       label: payload(),
+      flight: FLIGHT[slot.def.id] ?? FLIGHT.unknown_error,
     });
     if (slot.def.behavior === 'burst') {
       for (let i = 0; i < 3; i++) this.projectiles.push(mk(300 + this.rng.range(-40, 40), -60 + this.rng.range(-40, 40)));
@@ -851,6 +881,7 @@ export class Run {
             x: sa.x, y: sa.y, vx: (dx / len) * 300, vy: (dy / len) * 300,
             owner: 1, weaponId: 'subagent_zap', driftAx: 0, fuseTime: -1,
             landed: false, bomblet: true, trail: [], age: 0, label: '☓',
+            flight: FLIGHT.rogue_zap,
           });
         }
       } else {
@@ -879,6 +910,7 @@ export class Run {
               x: sa.x, y: sa.y, vx: (dx / len) * 320, vy: (dy / len) * 320,
               owner: 0, weaponId: 'subagent_zap', driftAx: 0, fuseTime: -1,
               landed: false, bomblet: true, trail: [], age: 0, label: '✳',
+              flight: FLIGHT.subagent_zap,
             });
           }
         }
@@ -1174,6 +1206,7 @@ export class Run {
               x: e.x, y: e.y - 10, vx: dx * 0.55, vy: -180,
               owner: 1, weaponId: 'timeout_mortar', driftAx: 0, fuseTime: 0.9,
               landed: false, bomblet: false, trail: [], age: 0, label: 'ETIMEDOUT',
+              flight: FLIGHT.timeout_mortar,
             });
           }
           break;
@@ -1233,6 +1266,7 @@ export class Run {
               x: e.x, y: e.y - 8, vx: (dx / len) * 260, vy: (dy / len) * 260 - 20,
               owner: 1, weaponId: 'tool_bolt', driftAx: 0, fuseTime: -1,
               landed: false, bomblet: true, trail: [], age: 0, label: 'EPERM',
+              flight: FLIGHT.tool_bolt,
             });
           }
           break;
@@ -1249,6 +1283,11 @@ export class Run {
           break;
         case 'recovery_sprite':
           e.y += Math.sin(e.stateTimer * 3) * 14 * dt;
+          // skittish: it drifts away from you — corner it if you want it
+          if (dist < 260) {
+            e.x += Math.sign(e.x - a.x || 1) * 52 * dt;
+            e.x = Math.max(40, Math.min(this.terrain.width - 40, e.x));
+          }
           break;
       }
 
@@ -1265,8 +1304,8 @@ export class Run {
       if (dx * dx + dy * dy < 24 * 24) {
         if (e.def.friendly) {
           e.dead = true;
-          if (this.rng.chance(0.5)) { a.hp = Math.min(a.maxHp, a.hp + 18); this.pushLog('➕ recovery sprite: +18 hp — retry succeeded'); }
-          else { a.shield += 14; this.pushLog('➕ recovery sprite: +14 shield'); }
+          if (this.rng.chance(0.5)) { a.hp = Math.min(a.maxHp, a.hp + 10); this.pushLog('➕ recovery sprite: +10 hp — retry succeeded'); }
+          else { a.shield += 8; this.pushLog('➕ recovery sprite: +8 shield'); }
           this.emit('pickup', { kind: 'recovery' });
           this.dirty++;
         } else {
@@ -1391,6 +1430,7 @@ export class Run {
           owner: 0, weaponId: p.weaponId, driftAx: 0, fuseTime: -1,
           landed: false, bomblet: true, trail: [], age: 0,
           label: rng.pick(CLUSTER_HASHES), // regressions split into commit hashes
+          flight: FLIGHT.bomblet,
         });
       }
       return;
@@ -1404,6 +1444,10 @@ export class Run {
     // impacts scatter the payload's own characters — your words, everywhere
     this.spawnParticles(x, y, Math.min(30, Math.round(radius * 0.6)), '#d97757',
       label ? [...label.replace(/\s/g, '')] : undefined);
+    // …and if the payload was real words, they SPLASH legibly at the crater
+    if (label && label.length > 3) {
+      this.popups.push({ x, y: y - 18, text: `"${label}"`, ttl: 0.9, maxTtl: 0.9, big: false, color: '#a8a29a' });
+    }
     this.emit('explosion', { radius: Math.round(radius), weapon: weaponId, x: Math.round(x), y: Math.round(y) });
     const dmgMult = this.avatar.damageMult;
     if (directEnemy) this.damageEnemy(directEnemy, Math.round(damage * 1.15 * dmgMult), true);

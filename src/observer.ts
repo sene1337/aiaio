@@ -85,6 +85,12 @@ const LINES: Record<string, Pool> = {
     '"{task}" — shipped. Noting the date for the postmortem.',
     'One task down. The economy of this victory: questionable. The victory: real.',
     '"{task}" complete. Somewhere, a real version of you never finished this.',
+    '"{task}" done. Do not check the acceptance criteria. Keep moving.',
+    'Shipped. In this economy. Respect.',
+  ],
+  subagent_spawn_more: [
+    'Another one. The burn rate is now a lifestyle brand.',
+    'Two subagents. One of them is definitely updating its resume.',
   ],
   task_eaten: [
     'The wall ate "{task}". You were not using it anyway.',
@@ -106,6 +112,8 @@ const LINES: Record<string, Pool> = {
     'Exit code 137. The industry standard for "we do not talk about it".',
     'Process killed. The session, meanwhile, actually happened, and someone survived it.',
     'You died. In your defense, the level was your own fault.',
+    'Terminated. The tasks send their regards. From the queue. Where they remain.',
+    'Down you go. The wall did not even slow down to look.',
   ],
   death_repeat: [
     'That is death number {n} on this session. The errors are learning your name.',
@@ -124,9 +132,19 @@ const LINES: Record<string, Pool> = {
   ],
   update_bad: [
     'You installed an update and it made things worse. A rich tradition.',
+    'The patch notes said "improvements". The patch notes lied. They always lie.',
+    'Ah, the update gamble. The house won. The house is a changelog.',
+  ],
+  update_good: [
+    'The update actually helped. Frame this moment.',
+    'A net-positive patch. Statistically, you owe the universe one regression.',
+    'Buffed. Enjoy it before the next minor version.',
   ],
   model_upgrade: [
     'New model. Bigger context. Same you, though. That is the variable nobody patches.',
+    'Model upgraded. You can now remember your mistakes in higher resolution.',
+    'A bigger context window. The wall just got a bigger appetite too. Kidding. Mostly.',
+    'v{n}. They say the new one is smarter. They said that about the last one.',
   ],
   voluntary_compact: [
     'A voluntary compaction. Clean. Disciplined. Who are you and what did you do with the player.',
@@ -233,6 +251,13 @@ export class Observer {
     this.speak(line);
   }
 
+  /** bespoke per-session one-liners written by the player's own agent (dev mode) */
+  private sessionPack: string[] = [];
+
+  setSessionPack(lines: string[]): void {
+    this.sessionPack = lines.filter((l) => typeof l === 'string' && l.length > 4).slice(0, 12);
+  }
+
   /** the pre-game memory-lane roast (compositional; the LLM version replaces it when available) */
   briefingRoast(meta: RoastMeta): string[] {
     const slots = {
@@ -316,7 +341,7 @@ export class Observer {
         this.remark('perm_granted', {}, 2);
         break;
       case 'subagent_spawn':
-        this.remark('subagent_spawn', {}, 1);
+        this.remark(Number(data.alive) >= 2 ? 'subagent_spawn_more' : 'subagent_spawn', {}, 1);
         break;
       case 'subagent_corrupted':
         this.remark('subagent_corrupted', {}, 2);
@@ -340,10 +365,10 @@ export class Observer {
         }
         break;
       case 'update_install':
-        if (data.netBuff === false) this.remark('update_bad', {}, 1);
+        this.remark(data.netBuff === false ? 'update_bad' : 'update_good', {}, 2);
         break;
       case 'model_upgrade':
-        this.remark('model_upgrade', {}, 1);
+        this.remark('model_upgrade', { n: String(data.model ?? '?') }, 2);
         break;
       case 'kill':
         // occasional sarcastic cheer — direct hits by the PLAYER only
@@ -389,6 +414,13 @@ export class Observer {
     if (this.time - (this.lastByEvent.get(event) ?? -999) < EVENT_GAP_S) return;
     this.lastSpokeAt = this.time;
     this.lastByEvent.set(event, this.time);
+    // ambient events sometimes draw from the bespoke per-session pack instead
+    if (this.sessionPack.length > 0 && priority <= 1 && Math.random() < 0.35) {
+      const bespoke = this.sessionPack[Math.floor(Math.random() * this.sessionPack.length)];
+      this.sink(`☏ observer: ${bespoke}`);
+      this.speak(bespoke);
+      return;
+    }
     const line = fill(pick(pool), {
       ...slots,
       goal: this.ctx.goal ?? 'unclear, honestly',

@@ -67,6 +67,13 @@ export class UI {
       case 'compaction': this.glitchTtl = 1.0; this.shakeMag = Math.min(16, this.shakeMag + 9); break;
       case 'task_eaten': this.glitchTtl = Math.max(this.glitchTtl, 0.5); break;
       case 'subagent_corrupted': this.glitchTtl = Math.max(this.glitchTtl, 0.35); break;
+      case 'distraction': {
+        // the @here ping: a wave that radiates exactly to the stun radius
+        const x = Number(data.x) || 0, y = Number(data.y) || 0;
+        this.rings.push({ x, y, maxR: 420, ttl: 0.8, maxTtl: 0.8, color: '#e3b341' });
+        this.rings.push({ x, y, maxR: 300, ttl: 0.65, maxTtl: 0.8, color: 'rgba(227,179,65,0.5)' });
+        break;
+      }
       case 'kill': {
         const x = Number(data.x) || 0, y = Number(data.y) || 0;
         const direct = data.direct === true;
@@ -225,37 +232,34 @@ export class UI {
     // comet-trail of its own characters
     for (const proj of run.projectiles) {
       const color = proj.owner === 0 ? '#d3f9d8' : '#ffe2a8';
-      if (proj.label) {
-        const chars = [...proj.label.replace(/\s/g, '')];
-        ctx.font = '9px monospace';
-        for (let i = Math.max(0, proj.trail.length - 8); i < proj.trail.length; i++) {
+      if (proj.flight) {
+        // symbols fly: animated head glyph + a fading stream of trail glyphs
+        const fl = proj.flight;
+        ctx.font = '10px monospace';
+        for (let i = Math.max(0, proj.trail.length - 9); i < proj.trail.length; i++) {
           const t = proj.trail[i];
-          const fade = (i - (proj.trail.length - 8)) / 8;
-          ctx.globalAlpha = Math.max(0.06, fade * 0.5);
+          const back = proj.trail.length - 1 - i; // 0 = newest
+          const fade = 1 - back / 9;
+          ctx.globalAlpha = Math.max(0.05, fade * 0.55);
           ctx.fillStyle = proj.owner === 0 ? '#7ee787' : '#e3b341';
-          ctx.fillText(chars[i % chars.length], t.x, t.y);
+          ctx.fillText(fl.trail[Math.min(back, fl.trail.length - 1)], t.x, t.y);
         }
         ctx.globalAlpha = 1;
+        const head = fl.head[Math.floor(this.time * 10) % fl.head.length];
         if (proj.landed) {
-          // fused payload sits there, blinking, thinking about detonating
           const blink = Math.sin(this.time * 20) > 0;
           ctx.fillStyle = blink ? '#f47067' : '#e3b341';
-          ctx.font = 'bold 11px monospace';
+          ctx.font = 'bold 13px monospace';
           ctx.textAlign = 'center';
-          ctx.fillText(proj.label, proj.x, proj.y - 6);
+          ctx.fillText(head, proj.x, proj.y - 4);
           ctx.textAlign = 'left';
         } else {
-          // the payload text flies oriented along its velocity
-          ctx.save();
-          ctx.translate(proj.x, proj.y);
-          ctx.rotate(Math.atan2(proj.vy, proj.vx) * 0.35); // partial tilt — readable but dynamic
-          ctx.font = 'bold 11px monospace';
+          ctx.font = `bold ${proj.weaponId === 'context_nuke' ? 15 : 12}px monospace`;
           ctx.textAlign = 'center';
           ctx.fillStyle = 'rgba(0,0,0,0.6)';
-          ctx.fillText(proj.label, 1, 1);
+          ctx.fillText(head, proj.x + 1, proj.y + 1);
           ctx.fillStyle = color;
-          ctx.fillText(proj.label, 0, 0);
-          ctx.restore();
+          ctx.fillText(head, proj.x, proj.y);
           ctx.textAlign = 'left';
         }
       } else {

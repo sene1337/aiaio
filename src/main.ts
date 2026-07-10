@@ -106,7 +106,8 @@ async function loadGallery(): Promise<void> {
       buckets.forEach((b) => b.sort((a, x) => {
         const ca = isCleared(getProgress(a.session_id)) ? 0 : 1;
         const cx = isCleared(getProgress(x.session_id)) ? 0 : 1;
-        return ca - cx || difficulty(a) - difficulty(x);
+        // nostalgia bias: among equal difficulty, the OLDEST sessions lead
+        return ca - cx || difficulty(a) - difficulty(x) || (a.mtime ?? 0) - (x.mtime ?? 0);
       }));
 
       const clearedTotal = entries.filter((e) => isCleared(getProgress(e.session_id))).length;
@@ -170,6 +171,13 @@ async function loadGallery(): Promise<void> {
             try {
               const cardRes = await fetch(`./cards/${entry.file}`);
               setCard(parseSessionCard(await cardRes.text()), entry.file);
+              // dev mode: quietly ask YOUR agent to enrich this level for next time
+              if (import.meta.env.DEV) {
+                fetch('/__enrich', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ file: entry.file }),
+                }).catch(() => { /* enrichment is a bonus, never a blocker */ });
+              }
             } catch {
               $('card-status-0').textContent = `✕ could not load ${entry.file}`;
             }
@@ -276,6 +284,19 @@ function prepareRun(card: SessionCard): void {
         }
       })
       .catch(() => { /* compositional fallback speaks below */ });
+    // bespoke in-game one-liner pack, written by your agent for THIS session
+    fetch('/__quip', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: meta.sessionId + ':pack', data: meta }),
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('no pack'))))
+      .then(({ lines }: { lines: string[] }) => {
+        if (Array.isArray(lines) && run === thisRun) observer.setSessionPack(lines);
+      })
+      .catch(() => observer.setSessionPack([]));
+  } else {
+    observer.setSessionPack([]);
   }
   window.setTimeout(() => speakIfCurrent(composed), 6000);
 }

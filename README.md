@@ -135,10 +135,19 @@ exists. For private sessions, point `AIAIO_LLM_CMD` at a local model.
 
 ## `npm run scan` — your sessions become levels
 
-Auto-discovers agent session logs (`~/.claude/projects`, `~/.openclaw`,
-`~/.hermes`, or any root you pass), builds a SessionCard per recent session, and
-writes them to `public/cards/` — they appear as a pickable **gallery in the game
-menu**. No JSON hunting.
+Auto-discovers agent session logs (`~/.claude/projects`, `~/.openclaw` including
+archived agents, `~/.hermes` — whose SQLite history is dumped to JSONL
+automatically — or any root you pass), builds a SessionCard per session, and
+writes them to `public/cards/` — they appear as **THE VAULT**, the tiered
+campaign level-select. `--all` scans the entire archive; default takes the 12
+most recent per root.
+
+**Quality gate**: only sessions with real extractable human asks become levels.
+Cron jobs, heartbeats, and ask-less machine runs are excluded entirely — the
+game never fakes personalization. In dev mode, selecting a level also quietly
+asks YOUR agent (claude -p / AIAIO_LLM_CMD) to enrich it in the background:
+bespoke roast, per-session Observer one-liners, and rewritten tasks land in the
+cache for every later play.
 
 - Read-and-aggregate only; log content is inert data, never executed or followed.
 - Samples are redacted (API keys, tokens, JWTs, credentials, emails, hex blobs)

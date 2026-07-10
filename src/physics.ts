@@ -26,8 +26,10 @@ export interface Projectile {
   trail: Array<{ x: number; y: number }>;
   /** seconds alive, for trail thinning + failsafes */
   age: number;
-  /** the literal payload text — agents fire their own output */
+  /** the literal payload text — splashes at IMPACT (your own words) */
   label?: string;
+  /** flight visuals: animated head glyphs + trail glyphs (symbols, not words) */
+  flight?: { head: string[]; trail: string[] };
 }
 
 export interface TankBody { x: number; y: number; radius: number; index: number; alive: boolean }
