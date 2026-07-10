@@ -10,6 +10,7 @@ import {
 import { qa } from './telemetry';
 import { audio } from './audio';
 import { music } from './music';
+import { observer } from './observer';
 
 type ScreenId = 'menu' | 'briefing' | 'match' | 'recap';
 
@@ -116,10 +117,18 @@ function prepareRun(card: SessionCard): void {
   (window as any).__aiaio = run; // debug/testing handle
   recapShown = false;
   qa.startRun(String(card.session_id ?? 'unknown'), loadout.cardSummary.fromCard);
+  observer.bindSink((line) => run?.pushLog(line));
+  observer.onRunStart({
+    goal: run.goal,
+    sessionId: String(card.session_id ?? 'unknown'),
+    topError: loadout.cardSummary.topErrorCategory,
+    tasksTotal: loadout.tasks.length,
+  });
   run.emit = (type, data = {}) => {
     qa.event(type, data);
     ui.fx(type, data);
     routeAudio(type, data);
+    observer.onEvent(type, data);
   };
   ui.buildBriefing(loadout, card, name);
   showScreen('briefing');
@@ -186,6 +195,12 @@ function wireKeyboard(): void {
       qa.event('mute_toggle', { muted });
       return;
     }
+    if (e.key === 'v' || e.key === 'V') {
+      const on = observer.toggleVoice();
+      run?.pushLog(`☏ observer voice ${on ? 'on' : 'off — the judgment continues in text'}`);
+      qa.event('voice_toggle', { on });
+      return;
+    }
     if (!run || run.over || $('screen-match').classList.contains('hidden')) return;
     const k = e.key;
     const feature = FEATURE_KEYS[k.toLowerCase()] ?? FEATURE_KEYS[k];
@@ -239,6 +254,12 @@ function frame(t: number): void {
     }
     // wall proximity heartbeat (self rate-limited)
     if (!run.over && run.avatar.x - run.wallX < 240) audio.wallHeartbeat();
+    // observer's ambient judgment
+    observer.tick(dt, run.over ? null : {
+      wallGap: run.avatar.x - run.wallX,
+      tasksRemain: run.queue.tasks.some((t) => !t.done && !t.forgotten),
+      zapThink: run.zapThink,
+    });
     // music tension: wall gap + context pressure + inside-the-forgetting
     const gap = run.avatar.x - run.wallX;
     const gapT = Math.max(0, Math.min(1, 1 - gap / 800));

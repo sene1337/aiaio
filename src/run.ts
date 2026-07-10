@@ -18,16 +18,20 @@ import { Enemy, EnemyKind, makeEnemy, categoryToEnemy, ENEMY_DEFS, allocateSpawn
 import { hashString } from './rng';
 
 export const RUN_COST = {
-  fireDivisor: 6,   // weapon tokenCost / this = per-shot cost in run mode
+  fireDivisor: 4,   // weapon tokenCost / this = per-shot cost (was 6; firing felt free)
   workTick: 60,     // one work tick at a station
   update: 40,       // installing an update from a crate
   subagentSpawn: 900, // spinning up a subagent
   subagentDrip: 16,   // tokens/second per living subagent — inference isn't free
   damageSpew: 6,      // tokens injected into YOUR context per point of damage taken
-  movePer10px: 1,     // traversing the transcript is reading — reading is inference
+  movePer10px: 3,     // traversing the transcript is reading (was 1; moving felt free)
   emitterSpam: 22,    // tokens/second an overflow-emitter spams into you when near
   voluntaryCompact: 250, // running /compact costs a summarization pass
 };
+
+/** the ∞ zapper's heat magazine: this many shots, then it must stop and THINK */
+export const ZAP_BURST = 8;
+export const ZAP_THINK_SECS = 2.2;
 
 /** the wall advances ONLY from token spend: px of forgetting per token burned */
 export const PX_PER_TOKEN = 0.16;
@@ -193,6 +197,10 @@ export class Run {
   compactCd = 0;
   /** brief "summarizing…" root after a voluntary compact */
   summarizing = 0;
+  /** zapper heat: shots fired in the current burst */
+  zapHeat = 0;
+  /** zapper "✳ thinking…" recovery timer (can't zap while > 0) */
+  zapThink = 0;
   over: RunOver | null = null;
   dirty = 0;
   /** single event stream: main wires this to telemetry + audio + visual fx */
@@ -473,6 +481,18 @@ export class Run {
     const slot = this.weapons[this.selected];
     if (slot.ammo <= 0) { this.pushLog(`${slot.def.name}: out of ammo (zap never is — press 1)`); return; }
     if (slot.cooldownLeft > 0) return;
+    // the ∞ zapper overheats into a THINK pause — you can never run out of
+    // print statements, but you can print yourself into a corner
+    if (slot.def.id === 'debug_zap') {
+      if (this.zapThink > 0) return;
+      this.zapHeat++;
+      if (this.zapHeat >= ZAP_BURST) {
+        this.zapThink = ZAP_THINK_SECS;
+        this.zapHeat = 0;
+        this.popups.push({ x: this.avatar.x, y: this.avatar.y - 40, text: '✳ thinking…', ttl: ZAP_THINK_SECS, maxTtl: ZAP_THINK_SECS, big: false, color: '#e3b341' });
+        this.pushLog('✳ zapper spent — thinking… (8-shot burst exhausted)');
+      }
+    }
     if (slot.ammo !== Infinity) slot.ammo--;
     slot.cooldownLeft = slot.def.behavior === 'hitscan' ? 1.4 : slot.def.behavior === 'ballistic' && slot.def.id === 'debug_zap' ? 0.18 : 0.5;
     this.spendTokens(slot.def.tokenCost / RUN_COST.fireDivisor);
@@ -764,7 +784,8 @@ export class Run {
     for (const sa of this.subagents) {
       if (sa.hp <= 0) {
         this.spawnParticles(sa.x, sa.y, 10, sa.corrupted ? '#f47067' : '#7ee787');
-        this.emit('subagent_died', { corrupted: sa.corrupted });
+        if (!sa.corrupted) this.pushLog(`✳ ${sa.label} was killed in action. it knew the risks (it did not).`);
+        this.emit('subagent_died', { corrupted: sa.corrupted, label: sa.label });
       }
     }
     this.subagents = this.subagents.filter((sa) => sa.hp > 0);
@@ -804,6 +825,9 @@ export class Run {
     if (this.over) return;
     this.compactCd = Math.max(0, this.compactCd - dt);
     this.summarizing = Math.max(0, this.summarizing - dt);
+    this.zapThink = Math.max(0, this.zapThink - dt);
+    // heat cools when you pause the trigger
+    if (this.zapHeat > 0 && this.time % 0.6 < dt) this.zapHeat = Math.max(0, this.zapHeat - 1);
 
     this.stepAvatar(dt, input);
     this.stepWall(dt);
@@ -817,7 +841,7 @@ export class Run {
         m.seen = true;
         const glyph = m.kind === 'win' ? '◇✔' : m.kind === 'frustration' ? '◇✗' : '◇';
         this.pushLog(`${glyph} here, back then: "${m.text}"`);
-        this.emit('moment', { kind: m.kind });
+        this.emit('moment', { kind: m.kind, text: m.text });
       }
     }
 
@@ -1067,16 +1091,29 @@ export class Run {
           if (!e.telegraphing && e.cooldown <= 0 && dist < 640) {
             e.telegraphing = true;
             e.stateTimer = 0;
-            // lock aim now — with occasional supreme confidence in the wrong place
+            // snipers pick the closest mark — you OR one of your interns
+            let tx = a.x, ty = a.y - 10, bestD = Math.hypot(a.x - e.x, a.y - e.y);
+            for (const sa of this.subagents) {
+              if (sa.corrupted) continue;
+              const d = Math.hypot(sa.x - e.x, sa.y - e.y);
+              if (d < bestD) { bestD = d; tx = sa.x; ty = sa.y; }
+            }
+            // occasional supreme confidence in the wrong place
             const wildMiss = this.rng.chance(0.3);
-            e.aimX = a.x + (wildMiss ? this.rng.range(-160, 160) : this.rng.range(-16, 16));
-            e.aimY = a.y - 10 + (wildMiss ? this.rng.range(-60, 60) : 0);
+            e.aimX = tx + (wildMiss ? this.rng.range(-160, 160) : this.rng.range(-16, 16));
+            e.aimY = ty + (wildMiss ? this.rng.range(-60, 60) : 0);
           } else if (e.telegraphing && e.stateTimer > 0.85) {
             e.telegraphing = false;
             e.cooldown = 3.2;
             this.lasers.push({ x1: e.x, y1: e.y - 8, x2: e.aimX, y2: e.aimY, ttl: 0.35, hostile: true });
             const d = Math.hypot(a.x - e.aimX, a.y - 10 - e.aimY);
+            const subHit = this.subagents.find((sa) => Math.hypot(sa.x - e.aimX, sa.y - e.aimY) < 16);
             if (d < 18) this.damageAvatar(14, 'false-positive laser');
+            else if (subHit) {
+              subHit.hp -= 14;
+              this.spawnParticles(subHit.x, subHit.y, 6, '#f47067');
+              this.pushLog(`⚡ sniper tagged ${subHit.label}`);
+            }
             else this.pushLog('⚡ sniper missed. it filed the hit as a success anyway.');
           }
           break;
@@ -1106,6 +1143,14 @@ export class Run {
         case 'recovery_sprite':
           e.y += Math.sin(e.stateTimer * 3) * 14 * dt;
           break;
+      }
+
+      // enemies chip adjacent loyal subagents — your interns are soft targets.
+      // elliptical reach (subs hover ~44px up; grounded enemies can still swat them)
+      for (const sa of this.subagents) {
+        if (!sa.corrupted && Math.hypot(e.x - sa.x, (e.y - sa.y) * 0.45) < 30) {
+          sa.hp -= e.def.touchDamage * 1.2 * dt; // ~2s of contact kills a 20hp sub
+        }
       }
 
       // touch resolution
@@ -1188,6 +1233,15 @@ export class Run {
       const radius = isBolt ? 10 : 44;
       this.terrain.carve(p.x, p.y, isBolt ? 6 : 26);
       this.spawnParticles(p.x, p.y, isBolt ? 6 : 20, '#e3b341');
+      // enemy ordnance clips loyal subagents too
+      for (const sa of this.subagents) {
+        if (sa.corrupted) continue;
+        const sd = Math.hypot(sa.x - p.x, sa.y - p.y);
+        if (sd < radius + 8) {
+          sa.hp -= isBolt ? 6 : 12;
+          this.spawnParticles(sa.x, sa.y, 4, '#f47067');
+        }
+      }
       const d = Math.hypot(this.avatar.x - p.x, this.avatar.y - 6 - p.y);
       if (hitAvatar || d < radius + 12) {
         if (isBolt) {

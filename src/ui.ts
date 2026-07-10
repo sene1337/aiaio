@@ -2,7 +2,7 @@
 // Hermes): character meters, ☐/☒ todos, ⏺/⎿ transcript, boxed > prompt, and the
 // wall of forgetting rendered as spreading memory corruption.
 
-import { Run, Banner } from './run';
+import { Run, Banner, RUN_COST, ZAP_BURST } from './run';
 import { contextFrac } from './context';
 import { garble } from './context';
 import { Rng } from './rng';
@@ -616,6 +616,7 @@ export class UI {
       `<span><span class="sb-key">c</span> /compact${run.compactCd > 0 ? ` (${Math.ceil(run.compactCd)}s)` : ''}</span>` +
       `<span><span class="sb-key">[ ]</span>/<span class="sb-key">1-9</span> weapons</span>` +
       `<span><span class="sb-key">m</span> mute</span>` +
+      `<span><span class="sb-key">v</span> voice</span>` +
       `<span class="sb-right">aiaio session-run · ${run.kills} errors resolved · ${run.ctx.compactions}⚡</span>`;
   }
 
@@ -681,11 +682,14 @@ export class UI {
       const div = document.createElement('div');
       div.className = 'weapon-slot' + (i === run.selected ? ' selected' : '') +
         (slot.ammo <= 0 ? ' empty' : '');
-      const ammo = slot.ammo === Infinity ? '∞' : `×${slot.ammo}`;
+      const heat = slot.def.id === 'debug_zap'
+        ? (run.zapThink > 0 ? ' · ✳ thinking' : ` · heat ${run.zapHeat}/${ZAP_BURST}`)
+        : '';
+      const ammo = (slot.ammo === Infinity ? '∞' : `×${slot.ammo}`) + heat;
       const sel = i === run.selected ? '❯' : ' ';
       const cost = slot.def.id === 'context_nuke'
-        ? `${Math.round(slot.def.tokenCost / 6)}tk <span style="color:var(--red)">+25% flood</span>`
-        : `${Math.round(slot.def.tokenCost / 6)}tk`;
+        ? `${Math.round(slot.def.tokenCost / RUN_COST.fireDivisor)}tk <span style="color:var(--red)">+25% flood</span>`
+        : `${Math.round(slot.def.tokenCost / RUN_COST.fireDivisor)}tk`;
       div.innerHTML = `
         <span class="dim">${sel} ${i + 1}</span>
         <span class="wname">${slot.def.glyph} ${kebab(slot.def.name)}</span>
@@ -732,6 +736,7 @@ export class UI {
       const slot = run.weapons[run.selected];
       const ammo = slot.ammo === Infinity ? '∞' : `×${slot.ammo}`;
       const bits: string[] = [];
+      if (slot.def.id === 'debug_zap' && run.zapThink > 0) bits.push('<span style="color:var(--yellow)">✳ thinking…</span>');
       if (run.working && run.nearStation) {
         bits.push(`<span style="color:var(--yellow)">⌨ working "${escapeHtml(run.queue.tasks[run.nearStation.taskIndex].name)}"…</span>`);
       } else if (run.nearStation) {
