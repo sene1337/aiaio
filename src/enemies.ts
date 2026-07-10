@@ -51,7 +51,7 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
   },
   tool_turret: {
     kind: 'tool_turret', name: 'tool-turret', glyph: '🔧', hp: 26, touchDamage: 6,
-    color: '#d97757', friendly: false,
+    color: '#ff9440', friendly: false,
     flavor: 'fires interrupt bolts — get hit while working and you lose task progress',
   },
   overflow_emitter: {

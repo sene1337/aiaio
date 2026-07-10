@@ -1442,7 +1442,7 @@ export class Run {
   private explodeAt(x: number, y: number, radius: number, damage: number, weaponId: string, directEnemy: Enemy | null = null, label?: string): void {
     this.terrain.carve(x, y, Math.min(radius, 60));
     // impacts scatter the payload's own characters — your words, everywhere
-    this.spawnParticles(x, y, Math.min(30, Math.round(radius * 0.6)), '#d97757',
+    this.spawnParticles(x, y, Math.min(30, Math.round(radius * 0.6)), '#ff9440',
       label ? [...label.replace(/\s/g, '')] : undefined);
     // …and if the payload was real words, they SPLASH legibly at the crater
     if (label && label.length > 3) {

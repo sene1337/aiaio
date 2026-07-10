@@ -85,7 +85,7 @@ export class Terrain {
       const x = speckleRng.int(0, this.width - 1);
       const y = speckleRng.int(0, this.height - 1);
       if (this.solidAt(x, y) && this.solidAt(x, y - 8)) {
-        this.ctx.fillStyle = speckleRng.chance(0.7) ? 'rgba(90,150,100,0.35)' : 'rgba(217,119,87,0.25)';
+        this.ctx.fillStyle = speckleRng.chance(0.7) ? 'rgba(90,150,100,0.35)' : 'rgba(255,148,64,0.25)';
         this.ctx.fillText(speckleRng.pick(glyphs), x, y);
       }
     }

@@ -11,6 +11,7 @@ import { qa } from './telemetry';
 import { audio } from './audio';
 import { music } from './music';
 import { observer } from './observer';
+import { startLogoLoop } from './logo';
 import {
   LevelEntry, difficulty, tierOf, TIERS, unlockedTiers, getProgress, isCleared,
   computeRank, recordResult, RANK_COLORS,
@@ -520,6 +521,8 @@ function main(): void {
 
   ui = new UI();
   (window as any).__ui = ui; // debug/testing handle
+  const logoEl = document.querySelector('.ascii-logo');
+  if (logoEl) startLogoLoop(logoEl as HTMLElement);
   wireCardSlot();
   wireKeyboard();
   loadGallery();

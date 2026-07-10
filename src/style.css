@@ -10,7 +10,8 @@
   --dim: #8f8b82; /* ≥4.5:1 on --bg and --bg-panel (WCAG AA) */
   --border: #3a3833;
   --green: #7ee787;        /* player 1 / success */
-  --clay: #d97757;         /* player 2 / the harness accent */
+  --clay: #ff9440;         /* arcade orange — the harness accent */
+  --purple: #b18aff;
   --blue: #6cb6ff;
   --red: #f47067;
   --yellow: #e3b341;

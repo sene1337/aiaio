@@ -53,10 +53,96 @@ export class UI {
   private whiteFlashTtl = 0;
   private rings: Array<{ x: number; y: number; maxR: number; ttl: number; maxTtl: number; color: string }> = [];
   private fxRng = new Rng('fx');
+  // J-space: the LLM's latent space as layered ASCII weather behind the level
+  private flow: Array<{ x: number; y: number; life: number }> = [];
+  private sparks: Array<{ x: number; y: number; ttl: number; maxTtl: number; hue: number }> = [];
 
   constructor() {
     this.canvas = $('game-canvas') as HTMLCanvasElement;
     this.ctx = this.canvas.getContext('2d')!;
+  }
+
+  // hash-based value noise: smooth, cheap, never repeats visibly
+  private static hash2(ix: number, iy: number): number {
+    let h = (ix * 374761393 + iy * 668265263) | 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  }
+
+  private noise(x: number, y: number): number {
+    const ix = Math.floor(x), iy = Math.floor(y);
+    const fx = x - ix, fy = y - iy;
+    const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    const a = UI.hash2(ix, iy), b = UI.hash2(ix + 1, iy);
+    const c = UI.hash2(ix, iy + 1), d = UI.hash2(ix + 1, iy + 1);
+    return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+  }
+
+  /**
+   * J-SPACE — the cognition weather. Three parallax ASCII layers, all
+   * noise-driven and non-repeating: a deep latent nebula (purple/blue glyph
+   * clouds), attention streams (particles riding a flow field), and sampling
+   * sparks (characters cycling candidates before collapsing). As context
+   * pressure rises toward compaction, the whole space gets agitated: denser,
+   * faster, redder. The mind you're inside gets visibly anxious.
+   */
+  private drawJSpace(ctx: CanvasRenderingContext2D, run: Run, W: number, H: number, dt: number): void {
+    const t = this.time;
+    const agitation = Math.min(1.4, run.ctx.used / (run.ctx.budget * run.ctx.threshold));
+    const redShift = Math.min(1, Math.max(0, agitation - 0.6) * 2.2);
+
+    // L1 — latent nebula (deep, parallax 0.18): thought-clouds breathing
+    const px = this.camX * 0.18, py = this.camY * 0.12;
+    ctx.font = '11px monospace';
+    for (let y = 10; y < H * 0.96; y += 26) {
+      for (let x = 6; x < W; x += 22) {
+        const n = this.noise((x + px) * 0.011, (y + py) * 0.015 + t * 0.045);
+        if (n < 0.53) continue;
+        const m = this.noise((x + px) * 0.005 + 41.7, (y + py) * 0.006 - t * 0.028);
+        const alpha = Math.min(0.42, (n - 0.53) * (0.85 + agitation * 0.55));
+        const r = Math.round(108 + m * 69 + redShift * 110);
+        const g = Math.round(138 + m * 44 - redShift * 60);
+        const b = Math.round(255 - redShift * 110);
+        ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+        const wob = (this.noise(x * 0.09 + 7, t * 0.3) - 0.5) * 9;
+        ctx.fillText(n > 0.74 ? '∙' : n > 0.63 ? ':' : '·', x + wob, y);
+      }
+    }
+
+    // L2 — attention streams (mid, parallax 0.45): activations in transit
+    const want = Math.round(20 + agitation * 16);
+    while (this.flow.length < want) {
+      this.flow.push({ x: Math.random() * W, y: Math.random() * H * 0.85, life: 2 + Math.random() * 4 });
+    }
+    ctx.font = '10px monospace';
+    for (const p of this.flow) {
+      const ang = this.noise((p.x + this.camX * 0.45) * 0.006, p.y * 0.008 + t * 0.055) * Math.PI * 4;
+      const sp = 13 + agitation * 30;
+      p.x += Math.cos(ang) * sp * dt;
+      p.y += Math.sin(ang) * sp * dt * 0.55;
+      p.life -= dt;
+      if (p.life <= 0 || p.x < -12 || p.x > W + 12 || p.y < -12 || p.y > H + 12) {
+        p.x = Math.random() * W; p.y = Math.random() * H * 0.85; p.life = 2 + Math.random() * 4;
+        continue;
+      }
+      const a = Math.min(0.28, p.life * 0.11);
+      ctx.fillStyle = redShift > 0.5 ? `rgba(255,148,64,${a})` : `rgba(108,182,255,${a})`;
+      ctx.fillText('∼', p.x, p.y);
+    }
+
+    // L3 — sampling sparks (near): a token being chosen, then committed
+    if (Math.random() < (0.028 + agitation * 0.05)) {
+      this.sparks.push({ x: Math.random() * W, y: Math.random() * H * 0.8, ttl: 0.9, maxTtl: 0.9, hue: Math.random() });
+    }
+    ctx.font = 'bold 11px monospace';
+    for (const s of this.sparks) {
+      s.ttl -= dt;
+      const a = Math.max(0, s.ttl / s.maxTtl) * 0.5;
+      const g = CORRUPT_GLYPHS[Math.floor(t * 22 + s.hue * 10) % CORRUPT_GLYPHS.length];
+      ctx.fillStyle = s.hue < 0.5 ? `rgba(255,148,64,${a})` : `rgba(177,138,255,${a})`;
+      ctx.fillText(g, s.x, s.y);
+    }
+    this.sparks = this.sparks.filter((s) => s.ttl > 0);
   }
 
   /** visual reactions to game events (wired from main alongside audio + telemetry) */
@@ -143,6 +229,9 @@ export class UI {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
 
+    // J-space: the latent-space weather lives behind everything
+    this.drawJSpace(ctx, run, W, H, dt);
+
     // decay effects
     this.shakeMag = Math.max(0, this.shakeMag - 26 * dt);
     this.glitchTtl = Math.max(0, this.glitchTtl - dt);
@@ -158,24 +247,6 @@ export class UI {
     ctx.translate(-this.camX, -this.camY);
     const viewL = this.camX - viewW / 2, viewR = this.camX + viewW / 2;
 
-    // ambient memory motes drifting up through the session
-    ctx.font = '10px monospace';
-    for (let i = 0; i < 26; i++) {
-      const seedX = (i * 379 + 131) % 1000 / 1000;
-      const mx = viewL + ((seedX * viewW + this.time * (6 + (i % 5) * 3)) % viewW);
-      const my = ((i * 613 + 89) % 1000 / 1000) * run.terrain.height - ((this.time * (4 + (i % 3) * 2)) % run.terrain.height);
-      const wrapped = ((my % run.terrain.height) + run.terrain.height) % run.terrain.height;
-      ctx.fillStyle = i % 4 === 0 ? 'rgba(217,119,87,0.10)' : 'rgba(126,231,135,0.08)';
-      ctx.fillText(['0', '1', '·', '▪', ':'][i % 5], mx, wrapped);
-    }
-
-    // faint memory grid
-    ctx.strokeStyle = 'rgba(126,231,135,0.05)';
-    ctx.lineWidth = 1 / this.camZoom;
-    ctx.beginPath();
-    for (let x = Math.floor(viewL / 120) * 120; x < viewR; x += 120) { ctx.moveTo(x, 0); ctx.lineTo(x, run.terrain.height); }
-    for (let y = 0; y < run.terrain.height; y += 120) { ctx.moveTo(viewL, y); ctx.lineTo(viewR, y); }
-    ctx.stroke();
 
     // terrain
     ctx.drawImage(run.terrain.canvas as CanvasImageSource, 0, 0);
@@ -728,7 +799,7 @@ export class UI {
       .join('') || '<div class="task-row dim"><span class="glyph">·</span><span>all errors resolved</span></div>';
     const crates = run.crates.filter((c) => !c.used).length;
     panel.innerHTML = `
-      <div class="pp-name" style="color:#d97757">session: ${escapeHtml(s.sessionId)}
+      <div class="pp-name" style="color:#ff9440">session: ${escapeHtml(s.sessionId)}
         ${s.fromCard ? '' : '<span class="badge">generated</span>'}
       </div>
       <div class="meter">len  <span class="tbar" style="color:var(--dim)">${textBar(run.avatar.x / run.terrain.width)}</span> <span class="val">${Math.round((run.avatar.x / run.terrain.width) * 100)}% traversed</span></div>
