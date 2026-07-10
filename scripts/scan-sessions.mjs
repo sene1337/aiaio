@@ -83,10 +83,14 @@ function main() {
           .sort()
           .pop();
         if (enriched) file = enriched;
+        // raw error counts mislead (spawns cap at √count≤5/category) — show real threat
+        const enemies = (card.errors ?? [])
+          .reduce((s, e) => s + Math.max(1, Math.min(5, Math.ceil(Math.sqrt(e.count ?? 1)))), 0);
         index.push({
           file,
           session_id: card.session_id,
           errors: (card.errors ?? []).reduce((s, e) => s + (e.count ?? 1), 0),
+          enemies,
           tasks: card.tasks?.length ?? 0,
           stability: card.stability_score ?? null,
           messages: card.message_count ?? 0,

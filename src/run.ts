@@ -247,8 +247,10 @@ export class Run {
     }];
     for (const w of this.loadout.weapons) {
       if (w.id === 'timeout_mortar' && w.sourceLine.startsWith('baseline')) continue; // zap covers the baseline now
+      // the nuke is a deal-with-the-devil — telemetry showed 6-nuke death spirals, cap it rare
+      const ammo = w.id === 'context_nuke' ? Math.min(w.ammo, 3) : w.ammo + 3;
       this.weapons.push({
-        def: WEAPONS[w.id], ammo: w.ammo + 3, statRoll: w.statRoll,
+        def: WEAPONS[w.id], ammo, statRoll: w.statRoll,
         sourceLine: w.sourceLine, cooldownLeft: 0,
       });
     }
@@ -1241,10 +1243,19 @@ export class Run {
       if (d < radius && damage > 0) sa.hp -= Math.round(damage * 0.5 * Math.max(0.3, 1 - d / radius));
     }
     // context nuke: erases enemies AND floods your own meter — under the
-    // action-driven wall, that flood is a ~650px surge. deal with the devil.
+    // action-driven wall, that flood is a huge surge. deal with the devil,
+    // and SHOW the devil's cut (telemetry: 6-nuke spirals felt like a mystery).
     if (weaponId === 'context_nuke') {
-      this.burn(Math.round(this.ctx.budget * 0.25));
-      this.pushLog('💥 context nuke — glorious. your own context felt it. so will the wall.');
+      const flood = Math.round(this.ctx.budget * 0.25);
+      this.burn(flood);
+      const pct = Math.round((this.ctx.used / this.ctx.budget) * 100);
+      this.pushBanner({
+        kind: 'compaction', ttl: 3,
+        title: '💥 NUKE SELF-FLOOD',
+        lines: [`${flood} tokens dumped into YOUR context — meter at ${pct}%`,
+                `the wall owes you ~${Math.round(flood * PX_PER_TOKEN)}px for that`],
+      });
+      this.pushLog(`💥 context nuke — glorious. it flooded ${flood}tk into your own meter (${pct}%).`);
     }
     // self splash
     const dSelf = Math.hypot(this.avatar.x - x, this.avatar.y - 6 - y);

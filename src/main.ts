@@ -77,15 +77,17 @@ async function loadGallery(): Promise<void> {
   try {
     const res = await fetch('./cards/index.json');
     if (!res.ok) throw new Error('none');
-    const index: Array<{ file: string; session_id: string; errors: number; tasks: number; stability: number | null }> = await res.json();
+    const index: Array<{ file: string; session_id: string; errors: number; enemies?: number; tasks: number; stability: number | null }> = await res.json();
     if (!Array.isArray(index) || index.length === 0) throw new Error('empty');
     box.innerHTML = '<div class="hint" style="text-align:left">scanned sessions (npm run scan):</div>';
     for (const entry of index.slice(0, 12)) {
       const btn = document.createElement('button');
       btn.className = 'cmd';
       const shortId = entry.session_id.length > 26 ? entry.session_id.slice(0, 24) + '…' : entry.session_id;
+      const threat = typeof entry.enemies === 'number'
+        ? `${entry.enemies} enemies (${entry.errors} errors)` : `${entry.errors} errors`;
       btn.innerHTML = `<span class="caret">❯</span><span class="cmd-name">${shortId}</span>` +
-        `<span class="cmd-desc">${entry.errors} errors · stability ${entry.stability ?? '?'}</span>`;
+        `<span class="cmd-desc">${threat} · stability ${entry.stability ?? '?'}</span>`;
       btn.addEventListener('click', async () => {
         try {
           const cardRes = await fetch(`./cards/${entry.file}`);

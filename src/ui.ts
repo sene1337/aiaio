@@ -678,10 +678,13 @@ export class UI {
         (slot.ammo <= 0 ? ' empty' : '');
       const ammo = slot.ammo === Infinity ? '∞' : `×${slot.ammo}`;
       const sel = i === run.selected ? '❯' : ' ';
+      const cost = slot.def.id === 'context_nuke'
+        ? `${Math.round(slot.def.tokenCost / 6)}tk <span style="color:var(--red)">+25% flood</span>`
+        : `${Math.round(slot.def.tokenCost / 6)}tk`;
       div.innerHTML = `
         <span class="dim">${sel} ${i + 1}</span>
         <span class="wname">${slot.def.glyph} ${kebab(slot.def.name)}</span>
-        <span class="wmeta">${ammo} · ${Math.round(slot.def.tokenCost / 6)}tk</span>
+        <span class="wmeta">${ammo} · ${cost}</span>
         <div class="tooltip">${escapeHtml(slot.def.flavor)}<span class="tsrc">from log: ${escapeHtml(slot.sourceLine)}</span></div>
       `;
       div.addEventListener('click', () => run.selectWeapon(i));
@@ -730,6 +733,7 @@ export class UI {
         bits.push(`<span style="color:#7ee787">hold W — "${escapeHtml(run.queue.tasks[run.nearStation.taskIndex].name)}"</span>`);
       }
       if (run.nearCrate) bits.push(`<span style="color:${run.nearCrate.kind === 'model' ? 'var(--blue)' : 'var(--yellow)'}">${run.nearCrate.kind === 'model' ? '◈' : '⬆'} U to install</span>`);
+      if (slot.def.id === 'context_nuke') bits.push('<span style="color:var(--red)">⚠ floods 25% of YOUR context</span>');
       if (run.insideWall) bits.push('<span style="color:var(--red)">▓ INSIDE THE FORGETTING — bleeding, weapons spraying</span>');
       if (run.compactCd <= 0 && run.ctx.used > run.ctx.budget * 0.4) bits.push('<span class="dim">✂ C to /compact</span>');
       html = `<span class="pcaret">&gt;</span> ${slot.def.glyph} ${kebab(slot.def.name)} ${ammo}` +
