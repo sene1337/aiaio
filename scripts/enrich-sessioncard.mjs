@@ -56,10 +56,10 @@ Below is a SessionCard (mechanical summary) and sampled excerpts from the actual
 
 Rewrite ONLY the narrative fields so the level tells this session's story:
 - "goal": one punchy line (max 140 chars) — what this session was really about, in the spirit of the user's own words.
-- "tasks": 3-6 entries. "name" (max 60 chars): the real things worked on, phrased as imperative tasks ("fix the OAuth refresh loop"). "at" (0..1): where in the session each began. "work_units" (integer 1-6): proportional to how much of the session it consumed. "completed": whether it actually got done.
+- "tasks": 3-6 entries. "name" (max 60 chars): the real things worked on, phrased as imperative tasks using the log's own words and subjects. "at" (0..1): where in the session each began. "work_units" (integer 1-6): proportional to how much of the session it consumed. "completed": whether it actually got done.
 - "moments": 6-12 entries. Real, specific beats — "kind" is "win", "frustration", or "note"; "text" (max 110 chars) quotes or tightly paraphrases the actual moment; "at" (0..1) is its position.
 
-Rules: do not change any other field. Do not invent events that did not happen. Never include secrets, API keys, tokens, emails, or personally sensitive content. Output ONLY the complete updated JSON object, no commentary.
+Rules: do not change any other field. Do not invent events that did not happen. Every task name and moment must trace to something visible in the excerpts below — if the log gives you too little to name real work, KEEP the original task names unchanged rather than inventing plausible-sounding ones. Never include secrets, API keys, tokens, emails, or personally sensitive content. Output ONLY the complete updated JSON object, no commentary.
 
 SessionCard:
 ${JSON.stringify(card, null, 2)}
@@ -98,11 +98,64 @@ function sanitizeControlChars(s) {
   return out;
 }
 
+/**
+ * `ollama run` and other TUI-flavored CLIs redraw their output live: cursor
+ * movement, kill-line, reprint — sometimes across rows. Stripping escapes
+ * alone leaves duplicated fragments, so emulate a minimal terminal (cursor
+ * up/down/left/right/column, erase-line variants, CR/LF) and return what
+ * would have been left on screen.
+ */
+function stripTuiRedraws(text) {
+  if (!text.includes('\x1b') && !text.includes('\r')) return text;
+  const rows = [''];
+  let r = 0;
+  let c = 0;
+  let i = 0;
+  const put = (ch) => {
+    const line = rows[r] ?? '';
+    rows[r] = line.length >= c
+      ? line.slice(0, c) + ch + line.slice(c + 1)
+      : line + ' '.repeat(c - line.length) + ch;
+    c++;
+  };
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === '\x1b') {
+      const m = /^\x1b\[([0-9;?]*)([A-Za-z])/.exec(text.slice(i));
+      if (m) {
+        const n = parseInt(m[1] || '1', 10) || 1;
+        const cmd = m[2];
+        if (cmd === 'A') r = Math.max(0, r - n);
+        else if (cmd === 'B') { r += n; while (rows.length <= r) rows.push(''); }
+        else if (cmd === 'C') c += n;
+        else if (cmd === 'D') c = Math.max(0, c - n);
+        else if (cmd === 'G') c = Math.max(0, n - 1);
+        else if (cmd === 'K') {
+          const mode = m[1] === '' ? 0 : parseInt(m[1], 10);
+          if (mode === 0) rows[r] = (rows[r] ?? '').slice(0, c);
+          else if (mode === 1) rows[r] = ' '.repeat(c) + (rows[r] ?? '').slice(c);
+          else rows[r] = '';
+        }
+        i += m[0].length;
+        continue;
+      }
+      i++; // lone/unknown ESC: drop
+      continue;
+    }
+    if (ch === '\r') { c = 0; i++; continue; }
+    if (ch === '\n') { r++; c = 0; while (rows.length <= r) rows.push(''); i++; continue; }
+    put(ch);
+    i++;
+  }
+  return rows.join('\n');
+}
+
 function extractJson(text) {
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
+  const clean = stripTuiRedraws(text);
+  const start = clean.indexOf('{');
+  const end = clean.lastIndexOf('}');
   if (start === -1 || end <= start) throw new Error('no JSON object in model output');
-  const slice = text.slice(start, end + 1);
+  const slice = clean.slice(start, end + 1);
   try {
     return JSON.parse(slice);
   } catch {
@@ -159,6 +212,12 @@ function main() {
   const cmd = process.env.AIAIO_LLM_CMD ?? 'claude -p';
   console.error(`asking your agent (${cmd}) to write the level… this can take a minute.`);
   const parts = cmd.split(' ');
+  // `ollama run` redraws its streaming output (word wrap), which corrupts
+  // piped JSON beyond repair; force clean machine output
+  if (/(^|\/)ollama$/.test(parts[0]) && parts[1] === 'run') {
+    if (!parts.includes('--nowordwrap')) parts.push('--nowordwrap');
+    if (!parts.includes('--format')) parts.push('--format', 'json');
+  }
   const res = spawnSync(parts[0], parts.slice(1), {
     input: prompt, encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, timeout: 300000,
   });

@@ -5,6 +5,17 @@ All notable changes to AIAIO are documented here. Format follows
 [semver](https://semver.org/) (minor = new player-facing capability,
 patch = fixes and copy).
 
+## [2.3.2] — 2026-07-10
+
+### Fixed
+- Enrichment prompt no longer offers a concrete example task name: small local
+  models copied "fix the OAuth refresh loop" verbatim into unrelated sessions
+  (caught by grounding-checking a real Hermes agent's batch). Task names and
+  moments must now trace to the log excerpts, with keep-original fallback.
+- `ollama run` commands get `--nowordwrap --format json` appended
+  automatically: its streaming word-wrap redraws corrupt piped JSON beyond
+  repair. A TUI-redraw emulator cleans up whatever still gets through.
+
 ## [2.3.1] — 2026-07-10
 
 ### Fixed
@@ -85,6 +96,7 @@ The artillery duel is retired: the session IS the level.
 - Initial artillery prototype: turn-based duel, SessionCard schema, extractor,
   task queue, compaction. Retired same day for being a Scorched Earth clone.
 
+[2.3.2]: https://github.com/sene1337/aiaio/compare/v2.3.1...v2.3.2
 [2.3.1]: https://github.com/sene1337/aiaio/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/sene1337/aiaio/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/sene1337/aiaio/compare/v2.1.0...v2.2.0
