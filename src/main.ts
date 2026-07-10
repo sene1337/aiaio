@@ -26,6 +26,10 @@ let ui: UI;
 let loadedCard: SessionCard | null = null;
 let runCounter = 0;
 let recapShown = false;
+let progressRecorded = false;
+let lastRankInfo: { rank: 'S' | 'A' | 'B' | 'C' | 'D'; newBest: boolean; rankUp: boolean; prevBest: number | null } | null = null;
+/** re-render THE VAULT (set by loadGallery) — call when returning to the menu */
+let refreshVault: (() => void) | null = null;
 
 function showScreen(id: ScreenId): void {
   for (const s of ['menu', 'briefing', 'match', 'recap']) {
@@ -195,6 +199,7 @@ async function loadGallery(): Promise<void> {
       const refocus = document.getElementById('gallery-filter') as HTMLInputElement;
       if (q) { refocus.focus(); refocus.setSelectionRange(filter.length, filter.length); }
     };
+    refreshVault = () => render((document.getElementById('gallery-filter') as HTMLInputElement)?.value ?? '');
     render('');
   } catch {
     box.innerHTML = '<div class="hint" style="text-align:left">no scanned sessions — run <b>npm run scan</b> to auto-build cards from your OpenClaw / Claude Code / Hermes sessions, or drop a card above.</div>';
@@ -225,6 +230,8 @@ function prepareRun(card: SessionCard): void {
   run = new Run({ loadout, card, name });
   (window as any).__aiaio = run; // debug/testing handle
   recapShown = false;
+  progressRecorded = false;
+  lastRankInfo = null;
   qa.startRun(String(card.session_id ?? 'unknown'), loadout.cardSummary.fromCard);
   observer.bindSink((line) => run?.pushLog(line));
   observer.onRunStart({
@@ -239,6 +246,15 @@ function prepareRun(card: SessionCard): void {
     ui.fx(type, data);
     routeAudio(type, data);
     observer.onEvent(type, data);
+    // grade + persist synchronously the moment the run ends — no frame loop,
+    // no banner gates, no way to lose it by quitting fast
+    if ((type === 'win' || type === 'death') && run && !progressRecorded) {
+      progressRecorded = true;
+      const rank = computeRank(type === 'win', data.perfect === true, progressFrac(run.queue));
+      const rec = recordResult(run.loadout.cardSummary.sessionId, rank, Number(data.score) || 0);
+      lastRankInfo = { rank, newBest: rec.newBest, rankUp: rec.rankUp, prevBest: rec.prev?.bestScore ?? null };
+      qa.event('rank', { rank, score: Number(data.score) || 0, newBest: rec.newBest });
+    }
   };
   ui.buildBriefing(loadout, card, name, {
     diff, tierName: tierOf(diff).name,
@@ -444,14 +460,9 @@ function frame(t: number): void {
     if (run.over && !recapShown && !run.bannerActive) {
       recapShown = true;
       const r = run;
-      const over = run.over;
-      // grade the run + persist campaign progress (keyed by session stem)
-      const rank = computeRank(over.won, over.perfect, progressFrac(r.queue));
-      const rec = recordResult(r.loadout.cardSummary.sessionId, rank, over.score);
-      qa.event('rank', { rank, score: over.score, newBest: rec.newBest });
       window.setTimeout(() => {
         if (run === r && r.over) {
-          ui.buildRecap(r, { rank, newBest: rec.newBest, rankUp: rec.rankUp, prevBest: rec.prev?.bestScore ?? null });
+          ui.buildRecap(r, lastRankInfo ?? undefined);
           showScreen('recap');
         }
       }, 1500);
@@ -481,8 +492,8 @@ function main(): void {
     if (!run) return;
     showScreen('match');
   });
-  $('btn-back-menu').addEventListener('click', () => { run = null; showScreen('menu'); });
-  $('btn-again').addEventListener('click', () => { run = null; showScreen('menu'); });
+  $('btn-back-menu').addEventListener('click', () => { run = null; refreshVault?.(); showScreen('menu'); });
+  $('btn-again').addEventListener('click', () => { run = null; refreshVault?.(); showScreen('menu'); });
 
   $('schema-pre').textContent = SESSION_CARD_SCHEMA;
   $('btn-schema').addEventListener('click', () => $('modal-schema').classList.remove('hidden'));
