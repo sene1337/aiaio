@@ -53,15 +53,20 @@ export function classifyLine(text) {
 // ---------------------------------------------------------------------------
 
 const REDACTIONS = [
-  /sk-[A-Za-z0-9_-]{10,}/g,                              // OpenAI/Anthropic-style keys
+  /sk-[A-Za-z0-9_-]{10,}/g,                              // OpenAI/Anthropic-style keys (incl. sk-ant-…)
   /(ghp|gho|ghs|github_pat)_[A-Za-z0-9_]{10,}/g,         // GitHub tokens
   /AKIA[A-Z0-9]{12,}/g,                                  // AWS access keys
+  /AIza[0-9A-Za-z_-]{30,}/g,                             // Google API keys
   /xox[bapos]-[A-Za-z0-9-]{10,}/g,                       // Slack tokens
   /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}/g, // JWTs
+  /-----BEGIN[A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END[A-Z ]*PRIVATE KEY-----|$)/g, // PEM blocks
   /(bearer\s+)[A-Za-z0-9._-]{12,}/gi,                    // bearer tokens
   /((?:api[_-]?key|token|secret|password|passwd|pwd)["'\s:=]+)[^\s"',;]{6,}/gi, // key=value creds
   /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g,     // emails
   /\b[0-9a-f]{32,}\b/gi,                                 // long hex blobs (hashes, keys)
+  /\b[A-Za-z0-9+/]{40,}={0,2}\b/g,                       // long base64 blobs
+  /\b(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?\b/g,           // IPv4 (+ optional port)
+  /(?<![\w.])\+?\d[\d ().-]{8,}\d(?![\w.])/g,            // phone-number-shaped sequences
 ];
 
 export function redact(text) {

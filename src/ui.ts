@@ -26,7 +26,7 @@ function kebab(name: string): string {
   return name.toLowerCase().replace(/ /g, '-');
 }
 
-function escapeHtml(s: string): string {
+export function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!
   ));
@@ -39,6 +39,7 @@ export class UI {
   private ctx: CanvasRenderingContext2D;
   private camX = 0; private camY = 0; private camZoom = 1;
   private trackedRun: Run | null = null;
+  private dpr = 1;
   private lastDirty = -1;
   private lastBannerCount = -1;
   private lastPrompt = '';
@@ -104,12 +105,17 @@ export class UI {
     this.time += dt;
     const c = this.canvas;
     const wrap = c.parentElement!;
-    if (c.width !== wrap.clientWidth || c.height !== wrap.clientHeight) {
-      c.width = wrap.clientWidth || 800;
-      c.height = wrap.clientHeight || 450;
+    // HiDPI: back the canvas at devicePixelRatio so the TUI text stays crisp (M-4)
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const cw = wrap.clientWidth || 800, ch = wrap.clientHeight || 450;
+    if (c.width !== Math.round(cw * dpr) || c.height !== Math.round(ch * dpr)) {
+      c.width = Math.round(cw * dpr);
+      c.height = Math.round(ch * dpr);
     }
     const ctx = this.ctx;
-    const W = c.width, H = c.height;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // all drawing below is in CSS pixels
+    this.dpr = dpr;
+    const W = cw, H = ch;
 
     // camera: follow the agent with lookahead toward facing
     const targetZoom = Math.min(1.05, Math.max(0.68, H / 760));
@@ -353,7 +359,8 @@ export class UI {
         const by = Math.floor(this.fxRng.range(0, H - 14));
         const bh = Math.floor(this.fxRng.range(3, 14));
         const off = Math.round(this.fxRng.range(-28, 28) * this.glitchTtl);
-        ctx.drawImage(c, 0, by, W, bh, off, by, W, bh);
+        // source rect is in DEVICE pixels; destination draws through the dpr transform
+        ctx.drawImage(c, 0, by * this.dpr, W * this.dpr, bh * this.dpr, off, by, W, bh);
       }
       if (this.fxRng.chance(0.3)) {
         ctx.fillStyle = `rgba(244,112,103,${0.06 * this.glitchTtl})`;

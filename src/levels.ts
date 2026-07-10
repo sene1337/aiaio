@@ -95,8 +95,19 @@ export function stemOf(sessionId: string): string {
   return sessionId.replace(/-[0-9a-f]{8}(-2)*$/, '');
 }
 
-function loadProgress(): Record<string, LevelProgress> {
-  try { return JSON.parse(localStorage.getItem(LS_PROGRESS) ?? '{}'); } catch { return {}; }
+// memoized: the vault calls getProgress thousands of times per render (M-2);
+// invalidated on writes here and on cross-tab storage events (M-6)
+let progressCache: Record<string, LevelProgress> | null = null;
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === LS_PROGRESS) progressCache = null;
+  });
+}
+
+function loadProgress(fresh = false): Record<string, LevelProgress> {
+  if (progressCache && !fresh) return progressCache;
+  try { progressCache = JSON.parse(localStorage.getItem(LS_PROGRESS) ?? '{}'); } catch { progressCache = {}; }
+  return progressCache!;
 }
 
 export function getProgress(sessionId: string): LevelProgress | null {
@@ -107,7 +118,7 @@ const RANK_ORDER: Rank[] = ['D', 'C', 'B', 'A', 'S'];
 
 /** record a finished run; returns flags for the recap ("NEW BEST", rank-up) */
 export function recordResult(sessionId: string, rank: Rank, score: number): { newBest: boolean; rankUp: boolean; prev: LevelProgress | null } {
-  const all = loadProgress();
+  const all = loadProgress(true); // fresh read: merge with any other tab's writes
   const key = stemOf(sessionId);
   const prev = all[key] ?? null;
   const rankUp = !prev || RANK_ORDER.indexOf(rank) > RANK_ORDER.indexOf(prev.rank);
@@ -119,6 +130,7 @@ export function recordResult(sessionId: string, rank: Rank, score: number): { ne
     lastPlayed: new Date().toISOString().slice(0, 10),
   };
   try { localStorage.setItem(LS_PROGRESS, JSON.stringify(all)); } catch { /* storage full */ }
+  progressCache = all;
   return { newBest, rankUp, prev };
 }
 

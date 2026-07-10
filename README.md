@@ -2,6 +2,19 @@
 
 *Operation: Inner Space × your agent's actual session log.*
 
+**🎮 [Play the hosted demo](https://sene1337.github.io/aiaio/)** (two fictional
+example sessions) · **the real game is your own history**: clone this repo,
+`npm run scan`, and every Claude Code / OpenClaw / Hermes session on your
+machine becomes a playable level — your prompts as tasks, your errors as
+monsters, your compactions as the wall chasing you.
+
+> **Beta notes** · desktop + keyboard required (mobile gets an honest gate) ·
+> SessionCards are generated locally and never leave your machine · sharing a
+> card with someone is possible but **experimental**: cards contain redacted
+> snippets of your real prompts — read `public/cards/<card>.json` yourself
+> before sending it to anyone. A proper pre-share review UI is the headline of
+> the next beta.
+
 **Your real session is the level.** Its timeline is the terrain you traverse. Your
 real errors spawn as monsters at the points where they actually happened. Your real
 tasks sit in the world as work stations. And behind you, always, the **WALL OF

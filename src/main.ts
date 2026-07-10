@@ -2,7 +2,7 @@
 // briefing, the run loop, keyboard input, recap.
 
 import { Run, RunInput } from './run';
-import { UI } from './ui';
+import { UI, escapeHtml } from './ui';
 import {
   SessionCard, parseSessionCard, loadoutFromCard, randomCard,
   EXAMPLE_CLEAN, EXAMPLE_CHAOTIC, SESSION_CARD_SCHEMA,
@@ -122,6 +122,7 @@ async function loadGallery(): Promise<void> {
       box.appendChild(head);
       const input = document.createElement('input');
       input.id = 'gallery-filter';
+      input.setAttribute('aria-label', 'Filter sessions by name, harness, or date');
       input.placeholder = 'filter by name, harness (openclaw/hermes/claude), or date…';
       input.value = filter;
       input.addEventListener('input', () => render(input.value));
@@ -145,10 +146,10 @@ async function loadGallery(): Promise<void> {
         if (!unlocked[tier.index]) {
           const need = 2 - entries.filter((e) =>
             tierOf(difficulty(e)).index === tier.index - 1 && isCleared(getProgress(e.session_id))).length;
-          folder.innerHTML = `<span class="caret">${isOpen ? '▾' : '▸'}</span><span class="cmd-name dim">🔒 ${tier.name}/</span>` +
-            `<span class="cmd-desc">clear ${Math.max(1, need)} more in ${TIERS[tier.index - 1].name.split(' — ')[0]}</span>`;
+          folder.innerHTML = `<span class="caret">${isOpen ? '▾' : '▸'}</span><span class="cmd-name dim">🔒 ${escapeHtml(tier.name)}/</span>` +
+            `<span class="cmd-desc">clear ${Math.max(1, need)} more in ${escapeHtml(TIERS[tier.index - 1].name.split(' — ')[0])}</span>`;
         } else {
-          folder.innerHTML = `<span class="caret">${isOpen ? '▾' : '▸'}</span><span class="cmd-name">${tier.name}/</span>` +
+          folder.innerHTML = `<span class="caret">${isOpen ? '▾' : '▸'}</span><span class="cmd-name">${escapeHtml(tier.name)}/</span>` +
             `<span class="cmd-desc">${bucket.length} levels · ${cleared} cleared</span>`;
           folder.addEventListener('click', () => {
             if (openTiers.has(tier.index)) openTiers.delete(tier.index); else openTiers.add(tier.index);
@@ -169,8 +170,9 @@ async function loadGallery(): Promise<void> {
             ? ` <span style="color:${RANK_COLORS[p.rank]}">★${p.rank}</span> <span class="dim">${p.bestScore.toLocaleString()}</span>`
             : '';
           const prov = [entry.when, entry.harness].filter(Boolean).join(' ');
-          btn.innerHTML = `<span class="caret">&nbsp;</span><span class="cmd-name">${glyph} ${shortId}</span>` +
-            `<span class="cmd-desc">${prov ? prov + ' · ' : ''}diff ${diff}${rankBit}</span>`;
+          // session_id derives from filenames — escape it like every other sink (M-3)
+          btn.innerHTML = `<span class="caret">&nbsp;</span><span class="cmd-name">${glyph} ${escapeHtml(shortId)}</span>` +
+            `<span class="cmd-desc">${prov ? escapeHtml(prov) + ' · ' : ''}diff ${diff}${rankBit}</span>`;
           btn.addEventListener('click', async () => {
             try {
               const cardRes = await fetch(`./cards/${entry.file}`);
@@ -417,6 +419,9 @@ function wireKeyboard(): void {
   window.addEventListener('click', () => audio.ensure());
   window.addEventListener('keyup', (e) => held.delete(e.key));
   window.addEventListener('blur', () => held.clear());
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') held.clear(); // no stuck keys (L-2)
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -426,7 +431,30 @@ function wireKeyboard(): void {
 let lastT = 0;
 let snapshotAccum = 0;
 
+let crashShown = false;
+
 function frame(t: number): void {
+  try {
+    frameBody(t);
+  } catch (err) {
+    // one bad frame must never kill the game forever (H-1)
+    console.error('[aiaio] frame error:', err);
+    if (!crashShown && run) {
+      crashShown = true;
+      try {
+        run.pushBanner({
+          kind: 'compaction', ttl: 6,
+          title: '☠ SEGFAULT (recovered)',
+          lines: ['a frame crashed and was skipped — if this repeats, reload', String(err).slice(0, 90)],
+        });
+      } catch { /* even the banner failed; the loop survives anyway */ }
+    }
+  } finally {
+    requestAnimationFrame(frame);
+  }
+}
+
+function frameBody(t: number): void {
   const dt = Math.min(0.05, (t - lastT) / 1000 || 0.016);
   lastT = t;
   if (run && !$('screen-match').classList.contains('hidden')) {
@@ -468,7 +496,7 @@ function frame(t: number): void {
       }, 1500);
     }
   }
-  requestAnimationFrame(frame);
+  // (re-scheduling happens in frame()'s finally — guaranteed even on throw)
 }
 
 // ---------------------------------------------------------------------------
@@ -476,6 +504,20 @@ function frame(t: number): void {
 // ---------------------------------------------------------------------------
 
 function main(): void {
+  // honest gate for touch-only devices: the beta needs a keyboard (M-5)
+  const touchOnly = window.matchMedia('(pointer: coarse)').matches && !window.matchMedia('(pointer: fine)').matches;
+  if (touchOnly) {
+    document.body.innerHTML = `
+      <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center;background:#0f0f0e;color:#dedad2;font-family:ui-monospace,Menlo,monospace">
+        <div style="color:#d97757;font-size:28px;letter-spacing:0.2em">AIAIO</div>
+        <div style="max-width:420px;font-size:14px;line-height:1.7">this beta needs a <b>desktop + keyboard</b> —
+        it's a game about replaying your agent sessions, and the controls are all keys.</div>
+        <div style="color:#8f8b82;font-size:12px;max-width:420px;line-height:1.7">bookmark it for your laptop:
+        clone the repo, <code>npm run scan</code> your own sessions, and play your actual history.</div>
+      </div>`;
+    return;
+  }
+
   ui = new UI();
   (window as any).__ui = ui; // debug/testing handle
   wireCardSlot();
