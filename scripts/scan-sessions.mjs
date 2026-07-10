@@ -24,6 +24,7 @@
 import { readdirSync, statSync, readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { homedir } from 'node:os';
+import { spawnSync } from 'node:child_process';
 import { extract, buildCard } from './extract-sessioncard.mjs';
 
 const DEFAULT_ROOTS = [
@@ -31,12 +32,11 @@ const DEFAULT_ROOTS = [
   join(homedir(), '.openclaw'),
   join(homedir(), '.hermes'),
 ];
-const SKIP_DIRS = new Set(['node_modules', '.git', 'cache', 'caches', 'audio_cache', 'bootstrap-cache', 'backups', 'dist', 'venv', '__pycache__']);
-const MAX_PER_ROOT = 12;
+const SKIP_DIRS = new Set(['node_modules', '.git', 'cache', 'caches', 'audio_cache', 'bootstrap-cache', 'backups', 'dist', 'venv', '__pycache__', 'rescue', 'lcm-files', 'qmd']);
 const MIN_BYTES = 2048;
 
 function findJsonl(dir, depth = 0, out = []) {
-  if (depth > 4) return out;
+  if (depth > 6) return out;
   let entries;
   try { entries = readdirSync(dir); } catch { return out; }
   for (const entry of entries) {
@@ -45,30 +45,103 @@ function findJsonl(dir, depth = 0, out = []) {
     let st;
     try { st = statSync(full); } catch { continue; }
     if (st.isDirectory()) findJsonl(full, depth + 1, out);
-    else if (/\.jsonl$/i.test(entry) && st.size >= MIN_BYTES) out.push({ path: full, mtime: st.mtimeMs, size: st.size });
+    // plain .jsonl only; trajectory files are runtime traces whose
+    // "timedOut":false fields read as thousands of fake timeout errors
+    else if (/\.jsonl$/i.test(entry) && !/\.trajectory\.jsonl$/i.test(entry) && st.size >= MIN_BYTES) {
+      out.push({ path: full, mtime: st.mtimeMs, size: st.size });
+    }
   }
   return out;
 }
 
+/**
+ * Hermes keeps history in SQLite, not transcripts. Dump each session with
+ * >= 10 messages to session-dumps/hermes/<id>.jsonl (idempotent; needs the
+ * macOS-bundled sqlite3 CLI). Uses the live state db if present, else the
+ * newest state snapshot.
+ */
+function dumpHermesSessions() {
+  const outDir = join(process.cwd(), 'session-dumps', 'hermes');
+  const candidates = [join(homedir(), '.hermes', 'state', 'state.db')];
+  try {
+    const snapRoot = join(homedir(), '.hermes', 'state-snapshots');
+    for (const d of readdirSync(snapRoot).sort().reverse().slice(0, 1)) {
+      candidates.push(join(snapRoot, d, 'state.db'));
+    }
+  } catch { /* no snapshots */ }
+  const db = candidates.find((p) => existsSync(p));
+  if (!db) return null;
+  const probe = spawnSync('sqlite3', [db, "SELECT name FROM sqlite_master WHERE name='messages'"], { encoding: 'utf8' });
+  if (probe.error || !probe.stdout.includes('messages')) return null;
+  mkdirSync(outDir, { recursive: true });
+  const list = spawnSync('sqlite3', [db, 'SELECT session_id, COUNT(*) FROM messages GROUP BY session_id HAVING COUNT(*) >= 10'], { encoding: 'utf8' });
+  if (list.error) return null;
+  const sessions = list.stdout.trim().split('\n').filter(Boolean).map((l) => l.split('|')[0]);
+  let dumped = 0;
+  for (const sid of sessions) {
+    const safe = sid.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80);
+    const dest = join(outDir, `${safe}.jsonl`);
+    if (existsSync(dest)) continue; // idempotent — old dumps stay stable
+    const rows = spawnSync('sqlite3', ['-json', db,
+      `SELECT role, content, tool_name, timestamp FROM messages WHERE session_id='${sid.replace(/'/g, "''")}' ORDER BY timestamp`,
+    ], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    if (rows.error || !rows.stdout.trim()) continue;
+    try {
+      const msgs = JSON.parse(rows.stdout);
+      const lines = msgs.map((m) => JSON.stringify({
+        role: m.role,
+        content: typeof m.content === 'string' ? m.content.slice(0, 4000) : m.content,
+        ...(m.tool_name ? { tool_name: m.tool_name } : {}),
+        timestamp: new Date(m.timestamp < 1e12 ? m.timestamp * 1000 : m.timestamp).toISOString(),
+      }));
+      writeFileSync(dest, lines.join('\n') + '\n');
+      dumped++;
+    } catch { /* malformed rows — skip session */ }
+  }
+  console.error(`hermes db: ${sessions.length} sessions with >=10 messages (${dumped} newly dumped) -> session-dumps/hermes/`);
+  return outDir;
+}
+
 function main() {
   const args = process.argv.slice(2);
-  const roots = (args.length > 0 ? args : DEFAULT_ROOTS).filter((r) => existsSync(r));
+  // flags: --all (no per-root cap — the full nostalgia archive) · --max N
+  const all = args.includes('--all');
+  const maxIdx = args.indexOf('--max');
+  const maxPerRoot = all ? Infinity : maxIdx !== -1 ? parseInt(args[maxIdx + 1], 10) || 12 : 12;
+  const rootArgs = args.filter((a, i) => !a.startsWith('--') && i !== maxIdx + 1);
+  const roots = (rootArgs.length > 0 ? rootArgs : DEFAULT_ROOTS).filter((r) => existsSync(r));
   if (roots.length === 0) {
     console.error('no session roots found. pass one explicitly: npm run scan -- /path/to/logs');
     process.exit(1);
   }
+  // Hermes lives in SQLite — dump to jsonl first, then scan the dumps
+  const hermesDump = dumpHermesSessions();
+  if (hermesDump && !roots.includes(hermesDump)) roots.push(hermesDump);
+
   const outDir = join(process.cwd(), 'public', 'cards');
   mkdirSync(outDir, { recursive: true });
 
   const index = [];
   const usedNames = new Set();
+  const seenBasenames = new Set(); // sessions get copied around — scan each once
   for (const root of roots) {
-    const harness = /\.claude/.test(root) ? 'claude code'
-      : /\.openclaw/.test(root) ? 'openclaw'
-      : /\.hermes/.test(root) ? 'hermes' : 'unknown harness';
-    const files = findJsonl(root).sort((a, b) => b.mtime - a.mtime).slice(0, MAX_PER_ROOT);
-    console.error(`${root}: ${files.length} recent session file(s)`);
+    const harness = /session-dumps\/hermes|\.hermes/.test(root) ? 'hermes'
+      : /\.claude/.test(root) ? 'claude code'
+      : /\.openclaw/.test(root) ? 'openclaw' : 'unknown harness';
+    const allFiles = findJsonl(root)
+      .filter((f) => {
+        const base = basename(f.path);
+        if (seenBasenames.has(base)) return false;
+        seenBasenames.add(base);
+        return true;
+      })
+      .sort((a, b) => b.mtime - a.mtime);
+    const files = Number.isFinite(maxPerRoot) ? allFiles.slice(0, maxPerRoot) : allFiles;
+    console.error(`${root}: ${files.length} session file(s)${all ? ' (full archive)' : ' (most recent)'}`);
+    let processed = 0;
     for (const f of files) {
+      processed++;
+      if (all && processed % 100 === 0) console.error(`  …${processed}/${files.length}`);
       try {
         const card = buildCard(f.path, [f.path], extract([f.path]));
         // provenance for the Observer's memory-lane roast
@@ -97,12 +170,18 @@ function main() {
         index.push({
           file,
           session_id: card.session_id,
+          harness,
+          when: card.when,
           errors: (card.errors ?? []).reduce((s, e) => s + (e.count ?? 1), 0),
           enemies,
           tasks: card.tasks?.length ?? 0,
           stability: card.stability_score ?? null,
           messages: card.message_count ?? 0,
           mtime: Math.round(f.mtime),
+          // difficulty inputs (see src/levels.ts) — raw so the formula stays tunable
+          token_peak: card.token_peak ?? null,
+          compactions: card.compaction_events ?? 0,
+          work: (card.tasks ?? []).reduce((s, t) => s + (t.work_units ?? 2), 0),
         });
       } catch (err) {
         console.error(`  skip ${basename(f.path)}: ${err.message}`);

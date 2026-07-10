@@ -83,6 +83,11 @@ html, body {
 }
 .drop-zone.dragover { border-color: var(--green); color: var(--green); background: rgba(126, 231, 135, 0.05); }
 .card-status { margin-top: 8px; font-size: 11px; color: var(--dim); line-height: 1.5; min-height: 30px; }
+#gallery-filter {
+  width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  font-family: inherit; font-size: 12px; padding: 5px 8px; margin: 4px 0;
+}
+#gallery-filter:focus { outline: none; border-color: var(--green); }
 .card-status.loaded { color: var(--green); }
 
 /* command-palette rows instead of buttons */
@@ -99,6 +104,13 @@ html, body {
 .cmd .cmd-desc { white-space: nowrap; }
 .cmd.primary .cmd-name { color: var(--green); }
 .cmd .cmd-desc { color: var(--dim); font-size: 12px; }
+.cmd.folder { padding: 5px 10px; }
+.cmd.folder .cmd-name { color: var(--clay); }
+.cmd.folder .caret { color: var(--clay); }
+.cmd.level { padding: 2px 10px 2px 22px; font-size: 12px; }
+.recap-rank { text-align: center; font-size: 26px; letter-spacing: 0.15em; margin-bottom: 4px; }
+.recap-rank .dim, .recap-rank span[style] { font-size: 13px; letter-spacing: normal; }
+.recap-rank > span:first-child { font-size: 26px !important; }
 
 .linkish {
   background: none; border: none; color: var(--blue); font-family: inherit; font-size: inherit;

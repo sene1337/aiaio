@@ -222,10 +222,11 @@ export function extract(files) {
           if (obj.completed === true || obj.status === 'completed' || obj.status === 'done') cur.completed = true;
           agg.tasks.set(name, cur);
         }
-        // model switches
-        if (typeof obj.model === 'string') {
-          if (agg.lastModel !== null && agg.lastModel !== obj.model) agg.modelSwitches++;
-          agg.lastModel = obj.model;
+        // model switches (claude code: model; openclaw: modelId on model_change)
+        const model = obj.model ?? obj.modelId;
+        if (typeof model === 'string') {
+          if (agg.lastModel !== null && agg.lastModel !== model) agg.modelSwitches++;
+          agg.lastModel = model;
         }
         // explicit error objects
         if (obj.error || obj.type === 'error' || obj.level === 'error') {

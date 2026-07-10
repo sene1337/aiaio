@@ -2,3 +2,4 @@ node_modules/
 dist/
 public/cards/
 qa-logs/
+session-dumps/

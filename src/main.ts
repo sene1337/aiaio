@@ -11,6 +11,11 @@ import { qa } from './telemetry';
 import { audio } from './audio';
 import { music } from './music';
 import { observer } from './observer';
+import {
+  LevelEntry, difficulty, tierOf, TIERS, unlockedTiers, getProgress, isCleared,
+  computeRank, recordResult, RANK_COLORS,
+} from './levels';
+import { progressFrac } from './tasks';
 
 type ScreenId = 'menu' | 'briefing' | 'match' | 'recap';
 
@@ -80,25 +85,109 @@ async function loadGallery(): Promise<void> {
     if (!res.ok) throw new Error('none');
     const index: Array<{ file: string; session_id: string; errors: number; enemies?: number; tasks: number; stability: number | null }> = await res.json();
     if (!Array.isArray(index) || index.length === 0) throw new Error('empty');
-    box.innerHTML = '<div class="hint" style="text-align:left">scanned sessions (npm run scan):</div>';
-    for (const entry of index.slice(0, 12)) {
-      const btn = document.createElement('button');
-      btn.className = 'cmd';
-      const shortId = entry.session_id.length > 26 ? entry.session_id.slice(0, 24) + '…' : entry.session_id;
-      const threat = typeof entry.enemies === 'number'
-        ? `${entry.enemies} enemies (${entry.errors} errors)` : `${entry.errors} errors`;
-      btn.innerHTML = `<span class="caret">❯</span><span class="cmd-name">${shortId}</span>` +
-        `<span class="cmd-desc">${threat} · stability ${entry.stability ?? '?'}</span>`;
-      btn.addEventListener('click', async () => {
-        try {
-          const cardRes = await fetch(`./cards/${entry.file}`);
-          setCard(parseSessionCard(await cardRes.text()), entry.file);
-        } catch {
-          $('card-status-0').textContent = `✕ could not load ${entry.file}`;
+    const entries = index as LevelEntry[];
+    const PER_FOLDER = 24;
+    // folders open state: default-open the lowest unlocked tier with unfinished levels
+    const openTiers = new Set<number>();
+
+    const render = (filter: string) => {
+      box.innerHTML = '';
+      const q = filter.trim().toLowerCase();
+      const unlocked = unlockedTiers(entries);
+
+      // bucket levels into tiers
+      const buckets: LevelEntry[][] = TIERS.map(() => []);
+      for (const e of entries) {
+        if (q && !`${e.session_id} ${e.harness ?? ''} ${e.when ?? ''}`.toLowerCase().includes(q)) continue;
+        buckets[tierOf(difficulty(e)).index].push(e);
+      }
+      // trophy shelf on top: cleared levels first (you should SEE what's done),
+      // then the frontier, easiest first
+      buckets.forEach((b) => b.sort((a, x) => {
+        const ca = isCleared(getProgress(a.session_id)) ? 0 : 1;
+        const cx = isCleared(getProgress(x.session_id)) ? 0 : 1;
+        return ca - cx || difficulty(a) - difficulty(x);
+      }));
+
+      const clearedTotal = entries.filter((e) => isCleared(getProgress(e.session_id))).length;
+      const head = document.createElement('div');
+      head.className = 'hint';
+      head.style.textAlign = 'left';
+      head.textContent = `THE VAULT — ${entries.length} sessions · ${clearedTotal} cleared (type to filter):`;
+      box.appendChild(head);
+      const input = document.createElement('input');
+      input.id = 'gallery-filter';
+      input.placeholder = 'filter by name, harness (openclaw/hermes/claude), or date…';
+      input.value = filter;
+      input.addEventListener('input', () => render(input.value));
+      box.appendChild(input);
+
+      if (openTiers.size === 0) {
+        // first render: open the frontier tier
+        const frontier = TIERS.findIndex((_, i) =>
+          unlocked[i] && buckets[i].some((e) => !isCleared(getProgress(e.session_id))));
+        openTiers.add(frontier === -1 ? 0 : frontier);
+      }
+
+      for (const tier of TIERS) {
+        const bucket = buckets[tier.index];
+        if (bucket.length === 0 && !q) continue;
+        const isOpen = (openTiers.has(tier.index) || !!q) && unlocked[tier.index];
+        const cleared = bucket.filter((e) => isCleared(getProgress(e.session_id))).length;
+
+        const folder = document.createElement('button');
+        folder.className = 'cmd folder';
+        if (!unlocked[tier.index]) {
+          const need = 2 - entries.filter((e) =>
+            tierOf(difficulty(e)).index === tier.index - 1 && isCleared(getProgress(e.session_id))).length;
+          folder.innerHTML = `<span class="caret">${isOpen ? '▾' : '▸'}</span><span class="cmd-name dim">🔒 ${tier.name}/</span>` +
+            `<span class="cmd-desc">clear ${Math.max(1, need)} more in ${TIERS[tier.index - 1].name.split(' — ')[0]}</span>`;
+        } else {
+          folder.innerHTML = `<span class="caret">${isOpen ? '▾' : '▸'}</span><span class="cmd-name">${tier.name}/</span>` +
+            `<span class="cmd-desc">${bucket.length} levels · ${cleared} cleared</span>`;
+          folder.addEventListener('click', () => {
+            if (openTiers.has(tier.index)) openTiers.delete(tier.index); else openTiers.add(tier.index);
+            render(input.value);
+          });
         }
-      });
-      box.appendChild(btn);
-    }
+        box.appendChild(folder);
+        if (!isOpen) continue;
+
+        for (const entry of bucket.slice(0, PER_FOLDER)) {
+          const p = getProgress(entry.session_id);
+          const diff = difficulty(entry);
+          const btn = document.createElement('button');
+          btn.className = 'cmd level';
+          const shortId = entry.session_id.length > 22 ? entry.session_id.slice(0, 20) + '…' : entry.session_id;
+          const glyph = isCleared(p) ? '☒' : '☐';
+          const rankBit = p
+            ? ` <span style="color:${RANK_COLORS[p.rank]}">★${p.rank}</span> <span class="dim">${p.bestScore.toLocaleString()}</span>`
+            : '';
+          const prov = [entry.when, entry.harness].filter(Boolean).join(' ');
+          btn.innerHTML = `<span class="caret">&nbsp;</span><span class="cmd-name">${glyph} ${shortId}</span>` +
+            `<span class="cmd-desc">${prov ? prov + ' · ' : ''}diff ${diff}${rankBit}</span>`;
+          btn.addEventListener('click', async () => {
+            try {
+              const cardRes = await fetch(`./cards/${entry.file}`);
+              setCard(parseSessionCard(await cardRes.text()), entry.file);
+            } catch {
+              $('card-status-0').textContent = `✕ could not load ${entry.file}`;
+            }
+          });
+          box.appendChild(btn);
+        }
+        if (bucket.length > PER_FOLDER) {
+          const more = document.createElement('div');
+          more.className = 'hint';
+          more.style.textAlign = 'left';
+          more.textContent = `  …${bucket.length - PER_FOLDER} more in this tier — filter to find them`;
+          box.appendChild(more);
+        }
+      }
+      const refocus = document.getElementById('gallery-filter') as HTMLInputElement;
+      if (q) { refocus.focus(); refocus.setSelectionRange(filter.length, filter.length); }
+    };
+    render('');
   } catch {
     box.innerHTML = '<div class="hint" style="text-align:left">no scanned sessions — run <b>npm run scan</b> to auto-build cards from your OpenClaw / Claude Code / Hermes sessions, or drop a card above.</div>';
   }
@@ -113,6 +202,18 @@ function prepareRun(card: SessionCard): void {
   const name = card.session_id ? `agent:${String(card.session_id).slice(0, 14)}` : 'AGENT-01';
   const loadout = loadoutFromCard(card, name);
   loadout.cardSummary.fromCard = loadedCard !== null || card === EXAMPLE_CLEAN || card === EXAMPLE_CHAOTIC;
+  // campaign context for the briefing: computed difficulty + any existing rank
+  const entryLike: LevelEntry = {
+    file: '', session_id: String(card.session_id ?? 'unknown'),
+    errors: (card.errors ?? []).reduce((s, e) => s + (e.count ?? 1), 0),
+    tasks: card.tasks?.length ?? 0, stability: card.stability_score ?? null,
+    messages: card.message_count ?? 120,
+    token_peak: card.token_peak ?? null, compactions: card.compaction_events ?? 0,
+    work: (card.tasks ?? []).reduce((s, t) => s + (t.work_units ?? 2), 0),
+  };
+  const diff = difficulty(entryLike);
+  const prevProgress = getProgress(entryLike.session_id);
+
   run = new Run({ loadout, card, name });
   (window as any).__aiaio = run; // debug/testing handle
   recapShown = false;
@@ -131,7 +232,10 @@ function prepareRun(card: SessionCard): void {
     routeAudio(type, data);
     observer.onEvent(type, data);
   };
-  ui.buildBriefing(loadout, card, name);
+  ui.buildBriefing(loadout, card, name, {
+    diff, tierName: tierOf(diff).name,
+    prevRank: prevProgress ? `${prevProgress.rank} · best ${prevProgress.bestScore.toLocaleString()}` : null,
+  });
   showScreen('briefing');
 
   // the memory-lane roast: compositional immediately, LLM version (your own
@@ -228,6 +332,8 @@ const FEATURE_KEYS: Record<string, string> = {
 
 function wireKeyboard(): void {
   window.addEventListener('keydown', (e) => {
+    // typing in an input (gallery filter) must never trigger game shortcuts
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
     held.add(e.key);
     audio.ensure(); // first gesture unlocks the AudioContext
     music.ensure();
@@ -317,9 +423,14 @@ function frame(t: number): void {
     if (run.over && !recapShown && !run.bannerActive) {
       recapShown = true;
       const r = run;
+      const over = run.over;
+      // grade the run + persist campaign progress (keyed by session stem)
+      const rank = computeRank(over.won, over.perfect, progressFrac(r.queue));
+      const rec = recordResult(r.loadout.cardSummary.sessionId, rank, over.score);
+      qa.event('rank', { rank, score: over.score, newBest: rec.newBest });
       window.setTimeout(() => {
         if (run === r && r.over) {
-          ui.buildRecap(r);
+          ui.buildRecap(r, { rank, newBest: rec.newBest, rankUp: rec.rankUp, prevBest: rec.prev?.bestScore ?? null });
           showScreen('recap');
         }
       }, 1500);

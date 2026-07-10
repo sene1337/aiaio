@@ -802,10 +802,16 @@ export class UI {
   // briefing + recap
   // -------------------------------------------------------------------------
 
-  buildBriefing(loadout: AgentLoadout, card: SessionCard, name: string): void {
+  buildBriefing(
+    loadout: AgentLoadout, card: SessionCard, name: string,
+    campaign?: { diff: number; tierName: string; prevRank: string | null },
+  ): void {
     const cols = $('briefing-cols');
     cols.innerHTML = '';
     const s = loadout.cardSummary;
+    const campaignLine = campaign
+      ? `<div class="stat-line" style="color:var(--yellow)">difficulty ${campaign.diff}/100 · ${escapeHtml(campaign.tierName)}${campaign.prevRank ? ` · your record: ★${escapeHtml(campaign.prevRank)}` : ' · unplayed'}</div>`
+      : '';
 
     const agentCol = document.createElement('div');
     agentCol.className = 'briefing-col p0';
@@ -816,6 +822,7 @@ export class UI {
     const tasks = loadout.tasks.map((t) => `<li>☐ ${escapeHtml(t.name)} <span class="dim">(${t.workUnits} work)</span></li>`).join('');
     agentCol.innerHTML = `
       <h3>${escapeHtml(name)}</h3>
+      ${campaignLine}
       <div class="stat-line">stability ${loadout.stability}/100 · hardening ${(loadout.hardening * 100).toFixed(0)}%</div>
       <div class="stat-line">context budget ${loadout.tokenBudget} · compaction at ${(loadout.compactionThreshold * 100).toFixed(0)}% (each one makes the wall LEAP)</div>
       ${loadout.stability < 45 ? '<div class="handicap-note">⚑ HANDICAP: low stability — starting shield + damage bonus. struggling agents get armor.</div>' : ''}
@@ -862,7 +869,10 @@ export class UI {
       lines.map((l) => `<p>${escapeHtml(l)}</p>`).join('');
   }
 
-  buildRecap(run: Run): void {
+  buildRecap(
+    run: Run,
+    rankInfo?: { rank: 'S' | 'A' | 'B' | 'C' | 'D'; newBest: boolean; rankUp: boolean; prevBest: number | null },
+  ): void {
     const over = run.over!;
     $('recap-headline').textContent = over.headline;
     const body = $('recap-body');
@@ -884,7 +894,14 @@ export class UI {
         placeBit = `<p class="recap-summary dim">the run ended around the part of the session where: "${escapeHtml(nearest.text.slice(0, 90))}"</p>`;
       }
     }
+    const RANK_COLORS: Record<string, string> = { S: '#7ee787', A: '#6cb6ff', B: '#dedad2', C: '#e3b341', D: '#f47067' };
+    const rankBit = rankInfo
+      ? `<p class="recap-rank"><span style="color:${RANK_COLORS[rankInfo.rank]}">★ RANK ${rankInfo.rank}</span>` +
+        `${rankInfo.newBest ? ' <span style="color:var(--yellow)">NEW BEST</span>' : rankInfo.prevBest !== null ? ` <span class="dim">best ${rankInfo.prevBest.toLocaleString()}</span>` : ''}` +
+        `${rankInfo.rankUp && rankInfo.prevBest !== null ? ' <span style="color:var(--green)">RANK UP</span>' : ''}</p>`
+      : '';
     body.innerHTML = `
+      ${rankBit}
       <p class="recap-summary">SCORE ${over.score} — ${Math.floor(run.time)}s · ${run.kills} errors resolved · ${run.ctx.compactions} compactions</p>
       ${placeBit}
       <div class="recap-cols"><div class="recap-col">
