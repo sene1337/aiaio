@@ -232,6 +232,10 @@ export class Run {
   awards: Award[] = [];
   nukesFired = 0;
   subsEatenByWall = 0;
+  /** the Task tool must be GRANTED before S works (a permission terminal early in the level) */
+  subagentsUnlocked = false;
+  permTerminal: { x: number; y: number; claimed: boolean } | null = null;
+  nearPermTerminal = false;
   nearStation: Station | null = null;
   nearCrate: Crate | null = null;
   crateMenu: CrateMenu | null = null;
@@ -394,6 +398,11 @@ export class Run {
     // one ◈ MODEL UPGRADE crate mid-to-late level — the "new model released" moment
     const mx = Math.round(width * rng.range(0.5, 0.78));
     this.crates.push({ x: mx, y: this.terrain.surfaceAt(mx) - 10, used: false, kind: 'model' });
+
+    // the Task-tool permission terminal, early in the timeline: delegation
+    // must be granted, not assumed
+    const px = Math.round(width * rng.range(0.09, 0.16));
+    this.permTerminal = { x: px, y: this.terrain.surfaceAt(px), claimed: false };
   }
 
   // -------------------------------------------------------------------------
@@ -639,7 +648,10 @@ export class Run {
   }
 
   installUpdate(): void {
-    if (this.over || !this.nearCrate || this.nearCrate.used || this.crateMenu) return;
+    if (this.over) return;
+    // U also claims the Task-tool grant when you're at the permission terminal
+    if (this.nearPermTerminal) { this.claimPermission(); return; }
+    if (!this.nearCrate || this.nearCrate.used || this.crateMenu) return;
     const a = this.avatar;
     if (this.nearCrate.kind === 'model') {
       this.nearCrate.used = true;
@@ -735,9 +747,27 @@ export class Run {
     this.emit('crate_choice', { choice: opt.id });
   }
 
+  /** claim the Task-tool grant at the permission terminal */
+  claimPermission(): void {
+    if (!this.permTerminal || this.permTerminal.claimed || !this.nearPermTerminal) return;
+    this.permTerminal.claimed = true;
+    this.subagentsUnlocked = true;
+    this.pushBanner({
+      kind: 'info', ttl: 4,
+      title: '✳ PERMISSION GRANTED — Task tool',
+      lines: ['S now spawns subagents (900tk + upkeep).', 'delegate responsibly. or don\'t. I\'m a banner, not a cop.'],
+    });
+    this.pushLog('✳ Task tool granted — subagents unlocked (S)');
+    this.emit('perm_granted', {});
+  }
+
   /** S: spawn a lower-model subagent — 900tk up front, then it drips tokens while alive */
   spawnSubagent(cached = false): void {
     if (this.over) return;
+    if (!this.subagentsUnlocked && !cached) {
+      this.pushLog('⛔ permission denied: Task tool not granted — find the [y/n] terminal');
+      return;
+    }
     const alive = this.subagents.length;
     if (alive >= 2) { this.pushLog('🤖 subagent limit reached (2 concurrent — rate limits)'); return; }
     if (!cached) this.spendTokens(RUN_COST.subagentSpawn);
@@ -924,6 +954,8 @@ export class Run {
       return Math.abs(s.x - this.avatar.x) < 36 && !t.done && !t.forgotten && s.x > this.wallX;
     }) ?? null;
     this.nearCrate = this.crates.find((c) => !c.used && Math.abs(c.x - this.avatar.x) < 30) ?? null;
+    this.nearPermTerminal = !!(this.permTerminal && !this.permTerminal.claimed &&
+      Math.abs(this.permTerminal.x - this.avatar.x) < 34);
     // walking away from an open crate menu closes it
     if (this.crateMenu && (this.crateMenu.crate.used || Math.abs(this.crateMenu.crate.x - this.avatar.x) > 60)) {
       this.crateMenu = null;

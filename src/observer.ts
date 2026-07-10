@@ -142,6 +142,10 @@ const LINES: Record<string, Pool> = {
   zap_think: [
     'Out of print statements. Even the debugger needs a moment.',
   ],
+  perm_granted: [
+    'You now have permission to delegate. The org chart trembles.',
+    'Task tool granted. Somewhere, a smaller model just felt a chill.',
+  ],
   cheer: [
     'Oh. A direct hit. I suppose violence was on the roadmap.',
     'Direct hit. Almost suspiciously competent.',
@@ -163,6 +167,18 @@ const ROAST_HISTORY: Pool = [
   'The record shows {topCount} {topError} errors and {compactions} compactions. The tasks? {done} of {tasks}. I counted twice.',
   'History logged {topCount} counts of {topError} and a memory that compacted {compactions} times. Task completion: {done}/{tasks}.',
 ];
+// BAD NEWS: a second personality for disasters. if the macOS novelty voice
+// "Bad News" is installed it SINGS these as a funeral dirge, which is the
+// funniest possible outcome; otherwise a pitched-down second voice fills in.
+const BAD_NEWS_LINES: Pool = [
+  'Bad news.',
+  'That was load-bearing.',
+  'The situation has developed. Negatively.',
+  'Oh no.',
+  'It is worse now.',
+  'Condolences.',
+];
+
 const ROAST_STING: Pool = [
   'Anyway. Stability {stab}. Let us see if the rematch goes better.',
   'Tonight, you get to relive it. With weapons. Stability {stab}, for the record.',
@@ -181,6 +197,8 @@ export class Observer {
   private lastProgressAt = 0;
   private wallWarned = false;
   private voice: SpeechSynthesisVoice | null = null;
+  private badVoice: SpeechSynthesisVoice | null | undefined = undefined; // undefined = not yet resolved
+  private lastBadNewsAt = -999;
   private nukeCount = 0;
 
   bindSink(sink: (line: string) => void): void {
@@ -280,6 +298,7 @@ export class Observer {
       case 'compaction': {
         const n = Number(data.n) || 1;
         this.remark(n >= 2 ? 'compaction_many' : 'compaction_1', { n }, 2);
+        if (n >= 2) this.badNews();
         break;
       }
       case 'task_done':
@@ -291,12 +310,17 @@ export class Observer {
         break;
       case 'task_eaten':
         this.remark('task_eaten', { task: String(data.task ?? 'a task') }, 2);
+        this.badNews();
+        break;
+      case 'perm_granted':
+        this.remark('perm_granted', {}, 2);
         break;
       case 'subagent_spawn':
         this.remark('subagent_spawn', {}, 1);
         break;
       case 'subagent_corrupted':
         this.remark('subagent_corrupted', {}, 2);
+        this.badNews();
         break;
       case 'subagent_died':
         if (data.corrupted !== true) this.remark('subagent_died', { label: String(data.label ?? 'the subagent') }, 1);
@@ -332,6 +356,7 @@ export class Observer {
         if (typeof data.line === 'string') {
           this.lastSpokeAt = this.time;
           this.speak(data.line);
+          this.badNews(true);
         }
         break;
       case 'voluntary_compact':
@@ -372,6 +397,32 @@ export class Observer {
     });
     this.sink(`☏ observer: ${line}`);
     this.speak(line);
+  }
+
+  /** the second personality: short disaster interjections in a different voice */
+  private badNews(force = false): void {
+    if (!force && this.time - this.lastBadNewsAt < 25) return;
+    if (!force && Math.random() > 0.55) return;
+    this.lastBadNewsAt = this.time;
+    const line = pick(BAD_NEWS_LINES);
+    this.sink(`☠ bad news: ${line}`); // the text judges you even on mute
+    if (!this.voiceOn || !('speechSynthesis' in window)) return;
+    try {
+      const synth = window.speechSynthesis;
+      if (this.badVoice === undefined) {
+        const voices = synth.getVoices();
+        // the macOS novelty voice "Bad News" literally sings a funeral dirge
+        this.badVoice = voices.find((v) => /bad news/i.test(v.name))
+          ?? voices.find((v) => /Organ|Cellos|Zarvox|Whisper|Trinoids/i.test(v.name))
+          ?? voices.find((v) => v.lang.startsWith('en') && v.name !== this.voice?.name)
+          ?? null;
+      }
+      const u = new SpeechSynthesisUtterance(line);
+      if (this.badVoice) u.voice = this.badVoice;
+      if (!this.badVoice || !/bad news/i.test(this.badVoice.name)) { u.pitch = 0.4; u.rate = 0.85; }
+      u.volume = 0.9;
+      synth.speak(u); // queues after any observer line — the dirge waits its turn
+    } catch { /* text judgment only */ }
   }
 
   private speak(text: string): void {

@@ -173,6 +173,26 @@ export class UI {
     // task stations + crates + session moments
     for (const s of run.stations) this.drawStation(ctx, run, s);
     for (const cr of run.crates) this.drawCrate(ctx, run, cr);
+    // the Task-tool permission terminal: a little [y/n] prompt standing in the world
+    if (run.permTerminal && !run.permTerminal.claimed) {
+      const pt = run.permTerminal;
+      const y = run.terrain.surfaceAt(pt.x);
+      const pulse = 0.6 + 0.4 * Math.abs(Math.sin(this.time * 2.2));
+      ctx.fillStyle = '#161615';
+      ctx.strokeStyle = `rgba(126,231,135,${pulse})`;
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(pt.x - 26, y - 26, 52, 22);
+      ctx.strokeRect(pt.x - 26, y - 26, 52, 22);
+      ctx.fillStyle = '#dedad2';
+      ctx.font = '9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('Task tool?', pt.x, y - 17);
+      ctx.fillStyle = `rgba(126,231,135,${pulse})`;
+      ctx.fillText('[y/n]', pt.x, y - 8);
+      ctx.font = `${10 / this.camZoom}px ui-monospace, monospace`;
+      ctx.fillText(run.nearPermTerminal ? '[U — grant permission]' : '✳ subagent permission', pt.x, y - 36);
+      ctx.textAlign = 'left';
+    }
     for (const m of run.moments) {
       if (m.x < viewL - 60 || m.x > viewR + 60) continue;
       const y = run.terrain.surfaceAt(m.x);
@@ -643,7 +663,7 @@ export class UI {
       `<span><span class="sb-key">space</span> fire</span>` +
       `<span><span class="sb-key">w</span> hold to work</span>` +
       `<span><span class="sb-key">u</span> install</span>` +
-      `<span><span class="sb-key">s</span> subagent (${900}tk)</span>` +
+      `<span><span class="sb-key">s</span> subagent${run.subagentsUnlocked ? ' (900tk)' : ' 🔒'}</span>` +
       `<span><span class="sb-key">c</span> /compact${run.compactCd > 0 ? ` (${Math.ceil(run.compactCd)}s)` : ''}</span>` +
       `<span><span class="sb-key">[ ]</span>/<span class="sb-key">1-9</span> weapons</span>` +
       `<span><span class="sb-key">m</span> mute</span>` +
@@ -741,7 +761,7 @@ export class UI {
       div.className = 'tr-line' + (idx === lines.length - 1 ? ' fresh' : '');
       const first = [...line][0];
       let bullet = '⏺', bclass = 'b-action';
-      if ('💢⚡▓'.includes(first)) { bullet = '⏺'; bclass = 'b-bad'; }
+      if ('💢⚡▓☠⛔'.includes(first)) { bullet = '⏺'; bclass = 'b-bad'; }
       else if ('🛡⏱☢➕·✔🔧'.includes(first)) { bullet = '⎿'; bclass = 'b-result'; }
       else if ('⚑📣💥⬆▶🔁'.includes(first)) { bullet = '⏺'; bclass = 'b-system'; }
       const body = line.replace(/^[✦⌨▶·]\s*/u, '');
@@ -773,6 +793,7 @@ export class UI {
       } else if (run.nearStation) {
         bits.push(`<span style="color:#7ee787">hold W — "${escapeHtml(run.queue.tasks[run.nearStation.taskIndex].name)}"</span>`);
       }
+      if (run.nearPermTerminal) bits.push('<span style="color:#7ee787">✳ U — grant Task tool (unlock subagents)</span>');
       if (run.nearCrate) bits.push(`<span style="color:${run.nearCrate.kind === 'model' ? 'var(--blue)' : 'var(--yellow)'}">${run.nearCrate.kind === 'model' ? '◈' : '⬆'} U to install</span>`);
       if (slot.def.id === 'context_nuke') bits.push('<span style="color:var(--red)">⚠ floods 25% of YOUR context</span>');
       if (run.insideWall) bits.push('<span style="color:var(--red)">▓ INSIDE THE FORGETTING — bleeding, weapons spraying</span>');
