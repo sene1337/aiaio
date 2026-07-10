@@ -126,6 +126,9 @@ html, body {
   text-decoration: underline; cursor: pointer; padding: 0;
 }
 .hint { color: var(--dim); font-size: 11px; }
+.credit { color: var(--dim); margin-top: 4px; }
+.credit a { color: var(--clay); text-decoration: none; }
+.credit a:hover { text-decoration: underline; }
 
 /* ---- briefing ---- */
 .briefing-inner h2 { font-size: 15px; letter-spacing: 0.1em; color: var(--text); font-weight: normal; }

@@ -23,6 +23,10 @@ and eventually you.
 Reach `process exit 0` alive. Clear your task queue on the way for a perfect run.
 Every token you spend fighting is distance the wall gains.
 
+If you like this game or have ideas, hit me up on
+[Twitter](https://x.com/bradmillscan) or
+[Instagram](https://instagram.com/bradmillscan) **@bradmillscan**.
+
 ## Run it
 
 ```bash
