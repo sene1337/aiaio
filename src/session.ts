@@ -41,6 +41,9 @@ export interface SessionCard {
   /** first substantive user ask — what the session was FOR */
   goal?: string;
   moments?: SessionCardMoment[];
+  /** provenance (stamped by the scanner): which agent harness + date */
+  harness?: string;
+  when?: string;
   regressions?: number;
   restarts?: number;
   recoveries?: number;
@@ -328,6 +331,8 @@ export function parseSessionCard(text: string): SessionCard {
   card.model_switches = num(raw.model_switches);
   card.stability_score = num(raw.stability_score);
   card.goal = str(raw.goal);
+  card.harness = str(raw.harness);
+  card.when = str(raw.when);
   if (Array.isArray(raw.tasks)) {
     card.tasks = raw.tasks.slice(0, 12).map((t: any) => ({
       name: str(t?.name), work_units: num(t?.work_units), completed: t?.completed === true,

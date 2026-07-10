@@ -14,6 +14,21 @@ interface ObserverContext {
   sessionId: string;
   topError: string;
   tasksTotal: number;
+  stability?: number;
+}
+
+/** everything the memory-lane roast can reference */
+export interface RoastMeta {
+  sessionId: string;
+  harness: string | null;
+  when: string | null;
+  goal: string | null;
+  topError: string;
+  topErrorCount: number;
+  compactions: number;
+  tasksTotal: number;
+  tasksCompleted: number;
+  stability: number;
 }
 
 type Pool = string[];
@@ -26,12 +41,24 @@ function fill(line: string, slots: Record<string, string | number>): string {
   return line.replace(/\{(\w+)\}/g, (_, k) => String(slots[k] ?? ''));
 }
 
+// compositional run-start: opener × observation = hundreds of variants,
+// so the line never goes stale
+const START_OPENERS: Pool = [
+  'Playback initiated.', 'Here we go.', 'Booting your past.', 'The session begins. Again.',
+  'Cursor blinking. Fate undecided.', 'Attempt logged.', 'Replay armed.', 'Process spawned. Expectations managed.',
+];
+const START_OBSERVATIONS: Pool = [
+  '{tasks} tasks. Historically, an optimistic number.',
+  'Your mission: {goal}.',
+  'I will be taking notes. I always take notes.',
+  'Your errors have been expecting you.',
+  'The wall is already awake. It is very patient.',
+  'Stability {stab}. We both know what that means.',
+  'Try to finish something this time.',
+  'The {topError} errors send their regards.',
+];
+
 const LINES: Record<string, Pool> = {
-  run_start: [
-    'Your mission: {goal}. I remember how this went the first time. Do you?',
-    'Ah, session {session}. {tasks} tasks. Historically, an optimistic number.',
-    'Beginning playback of your own decisions. I will be taking notes.',
-  ],
   nuke: [
     'You detonated your own context window. Bold. The wall sends its regards.',
     'A context nuke. Twenty-five percent of your memory, gone, on purpose. I admire the honesty.',
@@ -115,7 +142,33 @@ const LINES: Record<string, Pool> = {
   zap_think: [
     'Out of print statements. Even the debugger needs a moment.',
   ],
+  cheer: [
+    'Oh. A direct hit. I suppose violence was on the roadmap.',
+    'Direct hit. Almost suspiciously competent.',
+    'Nice shot. The error never saw the documentation coming.',
+    'Clean kill. Your aim is better than your token discipline.',
+    'Bullseye. If only the tasks died this easily.',
+    'A direct hit. Noting it in the one column of this spreadsheet that is not red.',
+  ],
 };
+
+// memory-lane roast parts (compositional fallback when no LLM is available)
+const ROAST_SCENE: Pool = [
+  'Welcome back to {when}. A {harness} session. The stated goal: "{goal}".',
+  '{when}. {harness}. You walked in and typed: "{goal}". Brave.',
+  'This one is from {when}, on {harness}. The mission, allegedly: "{goal}".',
+];
+const ROAST_HISTORY: Pool = [
+  'What actually happened: {topError} ×{topCount}, {compactions} compactions, and {done} of {tasks} tasks shipped.',
+  'The record shows {topCount} {topError} errors and {compactions} compactions. The tasks? {done} of {tasks}. I counted twice.',
+  'History logged {topCount} counts of {topError} and a memory that compacted {compactions} times. Task completion: {done}/{tasks}.',
+];
+const ROAST_STING: Pool = [
+  'Anyway. Stability {stab}. Let us see if the rematch goes better.',
+  'Tonight, you get to relive it. With weapons. Stability {stab}, for the record.',
+  'The wall remembers, even if you do not. Good luck.',
+  'You survived it once by closing the laptop. That will not work here.',
+];
 
 export class Observer {
   voiceOn = localStorage.getItem(LS_VOICE) !== '0';
@@ -149,7 +202,50 @@ export class Observer {
     this.lastProgressAt = 0;
     this.wallWarned = false;
     this.nukeCount = 0;
-    this.remark('run_start', {}, 2);
+    // composed, not canned: opener × observation
+    const line = fill(`${pick(START_OPENERS)} ${pick(START_OBSERVATIONS)}`, {
+      goal: this.ctx.goal ?? 'unclear, honestly',
+      session: this.ctx.sessionId.slice(0, 14),
+      tasks: this.ctx.tasksTotal,
+      stab: this.ctx.stability ?? '??',
+      topError: this.ctx.topError,
+    });
+    this.lastSpokeAt = this.time;
+    this.sink(`☏ observer: ${line}`);
+    this.speak(line);
+  }
+
+  /** the pre-game memory-lane roast (compositional; the LLM version replaces it when available) */
+  briefingRoast(meta: RoastMeta): string[] {
+    const slots = {
+      when: meta.when ?? 'an undated day',
+      harness: meta.harness ?? 'an unidentified harness',
+      goal: (meta.goal ?? 'no recorded goal — off to a great start').slice(0, 90),
+      topError: meta.topError,
+      topCount: meta.topErrorCount,
+      compactions: meta.compactions,
+      done: meta.tasksCompleted,
+      tasks: Math.max(meta.tasksTotal, meta.tasksCompleted),
+      stab: meta.stability,
+    };
+    return [fill(pick(ROAST_SCENE), slots), fill(pick(ROAST_HISTORY), slots), fill(pick(ROAST_STING), slots)];
+  }
+
+  /** speak a multi-line roast as queued utterances (natural pauses between lines) */
+  speakRoast(lines: string[]): void {
+    if (!this.voiceOn || !('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      for (const line of lines) this.speakQueued(line);
+    } catch { /* silence is also judgment */ }
+  }
+
+  private speakQueued(text: string): void {
+    const synth = window.speechSynthesis;
+    const u = new SpeechSynthesisUtterance(text);
+    if (this.voice) u.voice = this.voice;
+    u.rate = 1.04; u.pitch = 0.72; u.volume = 0.85;
+    synth.speak(u);
   }
 
   /** Shift+V: cycle through the system's English voices; speaks a sample. */
@@ -224,6 +320,19 @@ export class Observer {
         break;
       case 'model_upgrade':
         this.remark('model_upgrade', {}, 1);
+        break;
+      case 'kill':
+        // occasional sarcastic cheer — direct hits by the PLAYER only
+        if (data.direct === true && data.by !== 'sub' && Math.random() < 0.3) {
+          this.remark('cheer', {}, 1);
+        }
+        break;
+      case 'award':
+        // the game grants it; the observer delivers the eulogy
+        if (typeof data.line === 'string') {
+          this.lastSpokeAt = this.time;
+          this.speak(data.line);
+        }
         break;
       case 'voluntary_compact':
         this.remark('voluntary_compact', {}, 1);

@@ -846,6 +846,20 @@ export class UI {
       <h4>ENEMY ROSTER (from the real error log)</h4><ul>${roster}</ul>
     `;
     cols.appendChild(levelCol);
+
+    // the Observer's memory-lane roast slot (filled by main; LLM version swaps in)
+    const roastBox = document.createElement('div');
+    roastBox.id = 'briefing-roast';
+    roastBox.className = 'briefing-col roast-box';
+    roastBox.innerHTML = '<h3>☏ the observer reviews your file…</h3>';
+    cols.parentElement?.insertBefore(roastBox, cols.nextSibling);
+  }
+
+  setBriefingRoast(lines: string[], source: 'composed' | 'llm'): void {
+    const box = document.getElementById('briefing-roast');
+    if (!box) return;
+    box.innerHTML = `<h3>☏ the observer reviews your file ${source === 'llm' ? '' : '<span class="dim">(from memory)</span>'}</h3>` +
+      lines.map((l) => `<p>${escapeHtml(l)}</p>`).join('');
   }
 
   buildRecap(run: Run): void {
@@ -879,6 +893,7 @@ export class UI {
         ${eaten.length ? `<p style="color:var(--red)">eaten by the wall: ${eaten.map((t) => escapeHtml(t.name)).join(', ')}</p>` : ''}
         ${undone.length ? `<p class="dim">left undone: ${undone.map((t) => escapeHtml(t.name)).join(', ')}</p>` : ''}
         <p>hp ${Math.max(0, Math.round(run.avatar.hp))}/100 · ${run.ctx.compactions} compactions${run.ctx.compactions > 2 ? ' (memory was… negotiable)' : ''}</p>
+        ${run.awards.length ? `<p style="color:var(--yellow)">🏆 ${run.awards.map((a) => `${escapeHtml(a.title)} <span class="dim">— ${escapeHtml(a.desc)}</span>`).join('<br/>🏆 ')}</p>` : ''}
         ${cardBits}
       </div></div>
     `;

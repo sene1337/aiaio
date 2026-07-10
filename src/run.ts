@@ -8,7 +8,7 @@ import { Rng } from './rng';
 import { Terrain } from './terrain';
 import { Projectile, stepProjectile, PHYS_DT } from './physics';
 import { WEAPONS, WeaponDef, WeaponId } from './weapons';
-import { TaskQueue, makeTaskQueue, work as workTask, amnesia, allDone } from './tasks';
+import { TaskQueue, makeTaskQueue, work as workTask, amnesia, allDone, doneUnits } from './tasks';
 import {
   ContextMeter, makeContextMeter, spend, drainAfterCompaction, contextFrac, compactionSummary,
 } from './context';
@@ -74,6 +74,31 @@ const PAYLOADS: Record<string, string[]> = {
   subagent_zap: ['✳'],
 };
 const CLUSTER_HASHES = ['a3f9c2', 'e4d3ec', '9b01f7', 'c524b2', '7ee787', 'd97757'];
+
+// awards of shame: spectacular failures deserve institutional recognition
+export interface Award { id: string; title: string; desc: string; line: string }
+const AWARDS: Record<string, Omit<Award, 'id'>> = {
+  cost_center: {
+    title: 'COST CENTER',
+    desc: '2+ subagents fed to the wall of forgetting in one run',
+    line: 'An award: Cost Center. Two subagents, eighteen hundred tokens, zero survivors. HR has questions.',
+  },
+  self_directed: {
+    title: 'SELF-DIRECTED VIOLENCE',
+    desc: '3+ context nukes in one run',
+    line: 'Three nukes. The award is called Self-Directed Violence. It is not a compliment.',
+  },
+  speedrun_to_nothing: {
+    title: 'SPEEDRUN TO NOTHING',
+    desc: 'died with zero work done',
+    line: 'You died having done none of the work. The award is shaped like a mirror.',
+  },
+  conscientious_objector: {
+    title: 'CONSCIENTIOUS OBJECTOR',
+    desc: 'reached process exit without resolving a single error',
+    line: 'You finished while resolving nothing. The errors remain. They will always remain.',
+  },
+};
 
 const KILL_WORDS: Record<string, string> = {
   timeout_blob: 'RESOLVED',
@@ -204,6 +229,9 @@ export class Run {
   time = 0;
   kills = 0;
   working = false;
+  awards: Award[] = [];
+  nukesFired = 0;
+  subsEatenByWall = 0;
   nearStation: Station | null = null;
   nearCrate: Crate | null = null;
   crateMenu: CrateMenu | null = null;
@@ -445,9 +473,23 @@ export class Run {
     this.emit('compaction', { n: this.ctx.compactions, leap, wallGap: Math.round(this.avatar.x - this.wallX) });
   }
 
+  /** grant an award of shame (once), with full ceremony */
+  private grantAward(id: keyof typeof AWARDS): void {
+    if (this.awards.some((a) => a.id === id)) return;
+    const def = AWARDS[id];
+    const award: Award = { id: String(id), ...def };
+    this.awards.push(award);
+    this.pushBanner({ kind: 'update', ttl: 5, title: `🏆 AWARD: ${def.title}`, lines: [def.desc] });
+    this.pushLog(`🏆 award unlocked: ${def.title} — ${def.desc}`);
+    this.emit('award', { id, title: def.title, line: def.line });
+  }
+
   private finish(won: boolean, reason: RunOver['reason']): void {
     if (this.over) return;
     const tasksDone = this.queue.tasks.filter((t) => t.done).length;
+    // end-of-run awards
+    if (!won && doneUnits(this.queue) === 0) this.grantAward('speedrun_to_nothing');
+    if (won && this.kills === 0) this.grantAward('conscientious_objector');
     const perfect = won && allDone(this.queue);
     const score = Math.max(0,
       tasksDone * 1000 +
@@ -497,6 +539,10 @@ export class Run {
     if (slot.cooldownLeft > 0) return;
     // the ∞ zapper overheats into a THINK pause — you can never run out of
     // print statements, but you can print yourself into a corner
+    if (slot.def.id === 'context_nuke') {
+      this.nukesFired++;
+      if (this.nukesFired >= 3) this.grantAward('self_directed');
+    }
     if (slot.def.id === 'debug_zap') {
       if (this.zapThink > 0) return;
       this.zapHeat++;
@@ -976,8 +1022,10 @@ export class Run {
     for (const sa of this.subagents) {
       if (sa.hp > 0 && sa.x < this.wallX) {
         sa.hp = 0;
+        this.subsEatenByWall++;
         this.pushLog(`▓ the wall ate ${sa.label} — lower models don't survive the forgetting`);
         this.emit('subagent_eaten', { corrupted: sa.corrupted });
+        if (this.subsEatenByWall >= 2) this.grantAward('cost_center');
       }
     }
     // wall proximity warning + being INSIDE it: survivable, but you bleed and spray

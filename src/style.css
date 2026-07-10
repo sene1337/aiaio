@@ -122,6 +122,9 @@ html, body {
 .briefing-col li { margin-bottom: 3px; }
 .wsrc { color: var(--dim); font-size: 10px; display: block; padding-left: 14px; }
 .handicap-note { color: var(--yellow); font-size: 11px; border-left: 2px solid var(--yellow); padding-left: 8px; margin-top: 8px; }
+.roast-box { width: 100%; border-color: var(--clay) !important; margin-top: 12px; }
+.roast-box h3 { color: var(--clay) !important; }
+.roast-box p { margin: 3px 0; line-height: 1.6; }
 .stat-line { color: var(--text); }
 
 /* ---- match layout ---- */

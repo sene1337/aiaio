@@ -123,6 +123,7 @@ function prepareRun(card: SessionCard): void {
     sessionId: String(card.session_id ?? 'unknown'),
     topError: loadout.cardSummary.topErrorCategory,
     tasksTotal: loadout.tasks.length,
+    stability: loadout.stability,
   });
   run.emit = (type, data = {}) => {
     qa.event(type, data);
@@ -132,6 +133,47 @@ function prepareRun(card: SessionCard): void {
   };
   ui.buildBriefing(loadout, card, name);
   showScreen('briefing');
+
+  // the memory-lane roast: compositional immediately, LLM version (your own
+  // agent, dev-server only) swaps in when it arrives; whichever is current
+  // gets spoken once
+  const meta = {
+    sessionId: String(card.session_id ?? 'unknown'),
+    harness: card.harness ?? null,
+    when: card.when ?? null,
+    goal: card.goal ?? loadout.tasks[0]?.name ?? null,
+    topError: loadout.cardSummary.topErrorCategory,
+    topErrorCount: loadout.cardSummary.topErrorCount,
+    compactions: loadout.cardSummary.compactionEvents,
+    tasksTotal: Math.max(loadout.cardSummary.tasksTotal, loadout.tasks.length),
+    tasksCompleted: loadout.cardSummary.tasksCompleted,
+    stability: loadout.stability,
+  };
+  const composed = observer.briefingRoast(meta);
+  ui.setBriefingRoast(composed, 'composed');
+  const thisRun = run;
+  let spoken = false;
+  const speakIfCurrent = (lines: string[]) => {
+    if (spoken || run !== thisRun || $('screen-briefing').classList.contains('hidden')) return;
+    spoken = true;
+    observer.speakRoast(lines);
+  };
+  if (import.meta.env.DEV) {
+    fetch('/__quip', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: meta.sessionId + ':briefing', data: meta }),
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('no quip'))))
+      .then(({ lines }: { lines: string[] }) => {
+        if (Array.isArray(lines) && lines.length > 0 && run === thisRun) {
+          ui.setBriefingRoast(lines, 'llm');
+          speakIfCurrent(lines);
+        }
+      })
+      .catch(() => { /* compositional fallback speaks below */ });
+  }
+  window.setTimeout(() => speakIfCurrent(composed), 6000);
 }
 
 function routeAudio(type: string, data: Record<string, unknown>): void {

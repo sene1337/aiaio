@@ -63,11 +63,17 @@ function main() {
   const index = [];
   const usedNames = new Set();
   for (const root of roots) {
+    const harness = /\.claude/.test(root) ? 'claude code'
+      : /\.openclaw/.test(root) ? 'openclaw'
+      : /\.hermes/.test(root) ? 'hermes' : 'unknown harness';
     const files = findJsonl(root).sort((a, b) => b.mtime - a.mtime).slice(0, MAX_PER_ROOT);
     console.error(`${root}: ${files.length} recent session file(s)`);
     for (const f of files) {
       try {
         const card = buildCard(f.path, [f.path], extract([f.path]));
+        // provenance for the Observer's memory-lane roast
+        card.harness = harness;
+        card.when = new Date(f.mtime).toISOString().slice(0, 10);
         if ((card.message_count ?? 0) < 10) continue; // skip trivial stubs
         let slug = card.session_id.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 60);
         while (usedNames.has(slug)) slug += '-2';
