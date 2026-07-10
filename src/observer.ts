@@ -33,6 +33,21 @@ export interface RoastMeta {
 
 type Pool = string[];
 
+/**
+ * A persona pack: authored commentary (usually by the player's own agent)
+ * that the Observer mixes with its built-in lines. Loaded at startup from
+ * public/packs/observer.json when present. Lines may use the same {slot}
+ * templates as built-in pools. See AGENTS.md for the authoring guide.
+ */
+export interface PersonaPack {
+  name?: string;
+  voice_hint?: string;              // substring to match a system TTS voice
+  ambient?: string[];               // droppable at any calm moment
+  lines?: Record<string, string[]>; // event-keyed pools (same keys as LINES, plus "start")
+}
+
+const PACK_MIX = 0.5;               // chance an authored pool wins over the built-in one
+
 function pick(pool: Pool): string {
   return pool[Math.floor(Math.random() * pool.length)];
 }
@@ -238,8 +253,10 @@ export class Observer {
     this.lastProgressAt = 0;
     this.wallWarned = false;
     this.nukeCount = 0;
-    // composed, not canned: opener × observation
-    const line = fill(`${pick(START_OPENERS)} ${pick(START_OBSERVATIONS)}`, {
+    // composed, not canned: opener × observation (persona packs can add observations)
+    const startPool = this.packLines['start'] && Math.random() < PACK_MIX
+      ? this.packLines['start'] : START_OBSERVATIONS;
+    const line = fill(`${pick(START_OPENERS)} ${pick(startPool)}`, {
       goal: this.ctx.goal ?? 'unclear, honestly',
       session: this.ctx.sessionId.slice(0, 14),
       tasks: this.ctx.tasksTotal,
@@ -256,6 +273,37 @@ export class Observer {
 
   setSessionPack(lines: string[]): void {
     this.sessionPack = lines.filter((l) => typeof l === 'string' && l.length > 4).slice(0, 12);
+  }
+
+  /** persona pack: authored pools that outlive any single session */
+  private packLines: Record<string, Pool> = {};
+  private packAmbient: string[] = [];
+  private packVoiceHint: string | null = null;
+  packName: string | null = null;
+
+  loadPack(raw: unknown): boolean {
+    if (!raw || typeof raw !== 'object') return false;
+    const pack = raw as PersonaPack;
+    const clean = (arr: unknown, cap: number): string[] =>
+      (Array.isArray(arr) ? arr : [])
+        .filter((l): l is string => typeof l === 'string' && l.trim().length >= 4)
+        .map((l) => l.trim().slice(0, 140))
+        .slice(0, cap);
+    const lines: Record<string, Pool> = {};
+    if (pack.lines && typeof pack.lines === 'object') {
+      for (const key of Object.keys(pack.lines)) {
+        if (key !== 'start' && !(key in LINES)) continue; // unknown events stay dead
+        const pool = clean(pack.lines[key], 8);
+        if (pool.length > 0) lines[key] = pool;
+      }
+    }
+    const ambient = clean(pack.ambient, 16);
+    if (Object.keys(lines).length === 0 && ambient.length === 0) return false;
+    this.packLines = lines;
+    this.packAmbient = ambient;
+    this.packVoiceHint = typeof pack.voice_hint === 'string' ? pack.voice_hint.slice(0, 40) : null;
+    this.packName = typeof pack.name === 'string' ? pack.name.slice(0, 40) : 'custom';
+    return true;
   }
 
   /** the pre-game memory-lane roast (compositional; the LLM version replaces it when available) */
@@ -407,20 +455,24 @@ export class Observer {
   }
 
   private remark(event: string, slots: Record<string, string | number>, priority: number): void {
-    const pool = LINES[event];
-    if (!pool) return;
+    const builtin = LINES[event];
+    if (!builtin) return;
     const gap = priority >= 2 ? URGENT_GAP_S : GLOBAL_GAP_S;
     if (this.time - this.lastSpokeAt < gap && priority < 3) return;
     if (this.time - (this.lastByEvent.get(event) ?? -999) < EVENT_GAP_S) return;
     this.lastSpokeAt = this.time;
     this.lastByEvent.set(event, this.time);
-    // ambient events sometimes draw from the bespoke per-session pack instead
-    if (this.sessionPack.length > 0 && priority <= 1 && Math.random() < 0.35) {
-      const bespoke = this.sessionPack[Math.floor(Math.random() * this.sessionPack.length)];
+    // ambient events sometimes draw from the bespoke pools instead: the
+    // per-session pack (dev-mode LLM) and the persona pack's ambient lines
+    const bespokePool = [...this.sessionPack, ...this.packAmbient];
+    if (bespokePool.length > 0 && priority <= 1 && Math.random() < 0.35) {
+      const bespoke = bespokePool[Math.floor(Math.random() * bespokePool.length)];
       this.sink(`☏ observer: ${bespoke}`);
       this.speak(bespoke);
       return;
     }
+    // authored event pool competes with the built-in one
+    const pool = this.packLines[event] && Math.random() < PACK_MIX ? this.packLines[event] : builtin;
     const line = fill(pick(pool), {
       ...slots,
       goal: this.ctx.goal ?? 'unclear, honestly',
@@ -465,7 +517,10 @@ export class Observer {
       if (!this.voice) {
         const voices = synth.getVoices();
         const savedName = localStorage.getItem('aiaio-voice-name');
+        const hint = this.packVoiceHint;
         this.voice = (savedName ? voices.find((v) => v.name === savedName) : undefined)
+          // a manually chosen voice always wins; the pack's hint fills the default
+          ?? (hint ? voices.find((v) => v.name.toLowerCase().includes(hint.toLowerCase())) : undefined)
           ?? voices.find((v) => /Premium|Enhanced/.test(v.name) && v.lang.startsWith('en'))
           ?? voices.find((v) => /Samantha|Daniel|Alex|Karen|Moira/.test(v.name))
           ?? voices.find((v) => v.lang.startsWith('en')) ?? null;

@@ -82,6 +82,21 @@ function wireCardSlot(): void {
   });
 }
 
+/**
+ * Persona pack: authored Observer commentary at public/packs/observer.json,
+ * usually written by the player's own agent (see AGENTS.md). Optional; a 404
+ * means the built-in personality flies solo.
+ */
+async function loadPersonaPack(): Promise<void> {
+  try {
+    const res = await fetch('./packs/observer.json');
+    if (!res.ok) return;
+    if (observer.loadPack(await res.json())) {
+      console.info(`[aiaio] observer persona pack loaded: ${observer.packName}`);
+    }
+  } catch { /* no pack, no problem */ }
+}
+
 /** Gallery of cards produced by `npm run scan` (public/cards/index.json). */
 async function loadGallery(): Promise<void> {
   const box = $('gallery');
@@ -205,7 +220,7 @@ async function loadGallery(): Promise<void> {
     refreshVault = () => render((document.getElementById('gallery-filter') as HTMLInputElement)?.value ?? '');
     render('');
   } catch {
-    box.innerHTML = '<div class="hint" style="text-align:left">no scanned sessions. run <b>npm run scan</b> to auto-build cards from your OpenClaw / Claude Code / Hermes sessions, or drop a card above.</div>';
+    box.innerHTML = '<div class="hint" style="text-align:left">no scanned sessions. run <b>npm run scan</b> to auto-build cards from your OpenClaw / Claude Code / Hermes sessions, or drop a card above. vault still empty? <b>npm run doctor</b> explains why, or hand the whole thing to your agent (AGENTS.md is the playbook).</div>';
   }
 }
 
@@ -521,11 +536,13 @@ function main(): void {
 
   ui = new UI();
   (window as any).__ui = ui; // debug/testing handle
+  (window as any).__observer = observer;
   const logoEl = document.querySelector('.ascii-logo');
   if (logoEl) startLogoLoop(logoEl as HTMLElement);
   wireCardSlot();
   wireKeyboard();
   loadGallery();
+  loadPersonaPack();
 
   $('btn-run').addEventListener('click', () => {
     prepareRun(loadedCard ?? randomCard(`random-session-${runCounter + 1}`));

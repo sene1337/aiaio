@@ -39,6 +39,27 @@ npm run build    # static bundle in dist/
 No network calls. Fully playable offline with zero setup (two inline example
 sessions plus random generation).
 
+## Or let your agent do all of it
+
+This game is made for people who run agents, so the agent can be the installer,
+the level curator, and the tech support. **Hermes** users:
+
+```bash
+hermes skills install https://raw.githubusercontent.com/sene1337/aiaio/main/skills/aiaio/SKILL.md
+```
+
+then tell your agent things like *"set up aiaio"*, *"find my 10 most dramatic
+sessions and make them levels"*, or *"make the announcer a bitter golf
+commentator"*. Any other agent (Claude Code, OpenClaw, Codex): point it at
+[AGENTS.md](AGENTS.md) — same playbook, no skill required. If the vault comes up
+empty, `npm run doctor` prints exactly what was scanned and why each file was
+rejected; your agent can read it and fix the cause.
+
+Customization is narrative-only by design: agents write goals, task names,
+moments, and Observer commentary ([persona packs](AGENTS.md#observer-persona-packs-customizing-the-announcer)),
+but difficulty always derives from your real session data. That line is what
+keeps the levels honest.
+
 ## Play
 
 - **←/→** move. **↑** jump. **↓** fast-fall (explore drilled craters). **space**

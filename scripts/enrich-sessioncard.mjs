@@ -7,7 +7,11 @@
 // and length-capped. Numeric/mechanical fields are never LLM-touched.
 //
 // USAGE
-//   node scripts/enrich-sessioncard.mjs <card.json> <session-dir-or-jsonl> [-o out.json]
+//   node scripts/enrich-sessioncard.mjs <card.json> <session-dir-or-jsonl> [-o out.json] [--style "noir detective"]
+//
+// STYLE
+//   --style (or AIAIO_ENRICH_STYLE) sets the narrative voice: goal/task/moment
+//   phrasing only. Events, counts, and positions must still be real.
 //
 // SAFETY
 //   - log + LLM output are DATA: nothing from either is executed or followed
@@ -41,8 +45,12 @@ function buildExcerpt(files, maxChars = 22000) {
   return text;
 }
 
-function buildPrompt(card, excerpt) {
+function buildPrompt(card, excerpt, style) {
+  const styleBlock = style
+    ? `\nStyle directive: write every narrative field in this voice: "${style}". The style changes phrasing and tone ONLY. Every event, count, and position must still be true to the log.\n`
+    : '';
   return `You are writing the level script for AIAIO, a game where a real agent session becomes a playable level.
+${styleBlock}
 
 Below is a SessionCard (mechanical summary) and sampled excerpts from the actual session log.
 
@@ -95,11 +103,17 @@ function merge(original, enriched) {
 
 function main() {
   const args = process.argv.slice(2);
-  const outIdx = args.indexOf('-o');
-  const outPath = outIdx !== -1 ? args[outIdx + 1] : null;
-  const inputs = args.filter((a, i) => i !== outIdx && (outIdx === -1 || i !== outIdx + 1));
+  let outPath = null;
+  let style = null;
+  const inputs = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '-o') outPath = args[++i] ?? null;
+    else if (args[i] === '--style') style = args[++i] ?? null;
+    else inputs.push(args[i]);
+  }
+  style = (style ?? process.env.AIAIO_ENRICH_STYLE)?.slice(0, 200) || null;
   if (inputs.length !== 2) {
-    console.error('usage: node scripts/enrich-sessioncard.mjs <card.json> <session-dir-or-jsonl> [-o out.json]');
+    console.error('usage: node scripts/enrich-sessioncard.mjs <card.json> <session-dir-or-jsonl> [-o out.json] [--style "voice"]');
     process.exit(1);
   }
   const [cardPath, sessionPath] = inputs;
@@ -107,7 +121,8 @@ function main() {
   const files = collectFiles(sessionPath);
   if (files.length === 0) { console.error(`no log files under ${sessionPath}`); process.exit(1); }
 
-  const prompt = buildPrompt(card, buildExcerpt(files));
+  if (style) console.error(`style: ${style}`);
+  const prompt = buildPrompt(card, buildExcerpt(files), style);
   const cmd = process.env.AIAIO_LLM_CMD ?? 'claude -p';
   console.error(`asking your agent (${cmd}) to write the level… this can take a minute.`);
   const parts = cmd.split(' ');

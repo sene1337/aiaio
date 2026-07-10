@@ -35,7 +35,7 @@ const DEFAULT_ROOTS = [
 const SKIP_DIRS = new Set(['node_modules', '.git', 'cache', 'caches', 'audio_cache', 'bootstrap-cache', 'backups', 'dist', 'venv', '__pycache__', 'rescue', 'lcm-files', 'qmd']);
 const MIN_BYTES = 2048;
 
-function findJsonl(dir, depth = 0, out = []) {
+function findJsonl(dir, depth = 0, out = [], tally = null) {
   if (depth > 6) return out;
   let entries;
   try { entries = readdirSync(dir); } catch { return out; }
@@ -44,11 +44,13 @@ function findJsonl(dir, depth = 0, out = []) {
     const full = join(dir, entry);
     let st;
     try { st = statSync(full); } catch { continue; }
-    if (st.isDirectory()) findJsonl(full, depth + 1, out);
-    // plain .jsonl only; trajectory files are runtime traces whose
-    // "timedOut":false fields read as thousands of fake timeout errors
-    else if (/\.jsonl$/i.test(entry) && !/\.trajectory\.jsonl$/i.test(entry) && st.size >= MIN_BYTES) {
-      out.push({ path: full, mtime: st.mtimeMs, size: st.size });
+    if (st.isDirectory()) findJsonl(full, depth + 1, out, tally);
+    else if (/\.jsonl$/i.test(entry)) {
+      // trajectory files are runtime traces whose "timedOut":false fields
+      // read as thousands of fake timeout errors
+      if (/\.trajectory\.jsonl$/i.test(entry)) { if (tally) tally.trajectory++; }
+      else if (st.size < MIN_BYTES) { if (tally) tally.tooSmall++; }
+      else out.push({ path: full, mtime: st.mtimeMs, size: st.size });
     }
   }
   return out;
@@ -105,15 +107,23 @@ function dumpHermesSessions() {
 function main() {
   const args = process.argv.slice(2);
   // flags: --all (no per-root cap — the full nostalgia archive) · --max N
+  //        --doctor (print the filter accounting: what was found, what was
+  //        skipped and why — the first thing to run when the vault is empty)
   const all = args.includes('--all');
+  const doctor = args.includes('--doctor');
   const maxIdx = args.indexOf('--max');
   const maxPerRoot = all ? Infinity : maxIdx !== -1 ? parseInt(args[maxIdx + 1], 10) || 12 : 12;
   const rootArgs = args.filter((a, i) => !a.startsWith('--') && i !== maxIdx + 1);
-  const roots = (rootArgs.length > 0 ? rootArgs : DEFAULT_ROOTS).filter((r) => existsSync(r));
+  const wantedRoots = rootArgs.length > 0 ? rootArgs : DEFAULT_ROOTS;
+  const missingRoots = wantedRoots.filter((r) => !existsSync(r));
+  const roots = wantedRoots.filter((r) => existsSync(r));
   if (roots.length === 0) {
-    console.error('no session roots found. pass one explicitly: npm run scan -- /path/to/logs');
+    console.error('no session roots found. checked:');
+    for (const r of wantedRoots) console.error(`  ✗ ${r} (does not exist)`);
+    console.error('pass one explicitly: npm run scan -- /path/to/logs');
     process.exit(1);
   }
+  const report = []; // per-root accounting for --doctor / empty-vault diagnosis
   // Hermes lives in SQLite — dump to jsonl first, then scan the dumps
   const hermesDump = dumpHermesSessions();
   if (hermesDump && !roots.includes(hermesDump)) roots.push(hermesDump);
@@ -129,15 +139,18 @@ function main() {
     const harness = /session-dumps\/hermes|\.hermes/.test(root) ? 'hermes'
       : /\.claude/.test(root) ? 'claude code'
       : /\.openclaw/.test(root) ? 'openclaw' : 'unknown harness';
-    const allFiles = findJsonl(root)
+    const tally = { trajectory: 0, tooSmall: 0, dedup: 0, stub: 0, cron: 0, noTasks: 0, failed: 0, kept: 0 };
+    const allFiles = findJsonl(root, 0, [], tally)
       .filter((f) => {
         const base = basename(f.path);
-        if (seenBasenames.has(base)) return false;
+        if (seenBasenames.has(base)) { tally.dedup++; return false; }
         seenBasenames.add(base);
         return true;
       })
       .sort((a, b) => b.mtime - a.mtime);
     const files = Number.isFinite(maxPerRoot) ? allFiles.slice(0, maxPerRoot) : allFiles;
+    tally.capped = allFiles.length - files.length;
+    report.push({ root, harness, tally });
     console.error(`${root}: ${files.length} session file(s)${all ? ' (full archive)' : ' (most recent)'}`);
     let processed = 0;
     for (const f of files) {
@@ -148,12 +161,13 @@ function main() {
         // provenance for the Observer's memory-lane roast
         card.harness = harness;
         card.when = new Date(f.mtime).toISOString().slice(0, 10);
-        if ((card.message_count ?? 0) < 10) continue; // skip trivial stubs
+        if ((card.message_count ?? 0) < 10) { tally.stub++; continue; } // trivial stubs
         // QUALITY GATE (Brad's call): only sessions with REAL extractable human
         // work become levels. Cron/heartbeat/machine runs and ask-less sessions
         // are excluded entirely — the game never fakes personalization.
-        if (/^(cron_|routine|routing-eval|heartbeat|request_dump|healthcheck)/i.test(basename(f.path))) continue;
-        if (!card.tasks || card.tasks.length === 0) continue;
+        if (/^(cron_|routine|routing-eval|heartbeat|request_dump|healthcheck)/i.test(basename(f.path))) { tally.cron++; continue; }
+        if (!card.tasks || card.tasks.length === 0) { tally.noTasks++; continue; }
+        tally.kept++;
         let slug = card.session_id.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 60);
         while (usedNames.has(slug)) slug += '-2';
         usedNames.add(slug);
@@ -191,6 +205,7 @@ function main() {
           work: (card.tasks ?? []).reduce((s, t) => s + (t.work_units ?? 2), 0),
         });
       } catch (err) {
+        tally.failed++;
         console.error(`  skip ${basename(f.path)}: ${err.message}`);
       }
     }
@@ -207,6 +222,30 @@ function main() {
   console.error('NOTE: cards now include short REDACTED snippets of your actual prompts');
   console.error('(tasks/goal/moments) — skim public/cards/*.json before sharing any of them.');
   console.error('start the game (npm run dev) and your sessions appear in the menu gallery.');
+
+  // the accounting: always shown with --doctor, and whenever the scan came up
+  // empty (an empty vault should never be a mystery)
+  if (doctor || index.length === 0) {
+    console.error('\n── scan doctor ─────────────────────────────────────────');
+    for (const r of missingRoots) console.error(`✗ ${r}: does not exist (harness not installed, or logs live elsewhere)`);
+    if (!hermesDump && existsSync(join(homedir(), '.hermes'))) {
+      console.error('✗ hermes SQLite history: no readable state.db (or the sqlite3 CLI is missing)');
+    }
+    for (const { root, harness, tally } of report) {
+      console.error(`✔ ${root} (${harness})`);
+      console.error(`    kept ${tally.kept} · stubs(<10 msgs) ${tally.stub} · cron/machine ${tally.cron} · no-extractable-tasks ${tally.noTasks}`);
+      console.error(`    dedup ${tally.dedup} · too-small(<${MIN_BYTES}B) ${tally.tooSmall} · trajectory-excluded ${tally.trajectory} · parse-failed ${tally.failed}${tally.capped ? ` · beyond --max cap ${tally.capped}` : ''}`);
+    }
+    if (index.length === 0) {
+      console.error('\nvault is empty. the usual causes, in order:');
+      console.error('  1. everything got capped: try  npm run scan -- --all');
+      console.error('  2. sessions are stubs/cron/ask-less: only sessions with real extractable');
+      console.error('     human work become levels (the game never fakes personalization)');
+      console.error('  3. logs live somewhere unusual: npm run scan -- /path/to/logs');
+      console.error('  4. hermes: history is in SQLite; the sqlite3 CLI must be on PATH');
+      console.error('ask your agent to debug this — AGENTS.md has the playbook.');
+    }
+  }
 }
 
 main();
