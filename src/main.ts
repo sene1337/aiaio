@@ -118,7 +118,8 @@ async function loadGallery(): Promise<void> {
       // bucket levels into tiers
       const buckets: LevelEntry[][] = TIERS.map(() => []);
       for (const e of entries) {
-        if (q && !`${e.session_id} ${e.harness ?? ''} ${e.when ?? ''}`.toLowerCase().includes(q)) continue;
+        const enrichedKey = e.file.endsWith('.enriched.json') ? 'enriched curated' : '';
+        if (q && !`${e.session_id} ${e.harness ?? ''} ${e.when ?? ''} ${enrichedKey}`.toLowerCase().includes(q)) continue;
         buckets[tierOf(difficulty(e)).index].push(e);
       }
       // trophy shelf on top: cleared levels first (you should SEE what's done),
@@ -139,7 +140,7 @@ async function loadGallery(): Promise<void> {
       const input = document.createElement('input');
       input.id = 'gallery-filter';
       input.setAttribute('aria-label', 'Filter sessions by name, harness, or date');
-      input.placeholder = 'filter by name, harness (openclaw/hermes/claude), or date…';
+      input.placeholder = 'filter by name, harness (openclaw/hermes/claude), date, or "enriched"…';
       input.value = filter;
       input.addEventListener('input', () => render(input.value));
       box.appendChild(input);
@@ -154,7 +155,7 @@ async function loadGallery(): Promise<void> {
       for (const tier of TIERS) {
         const bucket = buckets[tier.index];
         if (bucket.length === 0 && !q) continue;
-        const isOpen = (openTiers.has(tier.index) || !!q) && unlocked[tier.index];
+        const isOpen = openTiers.has(tier.index) || !!q;
         const cleared = bucket.filter((e) => isCleared(getProgress(e.session_id))).length;
 
         const folder = document.createElement('button');
@@ -164,6 +165,11 @@ async function loadGallery(): Promise<void> {
             tierOf(difficulty(e)).index === tier.index - 1 && isCleared(getProgress(e.session_id))).length;
           folder.innerHTML = `<span class="caret">${isOpen ? '▾' : '▸'}</span><span class="cmd-name dim">🔒 ${escapeHtml(tier.name)}/</span>` +
             `<span class="cmd-desc">clear ${Math.max(1, need)} more in ${escapeHtml(TIERS[tier.index - 1].name.split(': ')[0])}</span>`;
+          // locked folders can be browsed (window shopping), just not played
+          folder.addEventListener('click', () => {
+            if (openTiers.has(tier.index)) openTiers.delete(tier.index); else openTiers.add(tier.index);
+            render(input.value);
+          });
         } else {
           folder.innerHTML = `<span class="caret">${isOpen ? '▾' : '▸'}</span><span class="cmd-name">${escapeHtml(tier.name)}/</span>` +
             `<span class="cmd-desc">${bucket.length} levels · ${cleared} cleared</span>`;
@@ -182,12 +188,23 @@ async function loadGallery(): Promise<void> {
           btn.className = 'cmd level';
           const shortId = entry.session_id.length > 22 ? entry.session_id.slice(0, 20) + '…' : entry.session_id;
           const glyph = isCleared(p) ? '☒' : '☐';
+          // agent-curated levels carry their story with them — show it
+          const star = entry.file.endsWith('.enriched.json')
+            ? '<span style="color:var(--purple)">✦ </span>' : '';
           const rankBit = p
             ? ` <span style="color:${RANK_COLORS[p.rank]}">★${p.rank}</span> <span class="dim">${p.bestScore.toLocaleString()}</span>`
             : '';
           const prov = [entry.when, entry.harness].filter(Boolean).join(' ');
           // session_id derives from filenames — escape it like every other sink (M-3)
-          btn.innerHTML = `<span class="caret">&nbsp;</span><span class="cmd-name">${glyph} ${escapeHtml(shortId)}</span>` +
+          if (!unlocked[tier.index]) {
+            btn.classList.add('locked');
+            btn.innerHTML = `<span class="caret">&nbsp;</span><span class="cmd-name dim">${glyph} ${star}${escapeHtml(shortId)}</span>` +
+              `<span class="cmd-desc">${prov ? escapeHtml(prov) + ' · ' : ''}diff ${diff} · 🔒</span>`;
+            btn.disabled = true;
+            box.appendChild(btn);
+            continue;
+          }
+          btn.innerHTML = `<span class="caret">&nbsp;</span><span class="cmd-name">${glyph} ${star}${escapeHtml(shortId)}</span>` +
             `<span class="cmd-desc">${prov ? escapeHtml(prov) + ' · ' : ''}diff ${diff}${rankBit}</span>`;
           btn.addEventListener('click', async () => {
             try {

@@ -117,6 +117,7 @@ html, body {
 .cmd.folder .cmd-name { color: var(--clay); }
 .cmd.folder .caret { color: var(--clay); }
 .cmd.level { padding: 2px 10px 2px 22px; font-size: 12px; }
+.cmd.level.locked { cursor: default; opacity: 0.55; }
 .recap-rank { text-align: center; font-size: 26px; letter-spacing: 0.15em; margin-bottom: 4px; }
 .recap-rank .dim, .recap-rank span[style] { font-size: 13px; letter-spacing: normal; }
 .recap-rank > span:first-child { font-size: 26px !important; }

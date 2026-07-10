@@ -5,6 +5,18 @@ All notable changes to AIAIO are documented here. Format follows
 [semver](https://semver.org/) (minor = new player-facing capability,
 patch = fixes and copy).
 
+## [2.3.3] — 2026-07-10
+
+### Added
+- Agent-curated (enriched) levels are marked with a purple ✦ in the vault and
+  findable by typing "enriched" (or "curated") in the filter.
+- Locked tiers can be browsed: entries render dimmed with a 🔒 instead of
+  being hidden, so curated high-tier levels are visible before they're earned.
+
+### Fixed
+- Two more curated cards carried the OAuth example-bleed fabrication;
+  exhaustive check across all ten (not a sample) now passes clean.
+
 ## [2.3.2] — 2026-07-10
 
 ### Fixed
@@ -96,6 +108,7 @@ The artillery duel is retired: the session IS the level.
 - Initial artillery prototype: turn-based duel, SessionCard schema, extractor,
   task queue, compaction. Retired same day for being a Scorched Earth clone.
 
+[2.3.3]: https://github.com/sene1337/aiaio/compare/v2.3.2...v2.3.3
 [2.3.2]: https://github.com/sene1337/aiaio/compare/v2.3.1...v2.3.2
 [2.3.1]: https://github.com/sene1337/aiaio/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/sene1337/aiaio/compare/v2.2.0...v2.3.0
