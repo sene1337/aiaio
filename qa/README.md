@@ -22,3 +22,7 @@ card, add its basename without putting that private filename in tracked code:
 The driver rotates weapons, advances and retreats around enemies, claims the
 Task tool, spawns subagents in the compaction profile, uses upgrades, and
 restarts completed runs after a short pause. Normal URLs never load it.
+
+Voice/caption tests that cycle system voices should finish with
+`&resetVoice=1`. It clears the QA-selected voice name and restores automatic
+Observer voice selection without shipping any reset route in production.

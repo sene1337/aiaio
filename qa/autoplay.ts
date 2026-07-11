@@ -140,6 +140,13 @@ export interface LoadedAutoplay {
 }
 
 export async function loadAutoplay(params: URLSearchParams): Promise<LoadedAutoplay> {
+  // QA voice tests must be able to return the browser to the same automatic
+  // selection a real player gets. This module is dev-only and tree-shaken out
+  // of production builds.
+  if (params.get('resetVoice') === '1') {
+    localStorage.removeItem('aiaio-voice-name');
+    localStorage.setItem('aiaio-voice', '1');
+  }
   const profileName = profileFrom(params.get('profile'));
   const controller = new AutoplayController(profileName);
   const cardFile = params.get('card');

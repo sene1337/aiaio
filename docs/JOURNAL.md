@@ -128,3 +128,18 @@ turns out wrong, append a correction.
 - Open: settings/accessibility UI, independent persisted bus sliders, mono
   output, reduced-flash wiring for canvas effects, fixed virtual pixel grid,
   broader responsive QA, and final tuning remain in the roadmap.
+
+## 2026-07-11 · GPT-5 · prevent voice QA preference leakage
+
+- What: restored automatic Observer voice selection after caption QA had
+  persisted several cycled macOS novelty voices in the player's real browser
+  profile. Added the dev-only `resetVoice=1` autoplay cleanup and documented
+  it for future voice/caption tests.
+- Why: Shift+V is intentionally a persistent player setting, so using it for
+  automated QA without cleanup silently changed the user's chosen Observer.
+  QA must restore preferences it mutates.
+- Verified: reset from a dev-only autoplay page, reopened the normal menu,
+  started the fictional clean briefing, observed a fresh Observer utterance
+  submission, and found no browser warnings/errors.
+- Open: independent audio/voice settings remain part of the accessibility
+  roadmap; this entry only fixes the local QA side effect.
