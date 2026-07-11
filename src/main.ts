@@ -31,6 +31,9 @@ let progressRecorded = false;
 let lastRankInfo: { rank: 'S' | 'A' | 'B' | 'C' | 'D'; newBest: boolean; rankUp: boolean; prevBest: number | null } | null = null;
 /** re-render THE VAULT (set by loadGallery) — call when returning to the menu */
 let refreshVault: (() => void) | null = null;
+type QAAutoplayController = import('../qa/autoplay').AutoplayController;
+let qaAutoplay: QAAutoplayController | null = null;
+let qaAutoplayCard: SessionCard | null = null;
 
 function showScreen(id: ScreenId): void {
   for (const s of ['menu', 'briefing', 'match', 'recap']) {
@@ -397,6 +400,24 @@ function currentInput(): RunInput {
   };
 }
 
+async function startDevAutoplay(): Promise<void> {
+  if (!import.meta.env.DEV) return;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('qa') !== 'autoplay') return;
+  try {
+    const { loadAutoplay } = await import('../qa/autoplay');
+    const loaded = await loadAutoplay(params);
+    qaAutoplay = loaded.controller;
+    qaAutoplayCard = loaded.card;
+    qaAutoplay.reset();
+    setCard(loaded.card, loaded.sourceName);
+    prepareRun(loaded.card);
+    showScreen('match');
+  } catch (err) {
+    console.error('[aiaio] QA autoplay failed:', err);
+  }
+}
+
 const FEATURE_KEYS: Record<string, string> = {
   ' ': 'fire', 'ArrowUp': 'jump', 'ArrowLeft': 'move', 'ArrowRight': 'move',
   'a': 'move', 'd': 'move', 'w': 'work', 'u': 'update', '[': 'weapon_cycle', ']': 'weapon_cycle',
@@ -491,7 +512,7 @@ function frameBody(t: number): void {
   const dt = Math.min(0.05, (t - lastT) / 1000 || 0.016);
   lastT = t;
   if (run && !$('screen-match').classList.contains('hidden')) {
-    run.step(dt, currentInput());
+    run.step(dt, import.meta.env.DEV && qaAutoplay ? qaAutoplay.input(run, dt) : currentInput());
     ui.render(run, dt);
     // QA snapshot every 2s: position, vitals, wall gap — the learning-curve data
     snapshotAccum += dt;
@@ -528,6 +549,11 @@ function frameBody(t: number): void {
         }
       }, 1500);
     }
+  }
+  if (import.meta.env.DEV && qaAutoplay && run && qaAutoplayCard && qaAutoplay.shouldRestart(run, dt)) {
+    qaAutoplay.reset();
+    prepareRun(qaAutoplayCard);
+    showScreen('match');
   }
   // (re-scheduling happens in frame()'s finally — guaranteed even on throw)
 }
@@ -592,6 +618,7 @@ function main(): void {
 
   showScreen('menu');
   requestAnimationFrame(frame);
+  if (import.meta.env.DEV) void startDevAutoplay();
 }
 
 main();

@@ -91,3 +91,20 @@ turns out wrong, append a correction.
   src/main.ts (?promo=1, PROMO_CARD, scripted weapon rotation) — appeared in
   the working tree ~14:30 local, author presumed Hermes agent or Brad.
   Whoever owns it: journal it and commit it with your trailer.
+
+## 2026-07-11 · GPT-5.6 SOL · extracted trailer autoplay into dev-only QA tooling
+
+- What: removed the promo profiles, private card ids, and Observer overrides
+  from `src/`; moved the 946 MB trailer workspace to sibling `aiaio-promo/`;
+  added reusable `qa/autoplay.ts` profiles plus `qa/README.md`; added `promo/`
+  to `.gitignore` so capture artifacts cannot drift back into the game repo.
+- Why: autoplay is useful for autonomous browser QA, but trailer-specific code
+  and personal card filenames do not belong in the live GitHub game source.
+  The QA driver defaults to the fictional chaotic example and accepts an
+  optional local `card=` basename without tracking private data.
+- Verified: `npm run build`; the production JavaScript bundle contains no QA
+  loader strings, autoplay profiles, or private card ids; live dev browser test
+  reached T+20s, rotated weapons, spawned two subagents, and advanced the run;
+  a normal URL returned to the standard menu.
+- Open: trailer capture scripts remain local in sibling `aiaio-promo/` and use
+  the dev-only `?qa=autoplay` URL when private capture cards are requested.
