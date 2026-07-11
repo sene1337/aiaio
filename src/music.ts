@@ -5,7 +5,7 @@
 // the filter darkens, plucks turn minor and sparse, detune creeps in, and a low
 // dread-drone rises until — inside the wall — it's mostly static and heartbeat.
 
-const LS_MUTE = 'aiaio-muted'; // shared with sfx: M mutes the whole soundscape
+import { audioMixer } from './audio';
 
 // A-minor-ish palette. calm: Am - F - C - G (pop-ambient warmth)
 const CHORDS: number[][] = [
@@ -28,7 +28,7 @@ const midiHz = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 
 export class Music {
   private ctx: AudioContext | null = null;
-  private master: GainNode | null = null;
+  private output: GainNode | null = null;
   private delaySend: GainNode | null = null;
   private droneOsc: OscillatorNode | null = null;
   private droneGain: GainNode | null = null;
@@ -38,7 +38,7 @@ export class Music {
   private nextBeatTime = 0;
   private chordIndex = 0;
   private lastNote = 4;
-  private muted = localStorage.getItem(LS_MUTE) === '1';
+  private tensionBand: 0 | 1 | 2 = 0;
   /** 0 = safe, 1 = the wall is chewing on you */
   tension = 0;
   inside = false;
@@ -51,10 +51,9 @@ export class Music {
       return;
     }
     try {
-      this.ctx = new AudioContext();
-      this.master = this.ctx.createGain();
-      this.master.gain.value = this.muted ? 0 : 0.11; // music sits under the sfx
-      this.master.connect(this.ctx.destination);
+      this.ctx = audioMixer.ensure();
+      this.output = audioMixer.bus('music');
+      if (!this.ctx || !this.output) return;
 
       // shared echo: feedback delay for the plucks
       const delay = this.ctx.createDelay(1.5);
@@ -62,7 +61,7 @@ export class Music {
       const feedback = this.ctx.createGain();
       feedback.gain.value = 0.38;
       delay.connect(feedback).connect(delay);
-      delay.connect(this.master);
+      delay.connect(this.output);
       this.delaySend = this.ctx.createGain();
       this.delaySend.gain.value = 0.5;
       this.delaySend.connect(delay);
@@ -71,7 +70,7 @@ export class Music {
       this.padFilter = this.ctx.createBiquadFilter();
       this.padFilter.type = 'lowpass';
       this.padFilter.frequency.value = 900;
-      this.padFilter.connect(this.master);
+      this.padFilter.connect(this.output);
 
       // the dread drone — silent until tension rises
       this.droneOsc = this.ctx.createOscillator();
@@ -82,7 +81,7 @@ export class Music {
       const droneFilter = this.ctx.createBiquadFilter();
       droneFilter.type = 'lowpass';
       droneFilter.frequency.value = 160;
-      this.droneOsc.connect(droneFilter).connect(this.droneGain).connect(this.master);
+      this.droneOsc.connect(droneFilter).connect(this.droneGain).connect(this.output);
       this.droneOsc.start();
 
       this.nextBarTime = this.ctx.currentTime + 0.1;
@@ -92,8 +91,7 @@ export class Music {
   }
 
   setMuted(m: boolean): void {
-    this.muted = m;
-    if (this.master) this.master.gain.value = m ? 0 : 0.11;
+    audioMixer.setMuted(m);
   }
 
   /** cheap deterministic-ish rand for musical choices */
@@ -103,9 +101,17 @@ export class Music {
   }
 
   private schedule(): void {
-    if (!this.ctx || !this.master || this.muted) return;
+    if (!this.ctx || !this.output || audioMixer.muted) return;
     const now = this.ctx.currentTime;
     const t = this.tension;
+
+    // Hysteresis keeps the score from nervously flipping modes when pressure
+    // hovers around one threshold.
+    if (this.inside) this.tensionBand = 2;
+    else if (this.tensionBand === 0 && t > 0.48) this.tensionBand = 1;
+    else if (this.tensionBand === 1 && t < 0.36) this.tensionBand = 0;
+    else if (this.tensionBand === 1 && t > 0.78) this.tensionBand = 2;
+    else if (this.tensionBand === 2 && t < 0.66) this.tensionBand = 1;
 
     // continuous morphs
     if (this.padFilter) this.padFilter.frequency.setTargetAtTime(900 - t * 620, now, 0.5);
@@ -114,7 +120,7 @@ export class Music {
 
     // pad: one chord per 4s bar
     while (this.nextBarTime < now + 0.3) {
-      const chords = t > 0.55 ? CHORDS_TENSE : CHORDS;
+      const chords = this.tensionBand >= 1 ? CHORDS_TENSE : CHORDS;
       const chord = chords[this.chordIndex % chords.length];
       this.chordIndex++;
       if (!this.inside) this.playPad(chord, this.nextBarTime, 4.6, t);
@@ -124,14 +130,14 @@ export class Music {
     while (this.nextBeatTime < now + 0.3) {
       const density = this.inside ? 0.08 : 0.34 - t * 0.14;
       if (this.rand() < density) {
-        const scale = t > 0.5 ? PLUCK_SCALE_TENSE : PLUCK_SCALE_CALM;
+        const scale = this.tensionBand >= 1 ? PLUCK_SCALE_TENSE : PLUCK_SCALE_CALM;
         // melodic random walk, ±2 steps, occasionally leaping
         const stepJump = this.rand() < 0.15 ? 4 : 2;
         this.lastNote = Math.max(0, Math.min(scale.length - 1,
           this.lastNote + Math.round((this.rand() - 0.5) * 2 * stepJump)));
         this.playPluck(scale[this.lastNote], this.nextBeatTime, t);
       }
-      this.nextBeatTime += t > 0.6 ? 0.375 : 0.5; // pressure quickens the pulse
+      this.nextBeatTime += this.tensionBand === 2 ? 0.375 : 0.5; // pressure quickens the pulse
     }
   }
 
@@ -156,7 +162,7 @@ export class Music {
   }
 
   private playPluck(note: number, when: number, tension: number): void {
-    if (!this.ctx || !this.delaySend || !this.master) return;
+    if (!this.ctx || !this.delaySend || !this.output) return;
     const osc = this.ctx.createOscillator();
     osc.type = tension > 0.7 ? 'square' : 'triangle';
     osc.frequency.value = midiHz(note);
@@ -165,7 +171,7 @@ export class Music {
     g.gain.setValueAtTime(0.09, when);
     g.gain.exponentialRampToValueAtTime(0.001, when + 1.1);
     osc.connect(g);
-    g.connect(this.master);
+    g.connect(this.output);
     g.connect(this.delaySend);
     osc.start(when);
     osc.stop(when + 1.2);

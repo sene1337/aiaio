@@ -52,14 +52,30 @@ export class UI {
   private muzzleTtl = 0;
   private whiteFlashTtl = 0;
   private rings: Array<{ x: number; y: number; maxR: number; ttl: number; maxTtl: number; color: string }> = [];
+  private tokenBursts: Array<{ x: number; y: number; tokens: number; ttl: number; maxTtl: number; nuke: boolean }> = [];
   private fxRng = new Rng('fx');
   // J-space: the LLM's latent space as layered ASCII weather behind the level
   private flow: Array<{ x: number; y: number; life: number }> = [];
   private sparks: Array<{ x: number; y: number; ttl: number; maxTtl: number; hue: number }> = [];
+  private captionSerial = 0;
 
   constructor() {
     this.canvas = $('game-canvas') as HTMLCanvasElement;
     this.ctx = this.canvas.getContext('2d')!;
+  }
+
+  setCaption(speaker: 'observer' | 'bad news', text: string, active: boolean): void {
+    const box = $('observer-caption');
+    if (!active) {
+      if (box.dataset.caption === text) box.classList.add('hidden');
+      return;
+    }
+    box.dataset.serial = String(++this.captionSerial);
+    box.dataset.caption = text;
+    box.classList.toggle('bad-news', speaker === 'bad news');
+    box.querySelector<HTMLElement>('.caption-speaker')!.textContent = speaker.toUpperCase();
+    box.querySelector<HTMLElement>('.caption-text')!.textContent = text;
+    box.classList.remove('hidden');
   }
 
   // hash-based value noise: smooth, cheap, never repeats visibly
@@ -149,7 +165,18 @@ export class UI {
   fx(type: string, data: Record<string, unknown> = {}): void {
     switch (type) {
       case 'explosion': this.shakeMag = Math.min(14, this.shakeMag + (Number(data.radius) || 20) / 6); break;
-      case 'fire': this.muzzleTtl = 0.09; this.shakeMag = Math.min(14, this.shakeMag + 1.2); break;
+      case 'fire': {
+        this.muzzleTtl = 0.09;
+        this.shakeMag = Math.min(14, this.shakeMag + 1.2);
+        const tokens = Number(data.tokens) || 0;
+        if (tokens >= 70) {
+          this.tokenBursts.push({
+            x: Number(data.x) || 0, y: Number(data.y) || 0, tokens,
+            ttl: 0.9, maxTtl: 0.9, nuke: data.weapon === 'context_nuke',
+          });
+        }
+        break;
+      }
       case 'damage': this.hitFlashTtl = 0.3; this.shakeMag = Math.min(14, this.shakeMag + 3); break;
       case 'compaction': this.glitchTtl = 1.0; this.shakeMag = Math.min(16, this.shakeMag + 9); break;
       case 'task_eaten': this.glitchTtl = Math.max(this.glitchTtl, 0.5); break;
@@ -200,11 +227,14 @@ export class UI {
     }
     const ctx = this.ctx;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // all drawing below is in CSS pixels
+    ctx.imageSmoothingEnabled = false;
     this.dpr = dpr;
     const W = cw, H = ch;
 
     // camera: follow the agent with lookahead toward facing
-    const targetZoom = Math.min(1.05, Math.max(0.68, H / 760));
+    // Compact and square windows previously zoomed so far out that actors read
+    // as telemetry. Use stable steps so the important silhouettes stay legible.
+    const targetZoom = H < 390 ? 0.82 : H < 540 ? 0.92 : 1;
     const targetX = run.avatar.x + run.avatar.facing * 130;
     const targetY = Math.min(run.avatar.y - 60, run.terrain.height * 0.62);
     if (this.trackedRun !== run) {
@@ -298,12 +328,33 @@ export class UI {
     // enemies
     for (const e of run.enemies) {
       if (e.dead || e.x < viewL - 60 || e.x > viewR + 60) continue;
-      this.drawEnemy(ctx, e, e.stunnedUntil > run.time);
+      const relevant = Math.abs(e.x - run.avatar.x) < 230 || e.telegraphing || e.stunnedUntil > run.time;
+      this.drawEnemy(ctx, e, e.stunnedUntil > run.time, relevant);
     }
 
     // the agent + its subagents
     this.drawAvatar(ctx, run);
     this.drawSubagents(ctx, run);
+
+    // Token spend is the causal link between firing and the pursuing wall.
+    // Show the cost moving left, toward the forgetting, instead of hiding it
+    // exclusively in the HUD meter.
+    for (const burst of this.tokenBursts) {
+      burst.ttl -= dt;
+      const age = 1 - burst.ttl / burst.maxTtl;
+      ctx.globalAlpha = Math.max(0, burst.ttl / burst.maxTtl);
+      ctx.fillStyle = burst.nuke ? '#f47067' : '#6cb6ff';
+      ctx.font = `bold ${burst.nuke ? 12 : 10}px ui-monospace, monospace`;
+      ctx.textAlign = 'right';
+      ctx.fillText(`-${burst.tokens}tk`, burst.x - 20 - age * 52, burst.y - 34 - age * 12);
+      ctx.font = '9px monospace';
+      for (let i = 0; i < 4; i++) {
+        ctx.fillText(i % 2 ? '1' : '0', burst.x - age * (20 + i * 18), burst.y - 18 - i * 3);
+      }
+    }
+    this.tokenBursts = this.tokenBursts.filter((burst) => burst.ttl > 0);
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'left';
 
     // projectiles: the payload IS the projectile — text in flight, with a
     // comet-trail of its own characters
@@ -530,6 +581,7 @@ export class UI {
     const t = run.queue.tasks[s.taskIndex];
     const y = run.terrain.surfaceAt(s.x);
     const active = run.nearStation && run.nearStation.taskIndex === s.taskIndex;
+    const relevant = active || Math.abs(s.x - run.avatar.x) < 260;
     const color = t.done ? '#7a766e' : t.forgotten ? '#f47067' : active ? '#7ee787' : '#dedad2';
     // terminal pillar
     ctx.fillStyle = '#161615';
@@ -544,8 +596,8 @@ export class UI {
     // task label + progress
     ctx.font = `${11 / this.camZoom}px ui-monospace, monospace`;
     const label = t.forgotten && !t.done ? garble(t.name, this.garbleRng, 0.4) : t.name;
-    ctx.fillText(label.slice(0, 26), s.x, y - 38);
-    if (!t.done && !t.forgotten) {
+    if (relevant) ctx.fillText(label.slice(0, 26), s.x, y - 38);
+    if (relevant && !t.done && !t.forgotten) {
       ctx.fillText('▰'.repeat(t.progress) + '▱'.repeat(Math.max(0, t.workUnits - t.progress)), s.x, y - 52);
       if (active) {
         ctx.fillStyle = '#7ee787';
@@ -584,20 +636,61 @@ export class UI {
     ctx.textAlign = 'left';
   }
 
-  private drawEnemy(ctx: CanvasRenderingContext2D, e: import('./enemies').Enemy, stunned = false): void {
+  private drawEnemy(ctx: CanvasRenderingContext2D, e: import('./enemies').Enemy, stunned = false, relevant = false): void {
     ctx.save();
     ctx.translate(e.x, e.y);
     let phase = e.def.kind === 'hallucination_ghost' ? 0.45 + 0.4 * Math.abs(Math.sin(e.stateTimer * 1.8)) : 1;
     if (stunned) phase = Math.min(phase, 0.75);
     ctx.globalAlpha = phase;
-    const size = e.mini ? 8 : 12;
+    const size = e.mini ? 9 : 14;
     ctx.fillStyle = '#161615';
     ctx.strokeStyle = e.def.color;
-    ctx.lineWidth = 1.5;
-    ctx.fillRect(-size, -size, size * 2, size * 2);
-    ctx.strokeRect(-size, -size, size * 2, size * 2);
+    ctx.lineWidth = relevant ? 2 : 1.5;
+    ctx.beginPath();
+    switch (e.def.kind) {
+      case 'timeout_blob':
+        ctx.roundRect(-size, -size * 0.72, size * 2, size * 1.44, 6);
+        break;
+      case 'hallucination_ghost':
+        ctx.moveTo(0, -size - 3); ctx.lineTo(size, 0); ctx.lineTo(0, size);
+        ctx.lineTo(-size, 0); ctx.closePath();
+        break;
+      case 'regression_splitter':
+        ctx.moveTo(-size, -size * 0.45); ctx.lineTo(-size * 0.45, -size);
+        ctx.lineTo(size * 0.45, -size); ctx.lineTo(size, -size * 0.45);
+        ctx.lineTo(size, size * 0.45); ctx.lineTo(size * 0.45, size);
+        ctx.lineTo(-size * 0.45, size); ctx.lineTo(-size, size * 0.45); ctx.closePath();
+        break;
+      case 'restart_crawler':
+        ctx.arc(0, 0, size, 0, Math.PI * 2);
+        break;
+      case 'false_positive_sniper':
+        ctx.moveTo(0, -size - 4); ctx.lineTo(size * 0.72, size);
+        ctx.lineTo(-size * 0.72, size); ctx.closePath();
+        break;
+      case 'tool_turret':
+        ctx.rect(-size, -size * 0.55, size * 2, size * 1.55);
+        break;
+      case 'overflow_emitter':
+        ctx.rect(-size * 0.68, -size - 4, size * 1.36, size * 2 + 4);
+        break;
+      case 'recovery_sprite':
+        ctx.arc(0, 0, size, 0, Math.PI * 2);
+        break;
+    }
+    ctx.fill();
+    ctx.stroke();
+    if (e.def.kind === 'regression_splitter') {
+      ctx.beginPath(); ctx.moveTo(0, -size + 3); ctx.lineTo(0, size - 3); ctx.stroke();
+    } else if (e.def.kind === 'tool_turret') {
+      ctx.beginPath(); ctx.moveTo(0, -size * 0.55); ctx.lineTo(size + 7, -size); ctx.stroke();
+    } else if (e.def.kind === 'overflow_emitter') {
+      ctx.globalAlpha = phase * (0.5 + 0.35 * Math.abs(Math.sin(this.time * 5)));
+      ctx.strokeRect(-size * 0.35, -size + 1, size * 0.7, size * 1.65);
+      ctx.globalAlpha = phase;
+    }
     ctx.fillStyle = e.def.color;
-    ctx.font = `${e.mini ? 9 : 12}px monospace`;
+    ctx.font = `${e.mini ? 10 : 14}px monospace`;
     ctx.textAlign = 'center';
     ctx.fillText(e.def.glyph, 0, 4);
     // hp pips + name
@@ -608,9 +701,11 @@ export class UI {
       ctx.fillStyle = e.def.color;
       ctx.fillRect(-size, -size - 6, size * 2 * frac, 3);
     }
-    ctx.font = `${10 / this.camZoom}px ui-monospace, monospace`;
-    ctx.globalAlpha = phase * 0.7;
-    ctx.fillText(e.def.name + (e.mini ? '·mini' : ''), 0, -size - 12);
+    if (relevant) {
+      ctx.font = `${10 / this.camZoom}px ui-monospace, monospace`;
+      ctx.globalAlpha = phase * 0.82;
+      ctx.fillText(e.def.name + (e.mini ? '·mini' : ''), 0, -size - 12);
+    }
     // stunned: busy reading the ping
     if (stunned) {
       ctx.globalAlpha = 0.95;
@@ -632,7 +727,7 @@ export class UI {
       ctx.strokeStyle = 'rgba(108,182,255,0.7)';
       ctx.fillStyle = 'rgba(108,182,255,0.10)';
       ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(0, -12, 22, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, -15, 28, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     }
     const color = dead ? '#555' : '#7ee787';
     const moving = Math.abs(a.vx) > 5 && a.onGround;
@@ -643,50 +738,50 @@ export class UI {
       ctx.lineWidth = 1.5;
       const phase = moving ? Math.sin(a.x * 0.25) * 3 : 0;
       ctx.beginPath();
-      ctx.moveTo(-6, -3); ctx.lineTo(-7 - phase, 0);
-      ctx.moveTo(6, -3); ctx.lineTo(7 + phase, 0);
+      ctx.moveTo(-8, -4); ctx.lineTo(-9 - phase, 0);
+      ctx.moveTo(8, -4); ctx.lineTo(9 + phase, 0);
       ctx.stroke();
     }
 
     // terminal window body
     ctx.fillStyle = dead ? '#222' : '#0c120e';
     ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.roundRect(-13, -22, 26, 19, 2); ctx.fill(); ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(-17, -28, 34, 24, 2); ctx.fill(); ctx.stroke();
     // title bar
     ctx.fillStyle = a.headsDown && !dead ? 'rgba(244,112,103,0.35)' : dead ? '#333' : 'rgba(126,231,135,0.22)';
-    ctx.fillRect(-12, -21, 24, 5);
+    ctx.fillRect(-16, -27, 32, 6);
     // traffic-light dots + model tag in the title bar
-    ctx.fillStyle = dead ? '#555' : '#f47067'; ctx.fillRect(-11, -19.5, 2, 2);
-    ctx.fillStyle = dead ? '#555' : '#e3b341'; ctx.fillRect(-8, -19.5, 2, 2);
-    ctx.font = '5px monospace';
+    ctx.fillStyle = dead ? '#555' : '#f47067'; ctx.fillRect(-15, -25.5, 2, 2);
+    ctx.fillStyle = dead ? '#555' : '#e3b341'; ctx.fillRect(-12, -25.5, 2, 2);
+    ctx.font = '6px monospace';
     ctx.fillStyle = dead ? '#666' : color;
     ctx.textAlign = 'right';
-    ctx.fillText(`v${a.model}`, 11, -17);
+    ctx.fillText(`v${a.model}`, 15, -22);
     ctx.textAlign = 'left';
     // the face: a prompt
-    ctx.font = '9px monospace';
+    ctx.font = '11px monospace';
     ctx.fillStyle = dead ? '#777' : color;
     if (dead) {
-      ctx.fillText('x_x', -7, -7);
+      ctx.fillText('x_x', -9, -10);
     } else if (run.working) {
       // typing furiously
       const dots = '▖▘▝▗'[Math.floor(this.time * 8) % 4];
-      ctx.fillText(`>${dots}`, a.facing === 1 ? -6 : -4, -7);
+      ctx.fillText(`>${dots}`, a.facing === 1 ? -8 : -5, -10);
     } else {
       const cursor = Math.sin(this.time * 4) > 0 ? '_' : ' ';
-      ctx.fillText(a.facing === 1 ? `>${cursor}` : `${cursor}<`, a.facing === 1 ? -6 : -4, -7);
+      ctx.fillText(a.facing === 1 ? `>${cursor}` : `${cursor}<`, a.facing === 1 ? -8 : -5, -10);
     }
     // antenna off the window corner
     if (!dead) {
       ctx.strokeStyle = color;
       ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(9, -22); ctx.lineTo(12, -28); ctx.stroke();
-      ctx.beginPath(); ctx.arc(12, -29, 1.5, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+      ctx.beginPath(); ctx.moveTo(12, -28); ctx.lineTo(16, -35); ctx.stroke();
+      ctx.beginPath(); ctx.arc(16, -36, 2, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
       if (this.muzzleTtl > 0) {
         ctx.fillStyle = `rgba(255,243,214,${this.muzzleTtl / 0.09})`;
         ctx.font = '12px monospace';
-        ctx.fillText(a.facing === 1 ? '»' : '«', a.facing * 16 - 4, -10);
+        ctx.fillText(a.facing === 1 ? '»' : '«', a.facing * 21 - 4, -13);
       }
     }
     // heads-down indicator
@@ -694,7 +789,7 @@ export class UI {
       ctx.fillStyle = '#f47067';
       ctx.font = `${10 / this.camZoom}px ui-monospace, monospace`;
       ctx.textAlign = 'center';
-      ctx.fillText('⌨ heads-down', 0, -38);
+      ctx.fillText('⌨ heads-down', 0, -45);
       ctx.textAlign = 'left';
     }
     ctx.restore();
@@ -702,6 +797,17 @@ export class UI {
 
   private drawSubagents(ctx: CanvasRenderingContext2D, run: Run): void {
     for (const sa of run.subagents) {
+      ctx.save();
+      ctx.globalAlpha = sa.corrupted ? 0.5 : 0.28;
+      ctx.strokeStyle = sa.corrupted ? '#f47067' : '#7ee787';
+      ctx.lineWidth = 1 / this.camZoom;
+      ctx.setLineDash(sa.corrupted ? [2, 5] : [4, 5]);
+      ctx.beginPath();
+      ctx.moveTo(run.avatar.x, run.avatar.y - 12);
+      ctx.lineTo(sa.x, sa.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
       ctx.save();
       ctx.translate(sa.x, sa.y);
       const color = sa.corrupted ? '#f47067' : '#7ee787';
@@ -760,9 +866,15 @@ export class UI {
     const hpFrac = Math.max(0, a.hp / a.maxHp);
     const ctxF = contextFrac(run.ctx);
     const overThresh = ctxF >= run.ctx.threshold;
-    const taskRows = run.queue.tasks.map((t, i) => {
+    const pending = run.queue.tasks.map((t, i) => ({ t, i })).filter(({ t }) => !t.done && !t.forgotten);
+    const nextAhead = run.stations.find((s) => s.x >= a.x - 40 && !run.queue.tasks[s.taskIndex].done && !run.queue.tasks[s.taskIndex].forgotten);
+    const focusIndex = run.nearStation?.taskIndex ?? nextAhead?.taskIndex ?? pending[0]?.i;
+    const visible = [focusIndex, ...pending.map(({ i }) => i).filter((i) => i !== focusIndex)]
+      .filter((i): i is number => i !== undefined).slice(0, 2);
+    const taskRows = visible.map((i) => {
+      const t = run.queue.tasks[i];
       const cls = ['task-row'];
-      const isCurrent = !t.done && !t.forgotten && run.nearStation?.taskIndex === i;
+      const isCurrent = i === focusIndex;
       if (t.done) cls.push('done');
       else if (isCurrent) cls.push('current');
       if (t.forgotten && !t.done) cls.push('forgotten');
@@ -771,7 +883,8 @@ export class UI {
         ? ` <span class="task-blocks">[${'▰'.repeat(t.progress)}${'▱'.repeat(Math.max(0, t.workUnits - t.progress))}]</span>` : '';
       const name = t.forgotten && !t.done ? garble(t.name, this.garbleRng, 0.35) : t.name;
       return `<div class="${cls.join(' ')}"><span class="glyph">${glyph}</span><span>${escapeHtml(name)}${blocks}</span></div>`;
-    }).join('');
+    }).join('') + (pending.length > visible.length
+      ? `<div class="task-row dim"><span class="glyph">·</span><span>${pending.length - visible.length} more queued</span></div>` : '');
     panel.innerHTML = `
       <div class="pp-name" style="color:#7ee787">${escapeHtml(run.name)} <span class="badge">v${a.model}</span>
         <span class="badge">stability ${run.loadout.stability}</span>
@@ -794,9 +907,12 @@ export class UI {
     const alive = run.enemies.filter((e) => !e.dead && !e.def.friendly);
     const byKind = new Map<string, number>();
     for (const e of alive) byKind.set(e.def.name, (byKind.get(e.def.name) ?? 0) + 1);
-    const roster = [...byKind.entries()].slice(0, 5)
+    const kinds = [...byKind.entries()];
+    const roster = kinds.slice(0, 3)
       .map(([name, n]) => `<div class="task-row"><span class="glyph">·</span><span>${escapeHtml(name)} ×${n}</span></div>`)
-      .join('') || '<div class="task-row dim"><span class="glyph">·</span><span>all errors resolved</span></div>';
+      .join('') + (kinds.length > 3
+        ? `<div class="task-row dim"><span class="glyph">·</span><span>${kinds.length - 3} more error classes</span></div>` : '') ||
+      '<div class="task-row dim"><span class="glyph">·</span><span>all errors resolved</span></div>';
     const crates = run.crates.filter((c) => !c.used).length;
     panel.innerHTML = `
       <div class="pp-name" style="color:#ff9440">session: ${escapeHtml(s.sessionId)}
@@ -837,7 +953,7 @@ export class UI {
   private renderTranscript(run: Run): void {
     const feed = $('log-feed');
     feed.innerHTML = '';
-    const lines = run.log.slice(-4);
+    const lines = run.log.slice(-3);
     lines.forEach((line, idx) => {
       const div = document.createElement('div');
       div.className = 'tr-line' + (idx === lines.length - 1 ? ' fresh' : '');

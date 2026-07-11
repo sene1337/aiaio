@@ -108,3 +108,23 @@ turns out wrong, append a correction.
   a normal URL returned to the standard menu.
 - Open: trailer capture scripts remain local in sibling `aiaio-promo/` and use
   the dev-only `?qa=autoplay` URL when private capture cards are requested.
+
+## 2026-07-11 · GPT-5 · visual and audio clarity foundation (v2.4.0)
+
+- What: began the full visual/audio roadmap on `codex/visual-audio-overhaul`.
+  Enlarged the player and threat framing, made labels contextual, compacted the
+  HUD, added Observer captions, differentiated all error silhouettes, exposed
+  token spend and subagent allegiance in-world, and replaced the separate SFX
+  and music outputs with one bus-based, limited, spatial mixer. Added threat
+  earcons, repeat variation, speech ducking, and music-state hysteresis.
+- Why: the terminal identity was strong but the playable layer, telemetry, and
+  labels competed at equal salience. Audio had strong authored moments without
+  a mix hierarchy. This pass makes cause/effect and immediate threats readable
+  before adding more decorative detail.
+- Verified: `npm run build`; `git diff --check`; live dev autoplay at the square
+  promo viewport; Observer caption fallback and minimum dwell; context-nuke
+  token trail, enemy silhouettes, compaction wall, and subagent tether; browser
+  console remained clear of warnings and errors.
+- Open: settings/accessibility UI, independent persisted bus sliders, mono
+  output, reduced-flash wiring for canvas effects, fixed virtual pixel grid,
+  broader responsive QA, and final tuning remain in the roadmap.

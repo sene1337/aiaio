@@ -356,17 +356,21 @@ function prepareRun(card: SessionCard): void {
 }
 
 function routeAudio(type: string, data: Record<string, unknown>): void {
+  const worldX = Number(data.x);
+  const pan = run && Number.isFinite(worldX)
+    ? Math.max(-0.9, Math.min(0.9, (worldX - run.avatar.x) / 420)) : 0;
   switch (type) {
     case 'fire': {
       const w = String(data.weapon ?? '');
-      if (w === 'debug_zap') audio.zap();
-      else if (w === 'false_positive_laser') audio.laser();
-      else audio.fire(w === 'context_nuke' || w === 'timeout_mortar' || w === 'regression_cluster');
+      if (w === 'debug_zap') audio.zap(pan);
+      else if (w === 'false_positive_laser') audio.laser(pan);
+      else audio.fire(w === 'context_nuke' || w === 'timeout_mortar' || w === 'regression_cluster', pan);
       break;
     }
-    case 'explosion': audio.explode(Number(data.radius) || 20); break;
-    case 'kill': data.by === 'sub' ? audio.subKill() : audio.kill(data.direct === true); break;
+    case 'explosion': audio.explode(Number(data.radius) || 20, pan); break;
+    case 'kill': data.by === 'sub' ? audio.subKill(pan) : audio.kill(data.direct === true, pan); break;
     case 'damage': audio.hurt(); break;
+    case 'threat_warning': audio.threatWarning(String(data.kind ?? ''), pan); break;
     case 'compaction': audio.compaction(); break;
     case 'work_tick': audio.taskTick(); break;
     case 'task_done': audio.taskDone(); break;
@@ -580,6 +584,8 @@ function main(): void {
   ui = new UI();
   (window as any).__ui = ui; // debug/testing handle
   (window as any).__observer = observer;
+  observer.bindCaptionSink((speaker, text, active) => ui.setCaption(speaker, text, active));
+  observer.bindSpeechState((active) => audio.setSpeechActive(active));
   const logoEl = document.querySelector('.ascii-logo');
   if (logoEl) startLogoLoop(logoEl as HTMLElement);
   wireCardSlot();

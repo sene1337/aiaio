@@ -592,9 +592,13 @@ export class Run {
     if (slot.ammo !== Infinity) slot.ammo--;
     slot.cooldownLeft = slot.def.behavior === 'hitscan' ? 1.4 : slot.def.behavior === 'ballistic' && slot.def.id === 'debug_zap' ? 0.18 : 0.5;
     this.spendTokens(slot.def.tokenCost / RUN_COST.fireDivisor);
-    this.emit('fire', { weapon: slot.def.id, ammoLeft: slot.ammo === Infinity ? -1 : slot.ammo });
-
     const a = this.avatar;
+    this.emit('fire', {
+      weapon: slot.def.id, ammoLeft: slot.ammo === Infinity ? -1 : slot.ammo,
+      x: Math.round(a.x), y: Math.round(a.y),
+      tokens: Math.round(slot.def.tokenCost / RUN_COST.fireDivisor),
+    });
+
     let jitter = a.aimJitter > 0 ? this.rng.range(-a.aimJitter, a.aimJitter) * 4 : 0;
     // inside the forgetting, your aim is as corrupted as your memory
     const inWall = this.insideWall;
@@ -1201,6 +1205,7 @@ export class Run {
         case 'timeout_blob':
           if (e.cooldown <= 0 && dist < 520) {
             e.cooldown = 2.6;
+            this.emit('threat_warning', { kind: 'timeout_mortar', x: Math.round(e.x), y: Math.round(e.y) });
             const dx = a.x - e.x;
             this.projectiles.push({
               x: e.x, y: e.y - 10, vx: dx * 0.55, vy: -180,
@@ -1231,6 +1236,7 @@ export class Run {
           if (!e.telegraphing && e.cooldown <= 0 && dist < 640) {
             e.telegraphing = true;
             e.stateTimer = 0;
+            this.emit('threat_warning', { kind: 'sniper', x: Math.round(e.x), y: Math.round(e.y) });
             // snipers pick the closest mark — you OR one of your interns
             let tx = a.x, ty = a.y - 10, bestD = Math.hypot(a.x - e.x, a.y - e.y);
             for (const sa of this.subagents) {
@@ -1260,6 +1266,7 @@ export class Run {
         case 'tool_turret':
           if (e.cooldown <= 0 && dist < 560) {
             e.cooldown = 2.4;
+            this.emit('threat_warning', { kind: 'tool_bolt', x: Math.round(e.x), y: Math.round(e.y) });
             const dx = a.x - e.x, dy = (a.y - 10) - (e.y - 8);
             const len = Math.hypot(dx, dy) || 1;
             this.projectiles.push({

@@ -186,6 +186,19 @@ html, body {
 #canvas-wrap { flex: 1; position: relative; min-height: 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 #game-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 
+#observer-caption {
+  position: absolute; z-index: 32; left: 50%; bottom: 18px; transform: translateX(-50%);
+  width: min(720px, calc(100% - 48px)); padding: 8px 12px;
+  background: rgba(10, 11, 13, 0.94); border-left: 3px solid var(--clay);
+  color: var(--text); font-size: 14px; line-height: 1.45; text-align: left;
+  pointer-events: none;
+}
+#observer-caption .caption-speaker {
+  color: var(--clay); font-size: 10px; margin-right: 9px;
+}
+#observer-caption.bad-news { border-left-color: var(--red); }
+#observer-caption.bad-news .caption-speaker { color: var(--red); }
+
 /* ---- banners ---- */
 #banner-layer {
   position: absolute; inset: 0; display: flex; align-items: flex-start; justify-content: center;
@@ -215,14 +228,17 @@ html, body {
 /* ---- bottom hud: weapon rows + prompt + transcript ---- */
 #hud-bottom {
   display: flex; gap: 14px; padding: 6px 10px 4px; align-items: flex-start;
-  min-height: 108px;
+  min-height: 92px;
 }
-#weapon-bar { display: flex; flex-direction: column; gap: 1px; flex: 0 0 300px; }
+#weapon-bar {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px 8px; flex: 0 0 410px;
+}
 .weapon-slot {
   padding: 2px 8px; font-size: 11px; cursor: pointer; position: relative;
-  color: var(--text); display: flex; gap: 8px; align-items: baseline;
+  color: var(--text); display: flex; gap: 6px; align-items: baseline; min-width: 0;
 }
-.weapon-slot .wname { white-space: nowrap; }
+.weapon-slot .wname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .weapon-slot .wmeta { color: var(--dim); font-size: 10px; margin-left: auto; }
 .weapon-slot.selected { background: var(--bg-sel); }
 .weapon-slot.selected .wname { color: var(--green); }
@@ -260,7 +276,7 @@ html, body {
 .prompt-box .spin-hint { color: var(--dim); font-size: 11px; }
 
 #log-feed {
-  height: 58px; overflow: hidden; font-size: 11px; line-height: 1.45;
+  height: 43px; overflow: hidden; font-size: 11px; line-height: 1.45;
   display: flex; flex-direction: column; justify-content: flex-end;
 }
 #log-feed .tr-line { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -280,6 +296,12 @@ html, body {
 }
 #status-bar .sb-key { color: var(--text); }
 #status-bar .sb-right { margin-left: auto; }
+
+@media (max-width: 980px) {
+  #weapon-bar { flex-basis: 360px; }
+  .player-panel { padding-inline: 8px; }
+  #hud-center { min-width: 142px; }
+}
 
 /* ---- recap ---- */
 #recap-body { width: 100%; font-size: 12px; line-height: 1.7; }

@@ -222,6 +222,9 @@ const ROAST_STING: Pool = [
 export class Observer {
   voiceOn = localStorage.getItem(LS_VOICE) !== '0';
   private sink: (line: string) => void = () => { /* wired by main */ };
+  private captionSink: (speaker: 'observer' | 'bad news', text: string, active: boolean) => void = () => {};
+  private speechStateSink: (active: boolean) => void = () => {};
+  private activeCaption: { speaker: 'observer' | 'bad news'; text: string; startedAt: number } | null = null;
   private ctx: ObserverContext = { goal: null, sessionId: '?', topError: 'none', tasksTotal: 0 };
   private time = 0;
   private lastSpokeAt = -999;
@@ -238,10 +241,54 @@ export class Observer {
     this.sink = sink;
   }
 
+  bindCaptionSink(sink: (speaker: 'observer' | 'bad news', text: string, active: boolean) => void): void {
+    this.captionSink = sink;
+  }
+
+  bindSpeechState(sink: (active: boolean) => void): void {
+    this.speechStateSink = sink;
+  }
+
+  private cancelSpeech(): void {
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    if (this.activeCaption) this.captionSink(this.activeCaption.speaker, this.activeCaption.text, false);
+    this.activeCaption = null;
+    this.speechStateSink(false);
+  }
+
+  private wireSpeech(
+    u: SpeechSynthesisUtterance, speaker: 'observer' | 'bad news', text: string, activateNow = false,
+  ): void {
+    const activate = () => {
+      this.activeCaption = { speaker, text, startedAt: performance.now() };
+      this.captionSink(speaker, text, true);
+      this.speechStateSink(true);
+    };
+    if (activateNow) activate();
+    u.onstart = activate;
+    const done = () => {
+      if (this.activeCaption?.speaker === speaker && this.activeCaption.text === text) {
+        const remaining = 1800 - (performance.now() - this.activeCaption.startedAt);
+        if (remaining > 0) {
+          window.setTimeout(done, remaining);
+          return;
+        }
+        this.captionSink(speaker, text, false);
+        this.activeCaption = null;
+        this.speechStateSink(false);
+      }
+    };
+    u.onend = done;
+    u.onerror = done;
+    // Some browser/system-voice combinations omit end events. Never leave the
+    // mix ducked or a stale subtitle pinned forever.
+    window.setTimeout(done, Math.max(4000, Math.min(12000, text.length * 85)));
+  }
+
   toggleVoice(): boolean {
     this.voiceOn = !this.voiceOn;
     localStorage.setItem(LS_VOICE, this.voiceOn ? '1' : '0');
-    if (!this.voiceOn && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+    if (!this.voiceOn) this.cancelSpeech();
     return this.voiceOn;
   }
 
@@ -326,7 +373,7 @@ export class Observer {
   speakRoast(lines: string[]): void {
     if (!this.voiceOn || !('speechSynthesis' in window)) return;
     try {
-      window.speechSynthesis.cancel();
+      this.cancelSpeech();
       for (const line of lines) this.speakQueued(line);
     } catch { /* silence is also judgment */ }
   }
@@ -336,6 +383,7 @@ export class Observer {
     const u = new SpeechSynthesisUtterance(text);
     if (this.voice) u.voice = this.voice;
     u.rate = 1.04; u.pitch = 0.72; u.volume = 0.85;
+    this.wireSpeech(u, 'observer', text);
     synth.speak(u);
   }
 
@@ -349,7 +397,7 @@ export class Observer {
     this.voice = voices[(idx + 1) % voices.length];
     localStorage.setItem('aiaio-voice-name', this.voice.name);
     // sample it immediately, interrupting anything in-flight
-    window.speechSynthesis.cancel();
+    this.cancelSpeech();
     const wasOn = this.voiceOn;
     this.voiceOn = true;
     this.speak(`Voice check. I will be judging you as ${this.voice.name.replace(/\(.*\)/, '').trim()}.`);
@@ -505,6 +553,7 @@ export class Observer {
       if (this.badVoice) u.voice = this.badVoice;
       if (!this.badVoice || !/bad news/i.test(this.badVoice.name)) { u.pitch = 0.4; u.rate = 0.85; }
       u.volume = 0.9;
+      this.wireSpeech(u, 'bad news', line, true);
       synth.speak(u); // queues after any observer line — the dirge waits its turn
     } catch { /* text judgment only */ }
   }
@@ -530,6 +579,7 @@ export class Observer {
       u.rate = 1.04;
       u.pitch = 0.72; // dry
       u.volume = 0.85;
+      this.wireSpeech(u, 'observer', text, true);
       synth.speak(u);
     } catch { /* no voice available — the transcript still judges you */ }
   }
