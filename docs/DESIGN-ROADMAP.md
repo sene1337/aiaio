@@ -165,13 +165,13 @@ ids.
 
 ## Integrated roadmap
 
-### P0: Restore campaign truth and incentives
+### P0: Restore campaign truth and incentives (completed in v2.5.0)
 
-- Record separate outcomes: `survived`, `recovered`, and `perfect`.
-- Require exit plus meaningful real-task engagement for campaign credit.
-- Remove invented enemies and tasks from real cards. Quiet sessions remain
+- [x] Record separate outcomes: `survived`, `recovered`, and `perfect`.
+- [x] Require exit plus meaningful real-task engagement for campaign credit.
+- [x] Remove invented enemies and tasks from real cards. Quiet sessions remain
   truthfully quiet; fallback content exists only in labeled demo/random modes.
-- Make rescans additive/stable so a capped scan cannot erase indexed history or
+- [x] Make rescans additive/stable so a capped scan cannot erase indexed history or
   orphan progress.
 
 ### P1: Finish settings and accessibility

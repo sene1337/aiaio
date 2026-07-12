@@ -5,7 +5,7 @@ import { Run, RunInput } from './run';
 import { UI, escapeHtml } from './ui';
 import {
   SessionCard, parseSessionCard, loadoutFromCard, randomCard,
-  EXAMPLE_CLEAN, EXAMPLE_CHAOTIC, SESSION_CARD_SCHEMA,
+  EXAMPLE_CLEAN, EXAMPLE_CHAOTIC, SESSION_CARD_SCHEMA, SessionMode,
 } from './session';
 import { qa } from './telemetry';
 import { audio } from './audio';
@@ -14,9 +14,9 @@ import { observer } from './observer';
 import { startLogoLoop } from './logo';
 import {
   LevelEntry, difficulty, tierOf, TIERS, unlockedTiers, getProgress, isCleared,
-  computeRank, recordResult, RANK_COLORS,
+  isPerfect, isSurvived, campaignOutcome, computeRank, recordResult, RANK_COLORS, CampaignOutcome,
 } from './levels';
-import { progressFrac } from './tasks';
+import { doneUnits, progressFrac, totalUnits } from './tasks';
 
 type ScreenId = 'menu' | 'briefing' | 'match' | 'recap';
 
@@ -28,12 +28,21 @@ let loadedCard: SessionCard | null = null;
 let runCounter = 0;
 let recapShown = false;
 let progressRecorded = false;
-let lastRankInfo: { rank: 'S' | 'A' | 'B' | 'C' | 'D'; newBest: boolean; rankUp: boolean; prevBest: number | null } | null = null;
+type RankInfo = {
+  rank: 'S' | 'A' | 'B' | 'C' | 'D';
+  newBest: boolean;
+  rankUp: boolean;
+  prevBest: number | null;
+  outcome: CampaignOutcome;
+  campaignRecorded: boolean;
+};
+let lastRankInfo: RankInfo | null = null;
 /** re-render THE VAULT (set by loadGallery) — call when returning to the menu */
 let refreshVault: (() => void) | null = null;
 type QAAutoplayController = import('../qa/autoplay').AutoplayController;
 let qaAutoplay: QAAutoplayController | null = null;
 let qaAutoplayCard: SessionCard | null = null;
+let qaAutoplayMode: SessionMode = 'demo';
 
 function showScreen(id: ScreenId): void {
   for (const s of ['menu', 'briefing', 'match', 'recap']) {
@@ -134,11 +143,11 @@ async function loadGallery(): Promise<void> {
         return ca - cx || difficulty(a) - difficulty(x) || (a.mtime ?? 0) - (x.mtime ?? 0);
       }));
 
-      const clearedTotal = entries.filter((e) => isCleared(getProgress(e.session_id))).length;
+      const recoveredTotal = entries.filter((e) => isCleared(getProgress(e.session_id))).length;
       const head = document.createElement('div');
       head.className = 'hint';
       head.style.textAlign = 'left';
-      head.textContent = `THE VAULT · ${entries.length} sessions · ${clearedTotal} cleared (type to filter):`;
+      head.textContent = `THE VAULT · ${entries.length} sessions · ${recoveredTotal} recovered (type to filter):`;
       box.appendChild(head);
       const input = document.createElement('input');
       input.id = 'gallery-filter';
@@ -159,7 +168,7 @@ async function loadGallery(): Promise<void> {
         const bucket = buckets[tier.index];
         if (bucket.length === 0 && !q) continue;
         const isOpen = openTiers.has(tier.index) || !!q;
-        const cleared = bucket.filter((e) => isCleared(getProgress(e.session_id))).length;
+        const recovered = bucket.filter((e) => isCleared(getProgress(e.session_id))).length;
 
         const folder = document.createElement('button');
         folder.className = 'cmd folder';
@@ -175,7 +184,7 @@ async function loadGallery(): Promise<void> {
           });
         } else {
           folder.innerHTML = `<span class="caret">${isOpen ? '▾' : '▸'}</span><span class="cmd-name">${escapeHtml(tier.name)}/</span>` +
-            `<span class="cmd-desc">${bucket.length} levels · ${cleared} cleared</span>`;
+            `<span class="cmd-desc">${bucket.length} levels · ${recovered} recovered</span>`;
           folder.addEventListener('click', () => {
             if (openTiers.has(tier.index)) openTiers.delete(tier.index); else openTiers.add(tier.index);
             render(input.value);
@@ -190,7 +199,7 @@ async function loadGallery(): Promise<void> {
           const btn = document.createElement('button');
           btn.className = 'cmd level';
           const shortId = entry.session_id.length > 22 ? entry.session_id.slice(0, 20) + '…' : entry.session_id;
-          const glyph = isCleared(p) ? '☒' : '☐';
+          const glyph = isPerfect(p) ? '✦' : isCleared(p) ? '☒' : isSurvived(p) ? '◉' : '☐';
           // agent-curated levels carry their story with them — show it
           const star = entry.file.endsWith('.enriched.json')
             ? '<span style="color:var(--purple)">✦ </span>' : '';
@@ -248,11 +257,10 @@ async function loadGallery(): Promise<void> {
 // run setup
 // ---------------------------------------------------------------------------
 
-function prepareRun(card: SessionCard): void {
+function prepareRun(card: SessionCard, mode: SessionMode): void {
   runCounter++;
   const name = card.session_id ? `agent:${String(card.session_id).slice(0, 14)}` : 'AGENT-01';
-  const loadout = loadoutFromCard(card, name);
-  loadout.cardSummary.fromCard = loadedCard !== null || card === EXAMPLE_CLEAN || card === EXAMPLE_CHAOTIC;
+  const loadout = loadoutFromCard(card, name, { mode });
   // campaign context for the briefing: computed difficulty + any existing rank
   const entryLike: LevelEntry = {
     file: '', session_id: String(card.session_id ?? 'unknown'),
@@ -288,15 +296,33 @@ function prepareRun(card: SessionCard): void {
     // no banner gates, no way to lose it by quitting fast
     if ((type === 'win' || type === 'death') && run && !progressRecorded) {
       progressRecorded = true;
-      const rank = computeRank(type === 'win', data.perfect === true, progressFrac(run.queue));
-      const rec = recordResult(run.loadout.cardSummary.sessionId, rank, Number(data.score) || 0);
-      lastRankInfo = { rank, newBest: rec.newBest, rankUp: rec.rankUp, prevBest: rec.prev?.bestScore ?? null };
-      qa.event('rank', { rank, score: Number(data.score) || 0, newBest: rec.newBest });
+      const isRealRun = mode === 'real';
+      const outcome = campaignOutcome(
+        type === 'win',
+        isRealRun ? totalUnits(run.queue) : 0,
+        isRealRun ? doneUnits(run.queue) : 0,
+        isRealRun ? run.queue.tasks.filter((task) => task.done).length : 0,
+      );
+      const rank = computeRank(outcome, progressFrac(run.queue));
+      const rec = isRealRun
+        ? recordResult(run.loadout.cardSummary.sessionId, rank, Number(data.score) || 0, outcome)
+        : { newBest: false, rankUp: false, prev: null };
+      lastRankInfo = {
+        rank, newBest: rec.newBest, rankUp: rec.rankUp, prevBest: rec.prev?.bestScore ?? null,
+        outcome, campaignRecorded: isRealRun,
+      };
+      qa.event('rank', { rank, score: Number(data.score) || 0, newBest: rec.newBest, ...outcome });
     }
   };
+  const prevStatus = !prevProgress ? null
+    : isPerfect(prevProgress) ? `perfect recall · best ${prevProgress.bestScore.toLocaleString()}`
+      : isCleared(prevProgress) ? `recovered · best ${prevProgress.bestScore.toLocaleString()}`
+        : isSurvived(prevProgress) ? `survived · best ${prevProgress.bestScore.toLocaleString()}`
+          : `attempted · best ${prevProgress.bestScore.toLocaleString()}`;
   ui.buildBriefing(loadout, card, name, {
     diff, tierName: tierOf(diff).name,
-    prevRank: prevProgress ? `${prevProgress.rank} · best ${prevProgress.bestScore.toLocaleString()}` : null,
+    prevRank: prevStatus,
+    mode,
   });
   showScreen('briefing');
 
@@ -413,8 +439,9 @@ async function startDevQA(): Promise<void> {
     const { loadAutoplay } = await import('../qa/autoplay');
     const loaded = await loadAutoplay(params);
     qaAutoplayCard = loaded.card;
+    qaAutoplayMode = params.get('card') ? 'real' : 'demo';
     setCard(loaded.card, loaded.sourceName);
-    prepareRun(loaded.card);
+    prepareRun(loaded.card, qaAutoplayMode);
     if (mode === 'autoplay') {
       qaAutoplay = loaded.controller;
       qaAutoplay.reset();
@@ -559,7 +586,7 @@ function frameBody(t: number): void {
   }
   if (import.meta.env.DEV && qaAutoplay && run && qaAutoplayCard && qaAutoplay.shouldRestart(run, dt)) {
     qaAutoplay.reset();
-    prepareRun(qaAutoplayCard);
+    prepareRun(qaAutoplayCard, qaAutoplayMode);
     showScreen('match');
   }
   // (re-scheduling happens in frame()'s finally — guaranteed even on throw)
@@ -597,10 +624,10 @@ function main(): void {
   loadPersonaPack();
 
   $('btn-run').addEventListener('click', () => {
-    prepareRun(loadedCard ?? randomCard(`random-session-${runCounter + 1}`));
+    prepareRun(loadedCard ?? randomCard(`random-session-${runCounter + 1}`), loadedCard ? 'real' : 'random');
   });
-  $('btn-example-clean').addEventListener('click', () => prepareRun(EXAMPLE_CLEAN));
-  $('btn-example-chaos').addEventListener('click', () => prepareRun(EXAMPLE_CHAOTIC));
+  $('btn-example-clean').addEventListener('click', () => prepareRun(EXAMPLE_CLEAN, 'demo'));
+  $('btn-example-chaos').addEventListener('click', () => prepareRun(EXAMPLE_CHAOTIC, 'demo'));
 
   $('btn-start-match').addEventListener('click', () => {
     if (!run) return;

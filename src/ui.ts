@@ -1023,13 +1023,15 @@ export class UI {
 
   buildBriefing(
     loadout: AgentLoadout, card: SessionCard, name: string,
-    campaign?: { diff: number; tierName: string; prevRank: string | null },
+    campaign?: { diff: number; tierName: string; prevRank: string | null; mode: 'real' | 'demo' | 'random' },
   ): void {
     const cols = $('briefing-cols');
     cols.innerHTML = '';
     const s = loadout.cardSummary;
-    const campaignLine = campaign
-      ? `<div class="stat-line" style="color:var(--yellow)">difficulty ${campaign.diff}/100 · ${escapeHtml(campaign.tierName)}${campaign.prevRank ? ` · your record: ★${escapeHtml(campaign.prevRank)}` : ' · unplayed'}</div>`
+    const campaignLine = campaign?.mode === 'real'
+      ? `<div class="stat-line" style="color:var(--yellow)">difficulty ${campaign.diff}/100 · ${escapeHtml(campaign.tierName)}${campaign.prevRank ? ` · your record: ${escapeHtml(campaign.prevRank)}` : ' · unplayed'}</div>`
+      : campaign
+        ? `<div class="stat-line dim">${campaign.mode === 'demo' ? 'fictional demo' : 'random session'} · no campaign progress is recorded</div>`
       : '';
 
     const agentCol = document.createElement('div');
@@ -1090,7 +1092,11 @@ export class UI {
 
   buildRecap(
     run: Run,
-    rankInfo?: { rank: 'S' | 'A' | 'B' | 'C' | 'D'; newBest: boolean; rankUp: boolean; prevBest: number | null },
+    rankInfo?: {
+      rank: 'S' | 'A' | 'B' | 'C' | 'D'; newBest: boolean; rankUp: boolean; prevBest: number | null;
+      outcome: { survived: boolean; recovered: boolean; perfect: boolean };
+      campaignRecorded: boolean;
+    },
   ): void {
     const over = run.over!;
     $('recap-headline').textContent = over.headline;
@@ -1099,11 +1105,13 @@ export class UI {
     const done = run.queue.tasks.filter((t) => t.done);
     const eaten = run.queue.tasks.filter((t) => t.forgotten && !t.done);
     const undone = run.queue.tasks.filter((t) => !t.done && !t.forgotten);
-    const cardBits = s.fromCard
+    const cardBits = s.mode === 'real'
       ? `<p class="dim">real session ${escapeHtml(s.sessionId)}: top error was ${escapeHtml(s.topErrorCategory)} ×${s.topErrorCount};
          ${s.compactionEvents} real compaction${s.compactionEvents === 1 ? '' : 's'} on record; this run compacted ${run.ctx.compactions}×.
          ${s.tasksTotal > 0 ? `the real agent finished ${s.tasksCompleted}/${s.tasksTotal} of these tasks; you finished ${done.length}/${run.queue.tasks.length}.` : ''}</p>`
-      : '<p class="dim">randomly generated session. run `npm run scan` and pick a real one for a personalized level.</p>';
+      : s.mode === 'demo'
+        ? '<p class="dim">fictional demo session. it does not alter your campaign history.</p>'
+        : '<p class="dim">randomly generated session. run `npm run scan` and pick a real one for a personalized level.</p>';
     // where in the real session the run ended
     let placeBit = '';
     if (run.moments.length > 0) {
@@ -1119,8 +1127,14 @@ export class UI {
         `${rankInfo.newBest ? ' <span style="color:var(--yellow)">NEW BEST</span>' : rankInfo.prevBest !== null ? ` <span class="dim">best ${rankInfo.prevBest.toLocaleString()}</span>` : ''}` +
         `${rankInfo.rankUp && rankInfo.prevBest !== null ? ' <span style="color:var(--green)">RANK UP</span>' : ''}</p>`
       : '';
+    const outcomeBit = rankInfo
+      ? `<p class="recap-outcome">OUTCOME · survived ${rankInfo.outcome.survived ? 'YES' : 'NO'} · recovered ${rankInfo.outcome.recovered ? 'YES' : 'NO'} · perfect ${rankInfo.outcome.perfect ? 'YES' : 'NO'}${rankInfo.campaignRecorded
+        ? rankInfo.outcome.recovered ? ' · <span style="color:var(--green)">CAMPAIGN CREDIT EARNED</span>' : ' · <span class="dim">campaign credit needs exit + half of the real task work</span>'
+        : ' · <span class="dim">demo/random runs do not affect campaign history</span>'}</p>`
+      : '';
     body.innerHTML = `
       ${rankBit}
+      ${outcomeBit}
       <p class="recap-summary">SCORE ${over.score} · ${Math.floor(run.time)}s · ${run.kills} errors resolved · ${run.ctx.compactions} compactions</p>
       ${placeBit}
       <div class="recap-cols"><div class="recap-col">

@@ -22,9 +22,10 @@
 // public/cards/*.json before sharing them with anyone.
 
 import { readdirSync, statSync, readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import { join, basename } from 'node:path';
+import { join, basename, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { extract, buildCard } from './extract-sessioncard.mjs';
 
 const DEFAULT_ROOTS = [
@@ -34,6 +35,40 @@ const DEFAULT_ROOTS = [
 ];
 const SKIP_DIRS = new Set(['node_modules', '.git', 'cache', 'caches', 'audio_cache', 'bootstrap-cache', 'backups', 'dist', 'venv', '__pycache__', 'rescue', 'lcm-files', 'qmd']);
 const MIN_BYTES = 2048;
+
+/** Session ids gain a content hash as logs grow; campaign identity is the stable stem. */
+export function sessionStem(sessionId) {
+  return String(sessionId).replace(/-[0-9a-f]{8}(-2)*$/, '');
+}
+
+/**
+ * Rescans are additive: a default capped scan updates the sessions it sees but
+ * preserves the rest of the player's previously indexed history.
+ */
+export function mergeIndex(existing, updates) {
+  const byStem = new Map();
+  for (const entry of existing) {
+    if (entry && typeof entry.session_id === 'string' && typeof entry.file === 'string') {
+      byStem.set(sessionStem(entry.session_id), entry);
+    }
+  }
+  for (const entry of updates) byStem.set(sessionStem(entry.session_id), entry);
+  return [...byStem.values()].sort((a, b) => (b.mtime ?? 0) - (a.mtime ?? 0));
+}
+
+function readJson(path, fallback) {
+  try { return JSON.parse(readFileSync(path, 'utf8')); } catch { return fallback; }
+}
+
+function existingIndex(outDir) {
+  const value = readJson(join(outDir, 'index.json'), []);
+  return Array.isArray(value) ? value : [];
+}
+
+function existingSources() {
+  const value = readJson(join(process.cwd(), 'qa-logs', 'sources.json'), {});
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
 
 function findJsonl(dir, depth = 0, out = [], tally = null) {
   if (depth > 6) return out;
@@ -135,8 +170,11 @@ function main() {
   const outDir = join(process.cwd(), 'public', 'cards');
   mkdirSync(outDir, { recursive: true });
 
-  const index = [];
-  const sources = {}; // card file -> absolute source log path (for auto-enrich)
+  const priorIndex = existingIndex(outDir);
+  const freshIndex = [];
+  // Preserve old mappings too: a capped rescan must not turn a retained card
+  // into an orphaned dev-mode enrichment target.
+  const sources = existingSources(); // card file -> absolute source log path (for auto-enrich)
   const usedNames = new Set();
   const seenBasenames = new Set(); // sessions get copied around — scan each once
   for (const root of roots) {
@@ -192,7 +230,7 @@ function main() {
         const errTotal = (card.errors ?? []).reduce((s, e) => s + Math.max(1, e.count ?? 1), 0);
         const enemies = errTotal === 0 ? 0
           : Math.max(4, Math.min(30, Math.round(4 + 4.5 * Math.log2(1 + errTotal / 6))));
-        index.push({
+        freshIndex.push({
           file,
           session_id: card.session_id,
           harness,
@@ -214,7 +252,7 @@ function main() {
       }
     }
   }
-  index.sort((a, b) => b.mtime - a.mtime);
+  const index = mergeIndex(priorIndex, freshIndex);
   writeFileSync(join(outDir, 'index.json'), JSON.stringify(index, null, 2) + '\n');
   // card-file -> source-log mapping for dev-mode auto-enrichment (gitignored;
   // absolute paths never go into shareable cards)
@@ -252,4 +290,4 @@ function main() {
   }
 }
 
-main();
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) main();

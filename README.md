@@ -20,7 +20,9 @@ real tasks sit in the world as work stations. And behind you, always, the **WALL
 OF FORGETTING** (context pressure made spatial) advances, eating terrain, tasks,
 and eventually you.
 
-Reach `process exit 0` alive. Clear your task queue on the way for a perfect run.
+Reach `process exit 0` alive. Clear your task queue on the way for a perfect run;
+in your real-history campaign, exiting after recovering at least half of the
+recorded task work earns progression credit.
 Every token you spend fighting is distance the wall gains.
 
 If you like this game or have ideas, hit me up on

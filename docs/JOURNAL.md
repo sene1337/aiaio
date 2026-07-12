@@ -169,3 +169,22 @@ turns out wrong, append a correction.
   the completed v2.4.0 journal entry, and current branch commits.
 - Open: the next build task should begin with P0 campaign truth/incentives,
   then finish settings/accessibility before the Memory Map and beat compiler.
+
+## 2026-07-12 · GPT-5 · restored campaign truth and repaired the quickbar (v2.5.0)
+
+- What: made the combat quickbar give every weapon name a dedicated rendered
+  line, with ammo and token cost beneath it; added `survived`, `recovered`, and
+  `perfect` campaign outcomes; made recovery, not exit-only rank B, unlock tiers;
+  stopped real cards from receiving fallback tasks or regression enemies; and
+  made capped rescans merge with the existing index by stable session stem.
+- Why: the quickbar made the personalized arsenal look broken at narrow desktop
+  widths. More importantly, progression previously rewarded a player for simply
+  reaching the exit, and quiet real logs were contradicted by made-up content.
+  A default scan could also erase sessions discovered by `--all`, making the
+  campaign unreliable.
+- Verified: `npm test`; `npm run build`; `git diff --check`; and an in-app local
+  browser run at 812px wide, where every quickbar label measured un-clipped and
+  rendered in full.
+- Open: P1 settings/accessibility, then the Memory Map and deterministic beat
+  compiler remain next. The player-visible recap now exposes the P0 outcomes,
+  but the richer chapter journey intentionally remains P1 work.

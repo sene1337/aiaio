@@ -526,7 +526,9 @@ export class Run {
     // end-of-run awards
     if (!won && doneUnits(this.queue) === 0) this.grantAward('speedrun_to_nothing');
     if (won && this.kills === 0) this.grantAward('conscientious_objector');
-    const perfect = won && allDone(this.queue);
+    // A quiet real session is allowed to stay quiet. Empty invented objectives
+    // must not turn an exit into a fictional perfect clear.
+    const perfect = won && (this.loadout.cardSummary.mode !== 'real' || this.queue.tasks.length > 0) && allDone(this.queue);
     const score = Math.max(0,
       tasksDone * 1000 +
       Math.round(this.avatar.hp) * 5 +

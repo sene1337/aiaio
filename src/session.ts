@@ -91,6 +91,13 @@ export interface GeneratedTask {
   at?: number;
 }
 
+/** Whether a run is the player's history or an explicitly labeled fictional mode. */
+export type SessionMode = 'real' | 'demo' | 'random';
+
+export interface LoadoutOptions {
+  mode?: SessionMode;
+}
+
 /** Everything the match needs for one player, derived from one card. */
 export interface AgentLoadout {
   label: string;
@@ -118,6 +125,7 @@ export interface CardSummary {
   restarts: number;
   modelSwitches: number;
   fromCard: boolean; // false when randomly generated
+  mode: SessionMode;
 }
 
 // ---------------------------------------------------------------------------
@@ -150,7 +158,9 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
 
-export function loadoutFromCard(card: SessionCard, label: string): AgentLoadout {
+export function loadoutFromCard(card: SessionCard, label: string, options: LoadoutOptions = {}): AgentLoadout {
+  const mode = options.mode ?? 'real';
+  const allowsFallbackContent = mode !== 'real';
   const sessionId = card.session_id ?? 'anonymous-session';
   const seed = hashString(sessionId);
   const rng = new Rng(seed ^ 0xa1a10);
@@ -210,15 +220,16 @@ export function loadoutFromCard(card: SessionCard, label: string): AgentLoadout 
     seen.set('distraction_barrage', g); weapons.push(g);
   }
 
-  // guarantee a playable baseline: everyone gets a Timeout Mortar (cheap default)
-  if (!seen.has('timeout_mortar')) {
+  // Demo/random modes need an authored baseline. Real sessions stay truthful:
+  // a quiet error log receives only the standard-issue debug zapper in Run.
+  if (allowsFallbackContent && !seen.has('timeout_mortar')) {
     weapons.unshift({
       id: 'timeout_mortar', ammo: 10, statRoll: 1,
       sourceLine: 'baseline issue. every agent has waited on something',
     });
   }
-  // guarantee at least one flavor weapon beyond the mortar
-  if (weapons.length < 2) {
+  // The same exception applies to the fictional flavor weapon.
+  if (allowsFallbackContent && weapons.length < 2) {
     weapons.push({
       id: 'unknown_error', ammo: 4, statRoll: 1,
       sourceLine: 'uncategorized log noise. nobody knows what this does',
@@ -235,7 +246,7 @@ export function loadoutFromCard(card: SessionCard, label: string): AgentLoadout 
       ...(typeof t.at === 'number' ? { at: clamp(t.at, 0, 1) } : {}),
     });
   }
-  if (tasks.length === 0) {
+  if (allowsFallbackContent && tasks.length === 0) {
     const n = clamp(3 + Math.floor(toolCalls / 40), 3, 5);
     const verbs = ['index', 'summarize', 'refactor', 'triage', 'deploy', 'lint', 'migrate', 'backfill'];
     const nouns = ['the inbox', 'session logs', 'the wiki', 'flaky tests', 'the pipeline', 'old branches', 'the changelog'];
@@ -282,7 +293,8 @@ export function loadoutFromCard(card: SessionCard, label: string): AgentLoadout 
       tasksTotal: cardTasks.length,
       restarts,
       modelSwitches,
-      fromCard: true,
+      fromCard: mode !== 'random',
+      mode,
     },
   };
 }

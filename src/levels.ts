@@ -65,10 +65,34 @@ export function tierOf(diff: number): Tier {
 
 export type Rank = 'S' | 'A' | 'B' | 'C' | 'D';
 
-export function computeRank(won: boolean, perfect: boolean, workFrac: number): Rank {
-  if (won && perfect) return 'S';
-  if (won && workFrac >= 0.75) return 'A';
-  if (won) return 'B';
+/**
+ * Campaign outcomes are intentionally separate. Reaching the exit is a
+ * survival; recovering the historical session requires completed real work;
+ * perfect is the full recovery. Demo/random runs never provide real units.
+ */
+export interface CampaignOutcome {
+  survived: boolean;
+  recovered: boolean;
+  perfect: boolean;
+}
+
+export function campaignOutcome(
+  survived: boolean, realTaskUnits: number, recoveredUnits: number, completedTasks: number,
+): CampaignOutcome {
+  const hasRealTasks = realTaskUnits > 0;
+  const recovered = survived && hasRealTasks && completedTasks > 0 &&
+    recoveredUnits >= Math.ceil(realTaskUnits / 2);
+  return {
+    survived,
+    recovered,
+    perfect: survived && hasRealTasks && recoveredUnits >= realTaskUnits,
+  };
+}
+
+export function computeRank(outcome: CampaignOutcome, workFrac: number): Rank {
+  if (outcome.perfect) return 'S';
+  if (outcome.recovered) return 'A';
+  if (outcome.survived) return 'B';
   if (workFrac >= 0.5) return 'C';
   return 'D';
 }
@@ -89,6 +113,9 @@ export interface LevelProgress {
   bestScore: number;
   plays: number;
   lastPlayed: string; // ISO date
+  survived: boolean;
+  recovered: boolean;
+  perfect: boolean;
 }
 
 export function stemOf(sessionId: string): string {
@@ -116,8 +143,23 @@ export function getProgress(sessionId: string): LevelProgress | null {
 
 const RANK_ORDER: Rank[] = ['D', 'C', 'B', 'A', 'S'];
 
+/** v2.4 stored only ranks. A/S prove meaningful work; B was exit-only. */
+function hadLegacyRecovery(p: LevelProgress): boolean {
+  return p.recovered ?? (p.rank === 'S' || p.rank === 'A');
+}
+
+function hadLegacySurvival(p: LevelProgress): boolean {
+  return p.survived ?? (p.rank === 'S' || p.rank === 'A' || p.rank === 'B');
+}
+
+function hadLegacyPerfect(p: LevelProgress): boolean {
+  return p.perfect ?? p.rank === 'S';
+}
+
 /** record a finished run; returns flags for the recap ("NEW BEST", rank-up) */
-export function recordResult(sessionId: string, rank: Rank, score: number): { newBest: boolean; rankUp: boolean; prev: LevelProgress | null } {
+export function recordResult(
+  sessionId: string, rank: Rank, score: number, outcome: CampaignOutcome,
+): { newBest: boolean; rankUp: boolean; prev: LevelProgress | null } {
   const all = loadProgress(true); // fresh read: merge with any other tab's writes
   const key = stemOf(sessionId);
   const prev = all[key] ?? null;
@@ -128,15 +170,26 @@ export function recordResult(sessionId: string, rank: Rank, score: number): { ne
     bestScore: Math.max(score, prev?.bestScore ?? 0),
     plays: (prev?.plays ?? 0) + 1,
     lastPlayed: new Date().toISOString().slice(0, 10),
+    survived: outcome.survived || (prev ? hadLegacySurvival(prev) : false),
+    recovered: outcome.recovered || (prev ? hadLegacyRecovery(prev) : false),
+    perfect: outcome.perfect || (prev ? hadLegacyPerfect(prev) : false),
   };
   try { localStorage.setItem(LS_PROGRESS, JSON.stringify(all)); } catch { /* storage full */ }
   progressCache = all;
   return { newBest, rankUp, prev };
 }
 
-/** a level counts as CLEARED when you survived it (rank B or better) */
+/** Campaign credit requires exit plus meaningful real-task recovery. */
 export function isCleared(p: LevelProgress | null): boolean {
-  return p !== null && (p.rank === 'S' || p.rank === 'A' || p.rank === 'B');
+  return p !== null && hadLegacyRecovery(p);
+}
+
+export function isSurvived(p: LevelProgress | null): boolean {
+  return p !== null && hadLegacySurvival(p);
+}
+
+export function isPerfect(p: LevelProgress | null): boolean {
+  return p !== null && hadLegacyPerfect(p);
 }
 
 /** tier N+1 unlocks when 2 levels of tier N are cleared (tier 1 always open) */

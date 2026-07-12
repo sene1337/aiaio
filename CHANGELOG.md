@@ -5,6 +5,26 @@ All notable changes to AIAIO are documented here. Format follows
 [semver](https://semver.org/) (minor = new player-facing capability,
 patch = fixes and copy).
 
+## [2.5.0] — 2026-07-12
+
+### Added
+- Campaign outcomes now record separately: **survived** (reached the exit),
+  **recovered** (exited after completing at least half of the real task work,
+  including a finished task), and **perfect** (all real task work recovered).
+  Only recovered sessions earn tier-unlock credit; the recap says exactly why.
+- Capped rescans now retain previously indexed sessions and replace growing logs
+  by their stable session stem, so an ordinary scan cannot erase the campaign
+  discovered by a prior `--all` run.
+
+### Changed
+- Real cards are now truthfully quiet when their logs are quiet: no fallback
+  tasks or regression enemies are invented. Fictional demos and random sessions
+  retain their labeled authored fallback content and never change campaign data.
+
+### Fixed
+- Weapon names in the combat quickbar render in full, with ammunition and token
+  cost on a second line instead of truncating names with an ellipsis.
+
 ## [2.4.0] — 2026-07-11
 
 ### Added
@@ -128,6 +148,7 @@ The artillery duel is retired: the session IS the level.
   task queue, compaction. Retired same day for being a Scorched Earth clone.
 
 [2.4.0]: https://github.com/sene1337/aiaio/compare/v2.3.3...v2.4.0
+[2.5.0]: https://github.com/sene1337/aiaio/compare/v2.4.0...v2.5.0
 [2.3.3]: https://github.com/sene1337/aiaio/compare/v2.3.2...v2.3.3
 [2.3.2]: https://github.com/sene1337/aiaio/compare/v2.3.1...v2.3.2
 [2.3.1]: https://github.com/sene1337/aiaio/compare/v2.3.0...v2.3.1
