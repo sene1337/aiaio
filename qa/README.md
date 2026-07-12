@@ -19,6 +19,17 @@ card, add its basename without putting that private filename in tracked code:
 ?qa=autoplay&profile=compaction&card=my-local-card.enriched.json
 ```
 
+For a human-played capture, load a private card directly into its briefing
+without starting the autoplay controller:
+
+```text
+?qa=manual&card=my-local-card.enriched.json
+```
+
+Both modes are local QA entry points, not game features. The production build
+removes their dynamic loader, and card basenames remain in the URL rather than
+tracked source.
+
 The driver rotates weapons, advances and retreats around enemies, claims the
 Task tool, spawns subagents in the compaction profile, uses upgrades, and
 restarts completed runs after a short pause. Normal URLs never load it.

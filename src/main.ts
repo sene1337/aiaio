@@ -404,21 +404,24 @@ function currentInput(): RunInput {
   };
 }
 
-async function startDevAutoplay(): Promise<void> {
+async function startDevQA(): Promise<void> {
   if (!import.meta.env.DEV) return;
   const params = new URLSearchParams(window.location.search);
-  if (params.get('qa') !== 'autoplay') return;
+  const mode = params.get('qa');
+  if (mode !== 'autoplay' && mode !== 'manual') return;
   try {
     const { loadAutoplay } = await import('../qa/autoplay');
     const loaded = await loadAutoplay(params);
-    qaAutoplay = loaded.controller;
     qaAutoplayCard = loaded.card;
-    qaAutoplay.reset();
     setCard(loaded.card, loaded.sourceName);
     prepareRun(loaded.card);
-    showScreen('match');
+    if (mode === 'autoplay') {
+      qaAutoplay = loaded.controller;
+      qaAutoplay.reset();
+      showScreen('match');
+    }
   } catch (err) {
-    console.error('[aiaio] QA autoplay failed:', err);
+    console.error(`[aiaio] QA ${mode} failed:`, err);
   }
 }
 
@@ -624,7 +627,7 @@ function main(): void {
 
   showScreen('menu');
   requestAnimationFrame(frame);
-  if (import.meta.env.DEV) void startDevAutoplay();
+  if (import.meta.env.DEV) void startDevQA();
 }
 
 main();

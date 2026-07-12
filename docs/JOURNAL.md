@@ -143,3 +143,15 @@ turns out wrong, append a correction.
   submission, and found no browser warnings/errors.
 - Open: independent audio/voice settings remain part of the accessibility
   roadmap; this entry only fixes the local QA side effect.
+
+## 2026-07-12 · GPT-5.6 SOL · formalized the manual capture QA entry point
+
+- What: extended the dev-only QA loader with `?qa=manual&card=<basename>` so a
+  human can open a private local card directly at its briefing without running
+  autoplay; renamed the source hook from autoplay-specific to general dev QA.
+- Why: recording and game development now have separate working sessions. The
+  reusable capture setup belongs with QA, while trailer files and private card
+  ids stay in the sibling `aiaio-promo/` workspace and out of game source.
+- Verified: `npm run build`; `git diff --check`; production bundle contains no
+  manual-QA route, private-card example, or capture-only documentation strings.
+- Open: none; normal URLs and production builds retain the standard game flow.
