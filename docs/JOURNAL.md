@@ -155,3 +155,17 @@ turns out wrong, append a correction.
 - Verified: `npm run build`; `git diff --check`; production bundle contains no
   manual-QA route, private-card example, or capture-only documentation strings.
 - Open: none; normal URLs and production builds retain the standard game flow.
+
+## 2026-07-12 · GPT-5.6 SOL · preserved the cross-discipline design roadmap
+
+- What: recovered the visual, audio, level-design, and history-progression
+  audits from the original task log and consolidated their scores, evidence,
+  proposals, sources, completed work, and acceptance criteria in
+  `docs/DESIGN-ROADMAP.md`.
+- Why: recording and game development now use separate Codex tasks. The build
+  task needs a durable, repo-native handoff instead of depending on promo-task
+  conversation context.
+- Verified: cross-checked the handoff against the original audit responses,
+  the completed v2.4.0 journal entry, and current branch commits.
+- Open: the next build task should begin with P0 campaign truth/incentives,
+  then finish settings/accessibility before the Memory Map and beat compiler.
