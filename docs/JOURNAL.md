@@ -188,3 +188,20 @@ turns out wrong, append a correction.
 - Open: P1 settings/accessibility, then the Memory Map and deterministic beat
   compiler remain next. The player-visible recap now exposes the P0 outcomes,
   but the richer chapter journey intentionally remains P1 work.
+
+## 2026-07-12 · GPT-5 · replaced the Vault front door with the Memory Map (v2.6.0)
+
+- What: added deterministic chronological eras and bounded five-session
+  chapters; put `Continue Journey` first with a factual explanation; moved the
+  complete archive into an unrestricted searchable Library; and stamped the
+  scanner index with each session's recorded goal (or first real task).
+- Why: a good run needs an obvious next episode, not an 884-row archive. The
+  opening campaign must remain bounded without hiding the player's own history.
+  Date gaps create eras; progress decides the frontier; neither invents story
+  events or difficulty.
+- Verified: `npm test` (campaign, scan merge, and Memory Map chronology);
+  `npm run build`; `git diff --check`; and the local menu loaded the Map from a
+  large private archive. Vault/card contents were not captured or published.
+- Open: P1 settings/accessibility remains next. The Map deliberately stops
+  short of labeling chapters as introduction/build/escalation/capstone until the
+  deterministic beat compiler can support those labels with source evidence.

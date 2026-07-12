@@ -233,6 +233,9 @@ function main() {
         freshIndex.push({
           file,
           session_id: card.session_id,
+          // The Memory Map needs the session's own words without loading every
+          // private card file just to draw its bounded campaign surface.
+          goal: card.goal ?? card.tasks?.[0]?.name ?? null,
           harness,
           when: card.when,
           errors: (card.errors ?? []).reduce((s, e) => s + (e.count ?? 1), 0),

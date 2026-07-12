@@ -178,9 +178,9 @@ sessions, point `AIAIO_LLM_CMD` at a local model.
 Auto-discovers agent session logs (`~/.claude/projects`, `~/.openclaw` including
 archived agents, and `~/.hermes`, whose SQLite history is dumped to JSONL
 automatically, or any root you pass), builds a SessionCard per session, and writes
-them to `public/cards/`, where they appear as **THE VAULT**, the tiered campaign
-level-select. `--all` scans the entire archive. The default takes the 12 most
-recent per root.
+them to `public/cards/`, where **THE MEMORY MAP** makes a factual chronological
+campaign and **LIBRARY** keeps every session searchable and playable. `--all`
+scans the entire archive. The default takes the 12 most recent per root.
 
 **Quality gate.** Only sessions with real extractable human asks become levels.
 Cron jobs, heartbeats, and ask-less machine runs are excluded entirely, because

@@ -183,17 +183,20 @@ ids.
 - Reduced motion and reduced flashes wired into canvas effects
 - Responsive QA across square promo, desktop, and narrow viewports
 
-### P1: Replace the default Vault with the Memory Map
+### P1: Replace the default Vault with the Memory Map (initial version completed in v2.6.0)
 
-- Lead with one `Continue Journey` session and a factual reason it is next.
-- Group sessions into deterministic chronological eras using real timestamps
+- [x] Lead with one `Continue Journey` session and a factual reason it is next.
+- [x] Group sessions into deterministic chronological eras using real timestamps
   and gaps.
-- Compose three-to-five-session chapters: introduction, build, escalation, and
-  capstone selected from actual metrics.
-- Show goal, date, harness, task/error shape, rank, and why the session was
+- [x] Compose bounded three-to-five-session chapters while retaining real order.
+- [x] Show goal, date, harness, task/error shape, rank, and why the session was
   selected.
-- Keep the existing Vault as an unrestricted searchable **Library**. The player
+- [x] Keep the existing Vault as an unrestricted searchable **Library**. The player
   is never locked out of their own history.
+
+Open refinement: encode the introduction/build/escalation/capstone rhythm as
+strictly data-derived chapter annotations after the beat compiler exists; do not
+write a story label that the source history cannot prove.
 
 ### P1: Add a deterministic level-beat compiler
 

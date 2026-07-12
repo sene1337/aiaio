@@ -5,6 +5,17 @@ All notable changes to AIAIO are documented here. Format follows
 [semver](https://semver.org/) (minor = new player-facing capability,
 patch = fixes and copy).
 
+## [2.6.0] — 2026-07-12
+
+### Added
+- **THE MEMORY MAP** is now the campaign front door: a factual `Continue
+  Journey` recommendation, a real reason it is next, and a bounded set of
+  chronological eras with three-to-five-session chapters.
+- **LIBRARY** retains the complete session archive as an unrestricted,
+  searchable level list. History is never hidden behind campaign locks.
+- Scanner indexes now carry each session's real goal (or first real task) so
+  the Memory Map can name episodes without loading an unbounded archive.
+
 ## [2.5.0] — 2026-07-12
 
 ### Added
@@ -149,6 +160,7 @@ The artillery duel is retired: the session IS the level.
 
 [2.4.0]: https://github.com/sene1337/aiaio/compare/v2.3.3...v2.4.0
 [2.5.0]: https://github.com/sene1337/aiaio/compare/v2.4.0...v2.5.0
+[2.6.0]: https://github.com/sene1337/aiaio/compare/v2.5.0...v2.6.0
 [2.3.3]: https://github.com/sene1337/aiaio/compare/v2.3.2...v2.3.3
 [2.3.2]: https://github.com/sene1337/aiaio/compare/v2.3.1...v2.3.2
 [2.3.1]: https://github.com/sene1337/aiaio/compare/v2.3.0...v2.3.1

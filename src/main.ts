@@ -13,10 +13,11 @@ import { music } from './music';
 import { observer } from './observer';
 import { startLogoLoop } from './logo';
 import {
-  LevelEntry, difficulty, tierOf, TIERS, unlockedTiers, getProgress, isCleared,
-  isPerfect, isSurvived, campaignOutcome, computeRank, recordResult, RANK_COLORS, CampaignOutcome,
+  LevelEntry, difficulty, tierOf, TIERS, getProgress, isCleared,
+  isPerfect, isSurvived, campaignOutcome, computeRank, recordResult, CampaignOutcome,
 } from './levels';
 import { doneUnits, progressFrac, totalUnits } from './tasks';
+import { buildMemoryMap, focusedChapter, MemoryChapter } from './history';
 
 type ScreenId = 'menu' | 'briefing' | 'match' | 'recap';
 
@@ -119,122 +120,155 @@ async function loadGallery(): Promise<void> {
     if (!Array.isArray(index) || index.length === 0) throw new Error('empty');
     const entries = index as LevelEntry[];
     const PER_FOLDER = 24;
-    // folders open state: default-open the lowest unlocked tier with unfinished levels
     const openTiers = new Set<number>();
+    let view: 'journey' | 'library' = 'journey';
+    let libraryFilter = '';
 
-    const render = (filter: string) => {
-      box.innerHTML = '';
-      const q = filter.trim().toLowerCase();
-      const unlocked = unlockedTiers(entries);
-
-      // bucket levels into tiers
-      const buckets: LevelEntry[][] = TIERS.map(() => []);
-      for (const e of entries) {
-        const enrichedKey = e.file.endsWith('.enriched.json') ? 'enriched curated' : '';
-        if (q && !`${e.session_id} ${e.harness ?? ''} ${e.when ?? ''} ${enrichedKey}`.toLowerCase().includes(q)) continue;
-        buckets[tierOf(difficulty(e)).index].push(e);
+    const entryGoal = (entry: LevelEntry): string => typeof entry.goal === 'string' && entry.goal
+      ? entry.goal : 'session goal not indexed yet';
+    const entryMeta = (entry: LevelEntry): string => {
+      const p = getProgress(entry.session_id);
+      const diff = difficulty(entry);
+      const dateAndHarness = [entry.when, entry.harness].filter(Boolean).join(' · ');
+      const rank = p ? ` · ★${p.rank}` : '';
+      return `${dateAndHarness ? dateAndHarness + ' · ' : ''}${entry.tasks} task${entry.tasks === 1 ? '' : 's'} · ${entry.errors} errors · diff ${diff}${rank}`;
+    };
+    const entryGlyph = (entry: LevelEntry): string => {
+      const p = getProgress(entry.session_id);
+      return isPerfect(p) ? '✦' : isCleared(p) ? '☒' : isSurvived(p) ? '◉' : '☐';
+    };
+    const loadEntry = async (entry: LevelEntry): Promise<void> => {
+      try {
+        const cardRes = await fetch(`./cards/${entry.file}`);
+        setCard(parseSessionCard(await cardRes.text()), entry.file);
+        if (import.meta.env.DEV) {
+          fetch('/__enrich', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file: entry.file }),
+          }).catch(() => { /* enrichment is a bonus, never a blocker */ });
+        }
+      } catch {
+        $('card-status-0').textContent = `✕ could not load ${entry.file}`;
       }
-      // trophy shelf on top: cleared levels first (you should SEE what's done),
-      // then the frontier, easiest first
-      buckets.forEach((b) => b.sort((a, x) => {
-        const ca = isCleared(getProgress(a.session_id)) ? 0 : 1;
-        const cx = isCleared(getProgress(x.session_id)) ? 0 : 1;
-        // nostalgia bias: among equal difficulty, the OLDEST sessions lead
-        return ca - cx || difficulty(a) - difficulty(x) || (a.mtime ?? 0) - (x.mtime ?? 0);
+    };
+    const makeEntryButton = (entry: LevelEntry, extra = ''): HTMLButtonElement => {
+      const btn = document.createElement('button');
+      btn.className = 'cmd level';
+      const star = entry.file.endsWith('.enriched.json') ? '<span style="color:var(--purple)">✦ </span>' : '';
+      btn.innerHTML = `<span class="caret">❯</span><span class="cmd-name">${entryGlyph(entry)} ${star}${escapeHtml(entryGoal(entry))}</span>` +
+        `<span class="cmd-desc">${escapeHtml(entryMeta(entry))}${extra}</span>`;
+      btn.addEventListener('click', () => { void loadEntry(entry); });
+      return btn;
+    };
+
+    // Indexes created before v2.6.0 lack goals. Hydrate only the bounded
+    // opening map from same-origin card files; new scans carry this inline.
+    const map = buildMemoryMap(entries, getProgress);
+    const mapEntries = new Set<LevelEntry>();
+    map.recommendation && mapEntries.add(map.recommendation.entry);
+    for (const era of map.eras.slice(0, 4)) {
+      for (const entry of focusedChapter(era, getProgress).entries) mapEntries.add(entry);
+    }
+    await Promise.all([...mapEntries].filter((entry) => !entry.goal).map(async (entry) => {
+      try {
+        const card = parseSessionCard(await (await fetch(`./cards/${entry.file}`)).text());
+        entry.goal = card.goal ?? card.tasks?.[0]?.name;
+      } catch { /* retained index entry may no longer have a local file */ }
+    }));
+
+    const renderTabs = (): void => {
+      const tabs = document.createElement('div');
+      tabs.className = 'gallery-tabs';
+      for (const tab of ['journey', 'library'] as const) {
+        const btn = document.createElement('button');
+        btn.className = `linkish gallery-tab${view === tab ? ' active' : ''}`;
+        btn.textContent = tab === 'journey' ? 'MEMORY MAP' : 'LIBRARY';
+        btn.addEventListener('click', () => { view = tab; render(); });
+        tabs.appendChild(btn);
+      }
+      box.appendChild(tabs);
+    };
+
+    const renderJourneyChapter = (chapter: MemoryChapter): void => {
+      const section = document.createElement('section');
+      section.className = 'memory-chapter';
+      section.innerHTML = `<div class="memory-chapter-head"><span>CHAPTER ${chapter.index}</span><span class="dim">${escapeHtml(chapter.label)} · ${chapter.entries.length} recorded session${chapter.entries.length === 1 ? '' : 's'}</span></div>`;
+      for (const entry of chapter.entries) section.appendChild(makeEntryButton(entry));
+      box.appendChild(section);
+    };
+
+    const renderJourney = (): void => {
+      const recoveredTotal = entries.filter((entry) => isCleared(getProgress(entry.session_id))).length;
+      const head = document.createElement('div');
+      head.className = 'memory-map-head';
+      head.innerHTML = `<div>THE MEMORY MAP</div><div class="dim">${entries.length} recorded sessions · ${recoveredTotal} recovered · chronological and local</div>`;
+      box.appendChild(head);
+      if (map.recommendation) {
+        const current = document.createElement('section');
+        current.className = 'journey-current';
+        current.innerHTML = `<div class="journey-kicker">▶ CONTINUE JOURNEY</div><div class="journey-reason">${escapeHtml(map.recommendation.reason)}</div>`;
+        current.appendChild(makeEntryButton(map.recommendation.entry));
+        box.appendChild(current);
+      }
+      for (const era of map.eras.slice(0, 4)) {
+        const eraEntries = era.chapters.flatMap((chapter) => chapter.entries);
+        const eraHead = document.createElement('div');
+        eraHead.className = 'memory-era-head';
+        eraHead.innerHTML = `<span>ERA ${era.index}</span><span class="dim">${escapeHtml(era.label)} · ${eraEntries.length} recorded session${eraEntries.length === 1 ? '' : 's'}</span>`;
+        box.appendChild(eraHead);
+        renderJourneyChapter(focusedChapter(era, getProgress));
+      }
+      if (map.eras.length > 4) {
+        const more = document.createElement('div');
+        more.className = 'hint';
+        more.textContent = `${map.eras.length - 4} earlier/later eras remain in the Library.`;
+        box.appendChild(more);
+      }
+    };
+
+    const renderLibrary = (): void => {
+      const q = libraryFilter.trim().toLowerCase();
+      const buckets: LevelEntry[][] = TIERS.map(() => []);
+      for (const entry of entries) {
+        const enrichedKey = entry.file.endsWith('.enriched.json') ? 'enriched curated' : '';
+        if (q && !`${entryGoal(entry)} ${entry.session_id} ${entry.harness ?? ''} ${entry.when ?? ''} ${enrichedKey}`.toLowerCase().includes(q)) continue;
+        buckets[tierOf(difficulty(entry)).index].push(entry);
+      }
+      buckets.forEach((bucket) => bucket.sort((a, b) => {
+        const aRecovered = isCleared(getProgress(a.session_id)) ? 0 : 1;
+        const bRecovered = isCleared(getProgress(b.session_id)) ? 0 : 1;
+        return aRecovered - bRecovered || (a.mtime ?? 0) - (b.mtime ?? 0);
       }));
 
-      const recoveredTotal = entries.filter((e) => isCleared(getProgress(e.session_id))).length;
       const head = document.createElement('div');
       head.className = 'hint';
       head.style.textAlign = 'left';
-      head.textContent = `THE VAULT · ${entries.length} sessions · ${recoveredTotal} recovered (type to filter):`;
+      head.textContent = `LIBRARY · ${entries.length} sessions · every record is playable (type to filter):`;
       box.appendChild(head);
       const input = document.createElement('input');
       input.id = 'gallery-filter';
-      input.setAttribute('aria-label', 'Filter sessions by name, harness, or date');
-      input.placeholder = 'filter by name, harness (openclaw/hermes/claude), date, or "enriched"…';
-      input.value = filter;
-      input.addEventListener('input', () => render(input.value));
+      input.setAttribute('aria-label', 'Filter sessions by goal, harness, or date');
+      input.placeholder = 'filter by goal, harness (openclaw/hermes/claude), date, or "enriched"…';
+      input.value = libraryFilter;
+      input.addEventListener('input', () => { libraryFilter = input.value; render(); });
       box.appendChild(input);
 
-      if (openTiers.size === 0) {
-        // first render: open the frontier tier
-        const frontier = TIERS.findIndex((_, i) =>
-          unlocked[i] && buckets[i].some((e) => !isCleared(getProgress(e.session_id))));
-        openTiers.add(frontier === -1 ? 0 : frontier);
-      }
-
+      if (openTiers.size === 0) openTiers.add(0);
       for (const tier of TIERS) {
         const bucket = buckets[tier.index];
         if (bucket.length === 0 && !q) continue;
         const isOpen = openTiers.has(tier.index) || !!q;
-        const recovered = bucket.filter((e) => isCleared(getProgress(e.session_id))).length;
-
         const folder = document.createElement('button');
         folder.className = 'cmd folder';
-        if (!unlocked[tier.index]) {
-          const need = 2 - entries.filter((e) =>
-            tierOf(difficulty(e)).index === tier.index - 1 && isCleared(getProgress(e.session_id))).length;
-          folder.innerHTML = `<span class="caret">${isOpen ? '▾' : '▸'}</span><span class="cmd-name dim">🔒 ${escapeHtml(tier.name)}/</span>` +
-            `<span class="cmd-desc">clear ${Math.max(1, need)} more in ${escapeHtml(TIERS[tier.index - 1].name.split(': ')[0])}</span>`;
-          // locked folders can be browsed (window shopping), just not played
-          folder.addEventListener('click', () => {
-            if (openTiers.has(tier.index)) openTiers.delete(tier.index); else openTiers.add(tier.index);
-            render(input.value);
-          });
-        } else {
-          folder.innerHTML = `<span class="caret">${isOpen ? '▾' : '▸'}</span><span class="cmd-name">${escapeHtml(tier.name)}/</span>` +
-            `<span class="cmd-desc">${bucket.length} levels · ${recovered} recovered</span>`;
-          folder.addEventListener('click', () => {
-            if (openTiers.has(tier.index)) openTiers.delete(tier.index); else openTiers.add(tier.index);
-            render(input.value);
-          });
-        }
+        folder.innerHTML = `<span class="caret">${isOpen ? '▾' : '▸'}</span><span class="cmd-name">${escapeHtml(tier.name)}/</span>` +
+          `<span class="cmd-desc">${bucket.length} sessions · ${bucket.filter((entry) => isCleared(getProgress(entry.session_id))).length} recovered</span>`;
+        folder.addEventListener('click', () => {
+          if (openTiers.has(tier.index)) openTiers.delete(tier.index); else openTiers.add(tier.index);
+          render();
+        });
         box.appendChild(folder);
         if (!isOpen) continue;
-
-        for (const entry of bucket.slice(0, PER_FOLDER)) {
-          const p = getProgress(entry.session_id);
-          const diff = difficulty(entry);
-          const btn = document.createElement('button');
-          btn.className = 'cmd level';
-          const shortId = entry.session_id.length > 22 ? entry.session_id.slice(0, 20) + '…' : entry.session_id;
-          const glyph = isPerfect(p) ? '✦' : isCleared(p) ? '☒' : isSurvived(p) ? '◉' : '☐';
-          // agent-curated levels carry their story with them — show it
-          const star = entry.file.endsWith('.enriched.json')
-            ? '<span style="color:var(--purple)">✦ </span>' : '';
-          const rankBit = p
-            ? ` <span style="color:${RANK_COLORS[p.rank]}">★${p.rank}</span> <span class="dim">${p.bestScore.toLocaleString()}</span>`
-            : '';
-          const prov = [entry.when, entry.harness].filter(Boolean).join(' ');
-          // session_id derives from filenames — escape it like every other sink (M-3)
-          if (!unlocked[tier.index]) {
-            btn.classList.add('locked');
-            btn.innerHTML = `<span class="caret">&nbsp;</span><span class="cmd-name dim">${glyph} ${star}${escapeHtml(shortId)}</span>` +
-              `<span class="cmd-desc">${prov ? escapeHtml(prov) + ' · ' : ''}diff ${diff} · 🔒</span>`;
-            btn.disabled = true;
-            box.appendChild(btn);
-            continue;
-          }
-          btn.innerHTML = `<span class="caret">&nbsp;</span><span class="cmd-name">${glyph} ${star}${escapeHtml(shortId)}</span>` +
-            `<span class="cmd-desc">${prov ? escapeHtml(prov) + ' · ' : ''}diff ${diff}${rankBit}</span>`;
-          btn.addEventListener('click', async () => {
-            try {
-              const cardRes = await fetch(`./cards/${entry.file}`);
-              setCard(parseSessionCard(await cardRes.text()), entry.file);
-              // dev mode: quietly ask YOUR agent to enrich this level for next time
-              if (import.meta.env.DEV) {
-                fetch('/__enrich', {
-                  method: 'POST', headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ file: entry.file }),
-                }).catch(() => { /* enrichment is a bonus, never a blocker */ });
-              }
-            } catch {
-              $('card-status-0').textContent = `✕ could not load ${entry.file}`;
-            }
-          });
-          box.appendChild(btn);
-        }
+        for (const entry of bucket.slice(0, PER_FOLDER)) box.appendChild(makeEntryButton(entry));
         if (bucket.length > PER_FOLDER) {
           const more = document.createElement('div');
           more.className = 'hint';
@@ -243,11 +277,19 @@ async function loadGallery(): Promise<void> {
           box.appendChild(more);
         }
       }
-      const refocus = document.getElementById('gallery-filter') as HTMLInputElement;
-      if (q) { refocus.focus(); refocus.setSelectionRange(filter.length, filter.length); }
+      if (q) {
+        const refocus = document.getElementById('gallery-filter') as HTMLInputElement;
+        refocus.focus(); refocus.setSelectionRange(libraryFilter.length, libraryFilter.length);
+      }
     };
-    refreshVault = () => render((document.getElementById('gallery-filter') as HTMLInputElement)?.value ?? '');
-    render('');
+
+    const render = (): void => {
+      box.innerHTML = '';
+      renderTabs();
+      if (view === 'journey') renderJourney(); else renderLibrary();
+    };
+    refreshVault = () => render();
+    render();
   } catch {
     box.innerHTML = '<div class="hint" style="text-align:left">no scanned sessions. run <b>npm run scan</b> to auto-build cards from your OpenClaw / Claude Code / Hermes sessions, or drop a card above. vault still empty? <b>npm run doctor</b> explains why, or hand the whole thing to your agent (AGENTS.md is the playbook).</div>';
   }

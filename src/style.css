@@ -118,6 +118,26 @@ html, body {
 .cmd.folder .caret { color: var(--clay); }
 .cmd.level { padding: 2px 10px 2px 22px; font-size: 12px; }
 .cmd.level.locked { cursor: default; opacity: 0.55; }
+.gallery-tabs { display: flex; gap: 14px; padding: 2px 10px 6px; border-bottom: 1px solid var(--border); }
+.gallery-tab { color: var(--dim); font-size: 11px; letter-spacing: 0.08em; text-decoration: none; }
+.gallery-tab.active { color: var(--green); text-decoration: none; }
+.memory-map-head { padding: 8px 10px 6px; color: var(--text); font-size: 12px; line-height: 1.55; }
+.journey-current {
+  margin: 2px 0 8px; border: 1px solid var(--green); background: rgba(126, 231, 135, 0.045);
+  padding: 7px 0 5px;
+}
+.journey-kicker { color: var(--green); font-size: 11px; letter-spacing: 0.08em; padding: 0 10px 3px; }
+.journey-reason { color: var(--yellow); font-size: 11px; padding: 0 10px 4px; }
+.memory-chapter { margin: 7px 0; border-top: 1px solid var(--border); padding-top: 3px; }
+.memory-era-head {
+  display: flex; justify-content: space-between; gap: 8px; color: var(--blue);
+  font-size: 11px; letter-spacing: 0.08em; padding: 8px 10px 1px;
+}
+.memory-chapter-head {
+  display: flex; justify-content: space-between; gap: 8px; color: var(--clay);
+  font-size: 11px; letter-spacing: 0.06em; padding: 3px 10px;
+}
+.memory-chapter .cmd-name, .journey-current .cmd-name { max-width: 280px; }
 .recap-rank { text-align: center; font-size: 26px; letter-spacing: 0.15em; margin-bottom: 4px; }
 .recap-rank .dim, .recap-rank span[style] { font-size: 13px; letter-spacing: normal; }
 .recap-rank > span:first-child { font-size: 26px !important; }

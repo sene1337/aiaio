@@ -5,6 +5,8 @@
 export interface LevelEntry {
   file: string;
   session_id: string;
+  /** first real ask or first extracted task, stamped by the local scanner */
+  goal?: string;
   harness?: string;
   when?: string;
   errors: number;
