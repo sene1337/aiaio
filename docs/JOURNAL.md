@@ -205,3 +205,21 @@ turns out wrong, append a correction.
 - Open: P1 settings/accessibility remains next. The Map deliberately stops
   short of labeling chapters as introduction/build/escalation/capstone until the
   deterministic beat compiler can support those labels with source evidence.
+
+## 2026-07-13 · GPT-5 · repaired Memory Map episode readability (v2.6.1)
+
+- What: replaced the clipped single-line prompt row with a compact factual
+  episode headline and a separate wrapping facts line. The scanner now stores a
+  locally derived headline, preferring the final recorded breakthrough or
+  frustration, then a real task, then the mission. Older indexes hydrate the
+  bounded map from their local cards, so they benefit without a full rescan.
+- Why: raw prompts made the campaign feel like a log browser and visibly ran
+  outside the row. The new title stays grounded in existing card fields; it
+  does not invent an episode or use a network summarizer.
+- Verified: `npm test`; standalone TypeScript check; local in-app browser
+  layout measurement over 17 Memory Map rows: zero row/title/detail overflows,
+  and all titles and detail facts occupied separate rows. Production build
+  compiled and transformed 25 modules but did not complete its local Vite
+  post-transform step after repeated waits, so no completed build is claimed.
+- Open: investigate the local Vite post-transform stall separately if it recurs;
+  the live dev game remains available and the focused verification is clean.

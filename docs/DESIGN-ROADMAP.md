@@ -193,6 +193,9 @@ ids.
   selected.
 - [x] Keep the existing Vault as an unrestricted searchable **Library**. The player
   is never locked out of their own history.
+- [x] Render each episode as a compact, data-derived headline with its factual
+  context on a separate line; raw prompts never force a Memory Map row outside
+  its bounds.
 
 Open refinement: encode the introduction/build/escalation/capstone rhythm as
 strictly data-derived chapter annotations after the beat compiler exists; do not

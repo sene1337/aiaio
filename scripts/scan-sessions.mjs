@@ -27,6 +27,7 @@ import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { extract, buildCard } from './extract-sessioncard.mjs';
+import { episodeHeadline } from '../src/episode-summary.js';
 
 const DEFAULT_ROOTS = [
   join(homedir(), '.claude', 'projects'),
@@ -225,6 +226,9 @@ function main() {
           .sort()
           .pop();
         if (enriched) file = enriched;
+        const enrichedNarrative = enriched ? readJson(join(outDir, enriched), card) : card;
+        const narrative = enrichedNarrative && typeof enrichedNarrative === 'object' && !Array.isArray(enrichedNarrative)
+          ? enrichedNarrative : card;
         // real threat estimate: mirrors the ramped global budget in
         // src/enemies.ts allocateSpawns() — keep the curve in sync
         const errTotal = (card.errors ?? []).reduce((s, e) => s + Math.max(1, e.count ?? 1), 0);
@@ -235,7 +239,8 @@ function main() {
           session_id: card.session_id,
           // The Memory Map needs the session's own words without loading every
           // private card file just to draw its bounded campaign surface.
-          goal: card.goal ?? card.tasks?.[0]?.name ?? null,
+          goal: narrative.goal ?? narrative.tasks?.[0]?.name ?? null,
+          headline: episodeHeadline(narrative),
           harness,
           when: card.when,
           errors: (card.errors ?? []).reduce((s, e) => s + (e.count ?? 1), 0),

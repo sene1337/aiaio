@@ -5,6 +5,14 @@ All notable changes to AIAIO are documented here. Format follows
 [semver](https://semver.org/) (minor = new player-facing capability,
 patch = fixes and copy).
 
+## [2.6.1] — 2026-07-13
+
+### Fixed
+- Memory Map episodes now lead with a compact, factual headline instead of a
+  clipped raw prompt. The latest recorded breakthrough or frustration becomes
+  the headline when present, otherwise a real task or mission does; date,
+  harness, task, error, and difficulty facts sit on a separate wrapping line.
+
 ## [2.6.0] — 2026-07-12
 
 ### Added

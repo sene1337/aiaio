@@ -7,6 +7,8 @@ export interface LevelEntry {
   session_id: string;
   /** first real ask or first extracted task, stamped by the local scanner */
   goal?: string;
+  /** compact factual episode label, derived locally from goals/tasks/moments */
+  headline?: string;
   harness?: string;
   when?: string;
   errors: number;

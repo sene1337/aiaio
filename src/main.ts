@@ -18,6 +18,7 @@ import {
 } from './levels';
 import { doneUnits, progressFrac, totalUnits } from './tasks';
 import { buildMemoryMap, focusedChapter, MemoryChapter } from './history';
+import { episodeHeadline } from './episode-summary.js';
 
 type ScreenId = 'menu' | 'briefing' | 'match' | 'recap';
 
@@ -126,6 +127,8 @@ async function loadGallery(): Promise<void> {
 
     const entryGoal = (entry: LevelEntry): string => typeof entry.goal === 'string' && entry.goal
       ? entry.goal : 'session goal not indexed yet';
+    const entryHeadline = (entry: LevelEntry): string => typeof entry.headline === 'string' && entry.headline
+      ? entry.headline : episodeHeadline(entry);
     const entryMeta = (entry: LevelEntry): string => {
       const p = getProgress(entry.session_id);
       const diff = difficulty(entry);
@@ -155,7 +158,8 @@ async function loadGallery(): Promise<void> {
       const btn = document.createElement('button');
       btn.className = 'cmd level';
       const star = entry.file.endsWith('.enriched.json') ? '<span style="color:var(--purple)">✦ </span>' : '';
-      btn.innerHTML = `<span class="caret">❯</span><span class="cmd-name">${entryGlyph(entry)} ${star}${escapeHtml(entryGoal(entry))}</span>` +
+      btn.title = [entryHeadline(entry), entry.goal, entryMeta(entry)].filter(Boolean).join('\n');
+      btn.innerHTML = `<span class="caret">❯</span><span class="cmd-name">${entryGlyph(entry)} ${star}${escapeHtml(entryHeadline(entry))}</span>` +
         `<span class="cmd-desc">${escapeHtml(entryMeta(entry))}${extra}</span>`;
       btn.addEventListener('click', () => { void loadEntry(entry); });
       return btn;
@@ -169,10 +173,11 @@ async function loadGallery(): Promise<void> {
     for (const era of map.eras.slice(0, 4)) {
       for (const entry of focusedChapter(era, getProgress).entries) mapEntries.add(entry);
     }
-    await Promise.all([...mapEntries].filter((entry) => !entry.goal).map(async (entry) => {
+    await Promise.all([...mapEntries].filter((entry) => !entry.goal || !entry.headline).map(async (entry) => {
       try {
         const card = parseSessionCard(await (await fetch(`./cards/${entry.file}`)).text());
-        entry.goal = card.goal ?? card.tasks?.[0]?.name;
+        entry.goal ??= card.goal ?? card.tasks?.[0]?.name;
+        entry.headline ??= episodeHeadline(card);
       } catch { /* retained index entry may no longer have a local file */ }
     }));
 
