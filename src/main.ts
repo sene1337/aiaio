@@ -753,6 +753,11 @@ function main(): void {
   $('btn-run').addEventListener('click', () => {
     prepareRun(loadedCard ?? randomCard(`random-session-${runCounter + 1}`), loadedCard ? 'real' : 'random');
   });
+  // ENRICH UX is being rebuilt per docs/specs/enrich-campaign.md (Stage B);
+  // gate the entry point until the honest flow ships so players never hit
+  // the known-broken chooser
+  const ENRICH_UI_READY = false;
+  if (!ENRICH_UI_READY) $('btn-enrich').classList.add('hidden');
   $('btn-enrich').addEventListener('click', () => {
     $('enrich-title').textContent = 'ENRICH YOUR HISTORY';
     $('enrich-copy').textContent = 'Choose a focused opening or a curated campaign.';
