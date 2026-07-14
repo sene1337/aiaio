@@ -44,6 +44,10 @@ patch = fixes and copy).
 - **The briefing happens in the wall's shadow.** The session dossier now
   renders inside the timeline screen, beside the grinding veil, instead of
   replacing it — the forgetting watches you read your own file.
+- **So does the recap.** Win or lose, the post-session ledger renders beside
+  the same grinding veil — after the sweep, the wall settles back to the left
+  and looms over the results it caused. Menu, briefing, and recap are now one
+  continuous space the wall never leaves.
 - **The wall never leaves your sight.** In-game, whenever the wall is
   offscreen, a faint red rune-lap breathes at the screen's left edge, growing
   hungrier as the gap closes. You are never safe. Only ahead.

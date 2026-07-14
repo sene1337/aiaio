@@ -55,13 +55,15 @@ let gallerySessionCount = 0;
 type CampaignRun = { manifest: CampaignManifest; entry: CampaignEntry };
 
 function showScreen(id: ScreenId): void {
-  // the briefing lives INSIDE the menu screen (right of the grinding veil):
-  // the wall never leaves your sight between choosing and entering
-  for (const s of ['menu', 'match', 'recap']) {
-    $(`screen-${s}`).classList.toggle('hidden', s !== (id === 'briefing' ? 'menu' : id));
-  }
+  // briefing AND recap live INSIDE the menu screen, beside the grinding
+  // veil: every out-of-game moment happens in the wall's shadow
+  const overlay = id === 'briefing' || id === 'recap';
+  $('screen-menu').classList.toggle('hidden', !(id === 'menu' || overlay));
+  $('screen-match').classList.toggle('hidden', id !== 'match');
   $('screen-briefing').classList.toggle('hidden', id !== 'briefing');
+  $('screen-recap').classList.toggle('hidden', id !== 'recap');
   $('screen-menu').classList.toggle('briefing-mode', id === 'briefing');
+  $('screen-menu').classList.toggle('recap-mode', id === 'recap');
 }
 
 // ---------------------------------------------------------------------------

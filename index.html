@@ -32,6 +32,26 @@
         </div>
         <div id="tl-rail-scroll"><div id="tl-rail"></div></div>
         <div id="tl-peek" class="hidden"></div>
+        <section id="screen-recap" class="hidden" aria-label="Session recap">
+      <div class="briefing-inner">
+        <div id="recap-banner">
+          <h2 id="recap-headline">SESSION TERMINATED</h2>
+          <div id="recap-rank-big"></div>
+          <div id="recap-score-line"></div>
+          <div id="recap-facts" class="hint"></div>
+        </div>
+        <div id="recap-forward" class="hidden">
+          <h4>⌁ WHAT MOVED FORWARD</h4>
+          <div id="recap-forward-rows"></div>
+        </div>
+        <div id="recap-observer" class="hidden">
+          <div class="who">☏ THE OBSERVER</div>
+          <div id="recap-observer-line"></div>
+        </div>
+        <div id="recap-body"></div>
+        <div class="cmd-list" id="recap-actions"></div>
+      </div>
+    </section>
         <section id="screen-briefing" class="hidden" aria-label="Session briefing">
           <div class="briefing-inner">
             <h2 class="glitchable">SESSION BRIEFING</h2>
@@ -99,27 +119,6 @@
       <div id="status-bar"></div>
     </section>
 
-    <!-- ============ RECAP: celebrate, then move something forward ============ -->
-    <section id="screen-recap" class="screen hidden">
-      <div class="briefing-inner">
-        <div id="recap-banner">
-          <h2 id="recap-headline">SESSION TERMINATED</h2>
-          <div id="recap-rank-big"></div>
-          <div id="recap-score-line"></div>
-          <div id="recap-facts" class="hint"></div>
-        </div>
-        <div id="recap-forward" class="hidden">
-          <h4>⌁ WHAT MOVED FORWARD</h4>
-          <div id="recap-forward-rows"></div>
-        </div>
-        <div id="recap-observer" class="hidden">
-          <div class="who">☏ THE OBSERVER</div>
-          <div id="recap-observer-line"></div>
-        </div>
-        <div id="recap-body"></div>
-        <div class="cmd-list" id="recap-actions"></div>
-      </div>
-    </section>
 
     <!-- ============ SCHEMA MODAL ============ -->
     <div id="modal-schema" class="modal hidden">
