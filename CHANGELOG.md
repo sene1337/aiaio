@@ -15,6 +15,12 @@ patch = fixes and copy).
   page body never scrolls.
 - ENRICH entry point gated behind a readiness flag until the Stage B honest
   UX ships (docs/specs/enrich-campaign.md).
+- **Pixel-stable world rendering**: the camera's world-to-screen offset and
+  screen shake snap to the device-pixel grid, so terrain and glyphs no longer
+  swim through anti-aliased positions while panning.
+- **Double-outlined gameplay glyphs** (XAG 102 pattern): enemies, crates, and
+  projectile heads draw with a dark halo + faint bright rim, readable over any
+  terrain or particle weather. Atmosphere stays quiet.
 
 ## [2.7.0] — 2026-07-13
 

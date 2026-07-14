@@ -38,6 +38,26 @@ export class UI {
   canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private camX = 0; private camY = 0; private camZoom = 1;
+
+  /**
+   * XAG-102 double outline: a dark halo plus a faint bright rim makes a glyph
+   * readable over any terrain, particle storm, or J-space weather. Use for
+   * gameplay-critical glyphs (entities, pickups, projectile heads) — never for
+   * atmosphere, which should stay quiet.
+   */
+  private outlinedGlyph(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, fill: string): void {
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(0,0,0,0.88)';
+    ctx.lineWidth = 3;
+    ctx.strokeText(text, x, y);
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.lineWidth = 1.1;
+    ctx.strokeText(text, x, y);
+    ctx.restore();
+    ctx.fillStyle = fill;
+    ctx.fillText(text, x, y);
+  }
   private trackedRun: Run | null = null;
   private dpr = 1;
   private lastDirty = -1;
@@ -270,11 +290,17 @@ export class UI {
 
     ctx.save();
     if (this.shakeMag > 0.2) {
-      ctx.translate(this.fxRng.range(-this.shakeMag, this.shakeMag), this.fxRng.range(-this.shakeMag, this.shakeMag));
+      // whole-pixel shake: same violence, no anti-aliased smear
+      ctx.translate(Math.round(this.fxRng.range(-this.shakeMag, this.shakeMag)), Math.round(this.fxRng.range(-this.shakeMag, this.shakeMag)));
     }
-    ctx.translate(W / 2, H / 2);
-    ctx.scale(this.camZoom, this.camZoom);
-    ctx.translate(-this.camX, -this.camY);
+    // snap the world-to-screen offset to the device-pixel grid so terrain and
+    // glyphs stop swimming between anti-aliased positions while the camera pans
+    {
+      const z = this.camZoom;
+      const snap = (v: number) => Math.round(v * this.dpr) / this.dpr;
+      ctx.translate(snap(W / 2 - this.camX * z), snap(H / 2 - this.camY * z));
+      ctx.scale(z, z);
+    }
     const viewL = this.camX - viewW / 2, viewR = this.camX + viewW / 2;
 
 
@@ -384,10 +410,7 @@ export class UI {
         } else {
           ctx.font = `bold ${proj.weaponId === 'context_nuke' ? 15 : 12}px monospace`;
           ctx.textAlign = 'center';
-          ctx.fillStyle = 'rgba(0,0,0,0.6)';
-          ctx.fillText(head, proj.x + 1, proj.y + 1);
-          ctx.fillStyle = color;
-          ctx.fillText(head, proj.x, proj.y);
+          this.outlinedGlyph(ctx, head, proj.x, proj.y, color);
           ctx.textAlign = 'left';
         }
       } else {
@@ -617,10 +640,9 @@ export class UI {
     ctx.lineWidth = 1.5;
     ctx.fillRect(cr.x - 9, y - 18, 18, 18);
     ctx.strokeRect(cr.x - 9, y - 18, 18, 18);
-    ctx.fillStyle = color;
     ctx.font = '11px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(glyph, cr.x, y - 5);
+    this.outlinedGlyph(ctx, glyph, cr.x, y - 5, color);
     if (!cr.used && cr.kind === 'model') {
       // the good crate advertises itself
       ctx.globalAlpha = 0.5 + 0.4 * Math.abs(Math.sin(this.time * 3));
@@ -689,10 +711,9 @@ export class UI {
       ctx.strokeRect(-size * 0.35, -size + 1, size * 0.7, size * 1.65);
       ctx.globalAlpha = phase;
     }
-    ctx.fillStyle = e.def.color;
     ctx.font = `${e.mini ? 10 : 14}px monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText(e.def.glyph, 0, 4);
+    this.outlinedGlyph(ctx, e.def.glyph, 0, 4, e.def.color);
     // hp pips + name
     if (!e.def.friendly) {
       const frac = Math.max(0, e.hp / (e.mini ? e.def.hp / 2 : e.def.hp));
