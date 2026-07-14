@@ -63,16 +63,20 @@ html, body {
 .tl-track .n { color: var(--blue); }
 #tl-map { flex: 1 1 auto; min-height: 0; position: relative; display: flex; align-items: center; }
 #tl-veil {
-  position: absolute; left: 0; top: 0; bottom: 0; width: 104px; z-index: 3; pointer-events: none;
-  background: linear-gradient(90deg, var(--bg) 30%, rgba(244,112,103,.09) 70%, transparent);
-  border-right: 1px solid rgba(244,112,103,.22);
+  position: absolute; left: 0; top: 0; bottom: 0; width: 132px; z-index: 3; pointer-events: none;
+  background: linear-gradient(90deg, var(--bg) 22%, rgba(244,112,103,.12) 72%, transparent);
 }
 #tl-veil .veil-runes {
-  position: absolute; inset: 0; color: rgba(244,112,103,.35); font-size: 11px;
-  line-height: 1.4; white-space: pre; overflow: hidden;
-  mask-image: linear-gradient(90deg, black 40%, transparent);
+  position: absolute; inset: 0; color: rgba(244,112,103,.5); font-size: 12px;
+  line-height: 15px; white-space: pre; overflow: hidden;
+  text-shadow: 0 0 6px rgba(244,112,103,.35);
 }
-#tl-veil .veil-label { position: absolute; bottom: 10px; left: 10px; color: var(--red); font-size: 9px; letter-spacing: .09em; opacity: .85; line-height: 1.5; }
+#tl-veil .veil-label {
+  position: absolute; bottom: 14px; left: 10px; color: var(--red); font-size: 13px;
+  letter-spacing: .08em; line-height: 1.5; font-weight: bold;
+  text-shadow: 0 0 10px rgba(244,112,103,.4);
+}
+#tl-veil .veil-label .dim { font-size: 11px; font-weight: normal; color: #d99a94; }
 #tl-rail-scroll { flex: 1; min-width: 0; overflow-x: auto; overflow-y: hidden; padding: 12px 320px 12px 118px; }
 #tl-rail { display: flex; align-items: center; gap: 0; min-height: 190px; width: max-content; }
 .tl-act { display: flex; flex-direction: column; gap: 8px; }

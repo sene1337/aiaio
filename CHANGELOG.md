@@ -32,6 +32,10 @@ patch = fixes and copy).
   bound to recorded stats, arrow-key/Tab/Enter navigation with a visible
   focus treatment, /library overlay with add-to-CUSTOM, drop-anywhere cards.
 
+- **The forgetting veil grinds.** The timeline's left edge is now a living
+  churn of runes with an undulating edge of grinding teeth glyphs, and the
+  BEFORE THE RECORDS label is big enough to fear.
+
 ### Fixed
 - A stale reference to the removed recap button silently killed all boot
   wiring after it (settings, schema, parts of input) — found when a clean

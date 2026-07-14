@@ -67,6 +67,42 @@ function runeBar(done: number, total: number): string {
   return '■'.repeat(done) + '□'.repeat(Math.max(0, total - done)) + ` ${done}/${total}`;
 }
 
+/**
+ * The forgetting veil is alive: a churning rune field whose right edge
+ * undulates with grinding teeth. Pre-history only; pure cosmetics, cheap DOM
+ * text at ~8fps, paused while the menu is hidden.
+ */
+function startVeil(): void {
+  const el = document.querySelector('#tl-veil .veil-runes') as HTMLElement | null;
+  if (!el) return;
+  const BODY = '▓▓▒▒░░█▒';
+  const TEETH = '╬≠☓✕×≢∦';
+  const SPARSE = ' ░▒';
+  let t = 0;
+  const draw = () => {
+    if (document.hidden || $('screen-menu').classList.contains('hidden')) return;
+    t += 0.12;
+    const rows = Math.ceil((el.clientHeight || 400) / 15);
+    const out: string[] = [];
+    for (let r = 0; r < rows; r++) {
+      // per-row width waves out of phase: the edge undulates
+      const w = 8 + Math.round(3.5 * Math.sin(t * 1.7 + r * 0.55) + 1.5 * Math.sin(t * 0.6 + r * 1.3));
+      let line = '';
+      for (let c = 0; c < w; c++) {
+        const deep = 1 - c / Math.max(1, w);
+        const set = deep > 0.45 ? BODY : SPARSE;
+        line += set[Math.floor(Math.abs(Math.sin(r * 31.7 + c * 17.3 + Math.floor(t * 2))) * set.length) % set.length];
+      }
+      // the grinding tooth at the edge
+      line += TEETH[Math.floor(Math.abs(Math.sin(r * 13.1 + Math.floor(t * 3))) * TEETH.length) % TEETH.length];
+      out.push(line);
+    }
+    el.textContent = out.join('\n');
+  };
+  draw();
+  window.setInterval(draw, 120);
+}
+
 export class Timeline {
   private track: TrackId;
   private focus = 0;
@@ -76,6 +112,7 @@ export class Timeline {
   constructor(private cfg: TimelineConfig) {
     // cold start: a fresh player lands on the authored fictional campaign;
     // anyone with a forged personal campaign lands on it
+    startVeil();
     const saved = localStorage.getItem('aiaio-track') as TrackId | null;
     this.track = saved ?? (cfg.personal ? 'campaign' : 'fictional');
     window.addEventListener('keydown', (e) => this.onKey(e));
