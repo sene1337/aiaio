@@ -5,6 +5,13 @@ All notable changes to AIAIO are documented here. Format follows
 [semver](https://semver.org/) (minor = new player-facing capability,
 patch = fixes and copy).
 
+## [2.11.1] — 2026-07-14
+
+### Changed
+- The campaign's documentary gap now carries its own explanation in the
+  author's public words: "Involved, unattached." The cause stays out of the
+  game, permanently.
+
 ## [2.11.0] — 2026-07-14 — THE TRUE STORY
 
 ### Changed
