@@ -55,9 +55,13 @@ let gallerySessionCount = 0;
 type CampaignRun = { manifest: CampaignManifest; entry: CampaignEntry };
 
 function showScreen(id: ScreenId): void {
-  for (const s of ['menu', 'briefing', 'match', 'recap']) {
-    $(`screen-${s}`).classList.toggle('hidden', s !== id);
+  // the briefing lives INSIDE the menu screen (right of the grinding veil):
+  // the wall never leaves your sight between choosing and entering
+  for (const s of ['menu', 'match', 'recap']) {
+    $(`screen-${s}`).classList.toggle('hidden', s !== (id === 'briefing' ? 'menu' : id));
   }
+  $('screen-briefing').classList.toggle('hidden', id !== 'briefing');
+  $('screen-menu').classList.toggle('briefing-mode', id === 'briefing');
 }
 
 // ---------------------------------------------------------------------------

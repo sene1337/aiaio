@@ -536,6 +536,34 @@ export class UI {
         ctx.fillRect(0, 0, W, H);
       }
     }
+    // the forgetting never leaves: when the wall itself is offscreen left, a
+    // faint red rune-lap breathes at the screen edge. you are never safe,
+    // only ahead.
+    {
+      const wallScreenX = W / 2 + (run.wallX - this.camX) * this.camZoom;
+      if (wallScreenX < 0 && !run.over) {
+        const gap = run.avatar.x - run.wallX;
+        // closer wall = hungrier edge (still subtle until it's actually near)
+        const urgency = Math.max(0.10, Math.min(0.42, 1 - gap / 900));
+        ctx.save();
+        ctx.font = '12px ui-monospace, monospace';
+        const rows = Math.ceil(H / 16);
+        for (let r = 0; r < rows; r++) {
+          const lap = Math.sin(this.time * 1.6 + r * 0.7);
+          const reach = Math.max(0, 4 + lap * 4 + Math.sin(this.time * 0.5 + r * 1.9) * 2);
+          const chars = '░▒▓'[Math.floor(Math.abs(Math.sin(r * 7.3 + Math.floor(this.time * 2))) * 3) % 3];
+          ctx.globalAlpha = urgency * (0.5 + 0.5 * Math.abs(lap));
+          ctx.fillStyle = '#f47067';
+          ctx.fillText(chars, reach - 4, r * 16 + 12);
+          if (r % 5 === Math.floor(this.time) % 5) {
+            ctx.globalAlpha = urgency * 0.8;
+            ctx.fillText('×', reach + 3, r * 16 + 12);
+          }
+        }
+        ctx.restore();
+        ctx.globalAlpha = 1;
+      }
+    }
     // offscreen threat chevrons: a charging enemy you can't see still warns
     // you from the screen edge at its height (XAG offscreen redundant cues)
     for (const e of run.enemies) {
@@ -1143,6 +1171,7 @@ export class UI {
     cols.appendChild(levelCol);
 
     // the Observer's memory-lane roast slot (filled by main; LLM version swaps in)
+    document.querySelectorAll('#briefing-roast').forEach((el) => el.remove());
     const roastBox = document.createElement('div');
     roastBox.id = 'briefing-roast';
     roastBox.className = 'briefing-col roast-box';

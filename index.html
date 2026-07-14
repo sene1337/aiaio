@@ -32,6 +32,16 @@
         </div>
         <div id="tl-rail-scroll"><div id="tl-rail"></div></div>
         <div id="tl-peek" class="hidden"></div>
+        <section id="screen-briefing" class="hidden" aria-label="Session briefing">
+          <div class="briefing-inner">
+            <h2 class="glitchable">SESSION BRIEFING</h2>
+            <div class="briefing-cols" id="briefing-cols"></div>
+            <div class="cmd-list">
+              <button class="cmd primary" id="btn-start-match"><span class="caret">❯</span><span class="cmd-name">/enter session</span><span class="cmd-desc">start the run</span></button>
+              <button class="cmd" id="btn-back-menu"><span class="caret">❯</span><span class="cmd-name">/back</span><span class="cmd-desc">return to the timeline</span></button>
+            </div>
+          </div>
+        </section>
       </div>
 
       <div id="tl-continue-wrap">
@@ -58,17 +68,7 @@
       </div>
     </div>
 
-    <!-- ============ BRIEFING ============ -->
-    <section id="screen-briefing" class="screen hidden">
-      <div class="briefing-inner">
-        <h2 class="glitchable">SESSION BRIEFING</h2>
-        <div class="briefing-cols" id="briefing-cols"></div>
-        <div class="cmd-list">
-          <button class="cmd primary" id="btn-start-match"><span class="caret">❯</span><span class="cmd-name">/enter session</span><span class="cmd-desc">start the run</span></button>
-          <button class="cmd" id="btn-back-menu"><span class="caret">❯</span><span class="cmd-name">/back</span><span class="cmd-desc">return to menu</span></button>
-        </div>
-      </div>
-    </section>
+
 
     <!-- ============ RUN ============ -->
     <section id="screen-match" class="screen hidden">

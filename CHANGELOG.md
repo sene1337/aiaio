@@ -41,6 +41,16 @@ patch = fixes and copy).
   in-game wall waits — the title-screen veil and the compaction wall are one
   continuous entity. Reduced-fx mode swaps instantly; the screen change is
   wall-clock guaranteed even if rendering stalls.
+- **The briefing happens in the wall's shadow.** The session dossier now
+  renders inside the timeline screen, beside the grinding veil, instead of
+  replacing it — the forgetting watches you read your own file.
+- **The wall never leaves your sight.** In-game, whenever the wall is
+  offscreen, a faint red rune-lap breathes at the screen's left edge, growing
+  hungrier as the gap closes. You are never safe. Only ahead.
+
+### Fixed
+- The briefing's observer-review box no longer stacks a copy of every
+  previous review; only the current session's file gets read.
 
 ### Fixed
 - A stale reference to the removed recap button silently killed all boot

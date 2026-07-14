@@ -131,6 +131,11 @@ html, body {
 #tl-footer .linkish b { color: var(--blue); font-weight: normal; }
 #tl-footer #btn-enrich b { color: var(--purple); }
 .tl-empty { padding: 30px; text-align: left; }
+/* briefing mode: the rail yields to the dossier; the veil keeps grinding */
+#screen-briefing { position: absolute; left: 132px; right: 0; top: 0; bottom: 0; overflow-y: auto; z-index: 2; }
+#screen-briefing .briefing-inner { max-width: 860px; padding: 12px 0; }
+.briefing-mode #tl-rail-scroll, .briefing-mode #tl-peek,
+.briefing-mode #tl-continue-wrap, .briefing-mode #tl-tracks { display: none !important; }
 #wall-wipe {
   position: fixed; inset: 0; z-index: 200; pointer-events: none; margin: 0;
   color: rgba(244, 112, 103, .55); background: transparent;
