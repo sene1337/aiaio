@@ -278,3 +278,33 @@ turns out wrong, append a correction.
   or quoted chat ruling.
 - Open: the v2.7.0 hybrid working tree needs quarantine-branch snapshot, then
   Stage A salvage per the spec. Implementation awaits Brad's go.
+
+## 2026-07-14 · Claude Fable 5 · overnight run: THE FEEL PASS (v2.8.0) + honest ENRICH (v2.9.0)
+
+- What: Brad's overnight directive ("wake up wow'd; alive with character").
+  Stabilized first: committed Codex's v2.7.0 hybrid as an attributed snapshot,
+  gated the broken ENRICH button, merged to local main. Then the feel pass,
+  one verified slice at a time (v2.8.0): no-scroll TUI workspace front door
+  with hero panel; pixel-grid snapping + XAG-102 double-outline glyphs;
+  telegraphs on every attack + offscreen chevrons + directional damage; an
+  audio language (pentatonic zap runs, subagent motif family, confirmation
+  earcons, accelerating wall heartbeat); talking subagents + Observer running
+  gags + no-repeat line dealing + opt-in burnout persona; pacing-encounter
+  disclosures rewritten in the Observer's voice; /settings (bus sliders,
+  mono, captions, reduced-fx, rude toggle). Then ENRICH Stage B per the spec
+  (v2.9.0): per-episode writer units, factual gates, named-command consent,
+  transcript progress, resume/cancel/failure paths, MY CAMPAIGN entry.
+- Why: the re-ranked arc (feel first, ENRICH second) per Brad's correction of
+  the CEO-review scope inversion. Every slice carried its own verification
+  gate because v2.7.0 taught us mechanical checks alone lie about UX.
+- Verified: per-slice browser E2E (documented in each commit); Stage B's full
+  gate matrix: happy path with 6/6 claude-p-written episodes -> premiere ->
+  briefing, reload-attach, cancel-preserves-prior, raw cards byte-identical
+  (md5 sweep before/after), tests green throughout. Found and fixed two
+  latent Stage B bugs: manifest/client digest parity, unconsumed cancel
+  stream.
+- Open: main is merged LOCALLY only — Brad defers the Pages deploy;
+  `git push origin main` is the one-command morning deploy. Remix (Stage D)
+  and richer error-wave staging remain per spec. The burnout persona ships
+  default-off. Brad's real 6-episode Opening is generated locally
+  (gitignored) and waiting behind MY CAMPAIGN.
