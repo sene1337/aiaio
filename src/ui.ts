@@ -38,6 +38,8 @@ export class UI {
   canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private camX = 0; private camY = 0; private camZoom = 1;
+  /** settings: suppress shake, glitch bands, and full-screen flashes */
+  reducedFx = localStorage.getItem('aiaio-reduced-fx') === '1';
 
   /**
    * XAG-102 double outline: a dark halo plus a faint bright rim makes a glyph
@@ -87,6 +89,7 @@ export class UI {
 
   setCaption(speaker: 'observer' | 'bad news', text: string, active: boolean): void {
     const box = $('observer-caption');
+    if (localStorage.getItem('aiaio-captions') === '0') { box.classList.add('hidden'); return; }
     if (!active) {
       if (box.dataset.caption === text) box.classList.add('hidden');
       return;
@@ -290,6 +293,7 @@ export class UI {
     this.muzzleTtl = Math.max(0, this.muzzleTtl - dt);
 
     ctx.save();
+    if (this.reducedFx) { this.shakeMag = 0; this.glitchTtl = 0; this.whiteFlashTtl = 0; }
     if (this.shakeMag > 0.2) {
       // whole-pixel shake: same violence, no anti-aliased smear
       ctx.translate(Math.round(this.fxRng.range(-this.shakeMag, this.shakeMag)), Math.round(this.fxRng.range(-this.shakeMag, this.shakeMag)));

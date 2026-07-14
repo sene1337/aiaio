@@ -44,6 +44,7 @@
             <button class="cmd primary" id="btn-enrich"><span class="caret">✦</span><span class="cmd-name">ENRICH YOUR HISTORY</span><span class="cmd-desc">shape six sessions or build a personal campaign</span></button>
             <button class="cmd" id="btn-openclaw"><span class="caret">❯</span><span class="cmd-name">THE OPENCLAW + HERMES CAMPAIGN</span><span class="cmd-desc">12 authored fictional levels · public and ready now</span></button>
             <button class="cmd" id="btn-schema"><span class="caret">❯</span><span class="cmd-name">/schema</span><span class="cmd-desc">SessionCard format (copyable)</span></button>
+            <button class="cmd" id="btn-settings"><span class="caret">❯</span><span class="cmd-name">/settings</span><span class="cmd-desc">audio mix · captions · motion · the rude subagent</span></button>
           </div>
           <div class="drop-zone drop-mini" id="drop-0">drop a SessionCard .json or <button class="linkish" id="pick-0">browse…</button></div>
           <p class="hint">←→ move · ↑ jump · space fire · hold W work · u install update · [ ]/1-9 weapons</p>
@@ -109,6 +110,23 @@
       <div class="modal-box">
         <h3>SessionCard format <button class="linkish" id="btn-copy-schema">copy</button> <button class="linkish" id="btn-close-schema">close ✕</button></h3>
         <pre id="schema-pre"></pre>
+      </div>
+    </div>
+
+    <!-- ============ SETTINGS ============ -->
+    <div id="modal-settings" class="modal hidden">
+      <div class="modal-box" style="max-width:560px">
+        <h3>/settings <button class="linkish" id="btn-close-settings">close ✕</button></h3>
+        <div class="settings-grid">
+          <label class="set-row">music <input type="range" id="set-vol-music" min="0" max="100" /><span class="set-val" id="val-vol-music"></span></label>
+          <label class="set-row">effects <input type="range" id="set-vol-sfx" min="0" max="100" /><span class="set-val" id="val-vol-sfx"></span></label>
+          <label class="set-row">interface <input type="range" id="set-vol-ui" min="0" max="100" /><span class="set-val" id="val-vol-ui"></span></label>
+          <label class="set-row set-check"><input type="checkbox" id="set-mono" /> mono output</label>
+          <label class="set-row set-check"><input type="checkbox" id="set-captions" checked /> observer captions</label>
+          <label class="set-row set-check"><input type="checkbox" id="set-reduced-fx" /> reduce shake &amp; flashes</label>
+          <label class="set-row set-check"><input type="checkbox" id="set-swears" /> the rude subagent <span class="dim">(one intern per run swears)</span></label>
+        </div>
+        <p class="hint">voice: V toggles the observer · ⇧V cycles system voices · M mutes everything</p>
       </div>
     </div>
 

@@ -8,7 +8,7 @@ import {
   SESSION_CARD_SCHEMA, SessionMode,
 } from './session';
 import { qa } from './telemetry';
-import { audio } from './audio';
+import { audio, audioMixer } from './audio';
 import { music } from './music';
 import { observer } from './observer';
 import { startLogoLoop } from './logo';
@@ -818,6 +818,43 @@ function main(): void {
 
   $('schema-pre').textContent = SESSION_CARD_SCHEMA;
   $('btn-schema').addEventListener('click', () => $('modal-schema').classList.remove('hidden'));
+
+  // /settings: the mix, captions, motion, and the rude subagent
+  const wireSettings = () => {
+    const modal = $('modal-settings');
+    const pct = (v: number) => `${Math.round(v * 100)}%`;
+    const buses = ['music', 'sfx', 'ui'] as const;
+    const sync = () => {
+      for (const b of buses) {
+        const slider = $(`set-vol-${b}`) as HTMLInputElement;
+        slider.value = String(Math.round(audioMixer.userLevel(b) * 100));
+        $(`val-vol-${b}`).textContent = pct(audioMixer.userLevel(b));
+      }
+      ($('set-mono') as HTMLInputElement).checked = audioMixer.isMono();
+      ($('set-captions') as HTMLInputElement).checked = localStorage.getItem('aiaio-captions') !== '0';
+      ($('set-reduced-fx') as HTMLInputElement).checked = localStorage.getItem('aiaio-reduced-fx') === '1';
+      ($('set-swears') as HTMLInputElement).checked = observer.swearsOn;
+    };
+    $('btn-settings').addEventListener('click', () => { audioMixer.ensure(); sync(); modal.classList.remove('hidden'); });
+    $('btn-close-settings').addEventListener('click', () => modal.classList.add('hidden'));
+    for (const b of buses) {
+      $(`set-vol-${b}`).addEventListener('input', (e) => {
+        const v = Number((e.target as HTMLInputElement).value) / 100;
+        audioMixer.setUserLevel(b, v);
+        $(`val-vol-${b}`).textContent = pct(v);
+        audio.select(); // audible preview on the bus you're adjusting
+      });
+    }
+    $('set-mono').addEventListener('change', (e) => audioMixer.setMono((e.target as HTMLInputElement).checked));
+    $('set-captions').addEventListener('change', (e) => localStorage.setItem('aiaio-captions', (e.target as HTMLInputElement).checked ? '1' : '0'));
+    $('set-reduced-fx').addEventListener('change', (e) => {
+      const on = (e.target as HTMLInputElement).checked;
+      localStorage.setItem('aiaio-reduced-fx', on ? '1' : '0');
+      if (ui) ui.reducedFx = on;
+    });
+    $('set-swears').addEventListener('change', (e) => observer.setSwears((e.target as HTMLInputElement).checked));
+  };
+  wireSettings();
   $('btn-close-schema').addEventListener('click', () => $('modal-schema').classList.add('hidden'));
   $('btn-copy-schema').addEventListener('click', () => {
     navigator.clipboard?.writeText(SESSION_CARD_SCHEMA).catch(() => { /* text is selectable */ });

@@ -10,8 +10,38 @@ class AudioMixer {
   private master: GainNode | null = null;
   private buses: Partial<Record<AudioBusName, GainNode>> = {};
   private readonly levels: Record<AudioBusName, number> = { music: 0.11, sfx: 0.22, ui: 0.18 };
+  /** player-set multipliers on top of the mix levels (settings screen) */
+  private userLevels: Record<AudioBusName, number> = {
+    music: Number(localStorage.getItem('aiaio-vol-music') ?? 1),
+    sfx: Number(localStorage.getItem('aiaio-vol-sfx') ?? 1),
+    ui: Number(localStorage.getItem('aiaio-vol-ui') ?? 1),
+  };
+  private mono = localStorage.getItem('aiaio-mono') === '1';
   muted = localStorage.getItem(LS_MUTE) === '1';
   private speechActive = false;
+
+  userLevel(name: AudioBusName): number { return this.userLevels[name]; }
+  isMono(): boolean { return this.mono; }
+
+  setUserLevel(name: AudioBusName, v: number): void {
+    this.userLevels[name] = Math.max(0, Math.min(1, v));
+    localStorage.setItem(`aiaio-vol-${name}`, String(this.userLevels[name]));
+    const bus = this.buses[name];
+    if (bus && this.ctx) bus.gain.setTargetAtTime(this.levels[name] * this.userLevels[name], this.ctx.currentTime, 0.03);
+  }
+
+  setMono(on: boolean): void {
+    this.mono = on;
+    localStorage.setItem('aiaio-mono', on ? '1' : '0');
+    this.applyMono();
+  }
+
+  private applyMono(): void {
+    if (!this.master) return;
+    // forcing the master gain to one explicit channel downmixes everything
+    this.master.channelCount = this.mono ? 1 : 2;
+    this.master.channelCountMode = this.mono ? 'explicit' : 'max';
+  }
 
   ensure(): AudioContext | null {
     if (this.ctx) {
@@ -32,10 +62,11 @@ class AudioMixer {
       mix.connect(limiter).connect(this.master).connect(this.ctx.destination);
       for (const name of ['music', 'sfx', 'ui'] as AudioBusName[]) {
         const bus = this.ctx.createGain();
-        bus.gain.value = this.levels[name];
+        bus.gain.value = this.levels[name] * this.userLevels[name];
         bus.connect(mix);
         this.buses[name] = bus;
       }
+      this.applyMono();
       return this.ctx;
     } catch {
       this.ctx = null;
@@ -76,8 +107,8 @@ class AudioMixer {
     const now = this.ctx.currentTime;
     const music = this.bus('music');
     const sfx = this.bus('sfx');
-    if (music) music.gain.setTargetAtTime(this.levels.music * (active ? 0.35 : 1), now, active ? 0.06 : 0.22);
-    if (sfx) sfx.gain.setTargetAtTime(this.levels.sfx * (active ? 0.58 : 1), now, active ? 0.04 : 0.16);
+    if (music) music.gain.setTargetAtTime(this.levels.music * this.userLevels.music * (active ? 0.35 : 1), now, active ? 0.06 : 0.22);
+    if (sfx) sfx.gain.setTargetAtTime(this.levels.sfx * this.userLevels.sfx * (active ? 0.58 : 1), now, active ? 0.04 : 0.16);
   }
 }
 

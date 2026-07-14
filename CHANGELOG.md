@@ -53,6 +53,9 @@ patch = fixes and copy).
   disclosure lines (referencing the actual task, date, or harness) instead of
   five generic ones. Verified on a zero-error factual card: no invented
   'recorded' enemies, max three staged encounters, every line unique.
+- **/settings**: per-bus volume sliders (music/effects/interface) with live
+  preview, mono output, observer-caption toggle, reduce-shake-and-flashes
+  mode, and the rude-subagent toggle. All persisted locally.
 
 ## [2.7.0] — 2026-07-13
 
