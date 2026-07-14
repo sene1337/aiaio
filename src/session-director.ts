@@ -48,12 +48,21 @@ function claim(occupied: number[], candidate: number, width: number, spacing = 1
 
 function observerLine(card: SessionCard, entry: CampaignEntry | undefined, i: number, variant: number, used: Set<string>): string {
   const subject = String(entry?.taskLabel || card.goal || card.tasks?.[0]?.name || 'the work').slice(0, 42);
+  const when = String(card.when ?? '').slice(0, 10);
+  const harness = String(card.harness ?? 'the harness');
   const templates = [
-    `quiet around ${subject}. suspicious.`,
+    `quiet around ${subject}. suspicious. here.`,
     `${subject} got comfortable. i corrected the pacing.`,
-    `the transcript paused. consequences did not.`,
+    `the transcript paused here. consequences did not.`,
     `a calm gap. i brought a counterargument.`,
-    `nothing failed for a while. that felt inaccurate.`,
+    `nothing failed for a while. that felt historically inaccurate.`,
+    `the log shows peace here. i show initiative.`,
+    `${subject} was going suspiciously well. was.`,
+    `this stretch had zero errors${when ? ` on ${when}` : ''}. i am correcting the record's mood, not its facts.`,
+    `${harness} went quiet here. i do not trust quiet.`,
+    `an uneventful gap. you were saving your mistakes for later. these are on me.`,
+    `no recorded incidents here. these two are complimentary.`,
+    `the session breathed here. briefly. you may not.`,
   ];
   const authored = entry?.observerLines?.[i]?.trim().slice(0, 120);
   if (authored && !used.has(authored)) { used.add(authored); return authored; }

@@ -48,6 +48,11 @@ patch = fixes and copy).
   no-repeat-until-exhausted instead of pure random.
 - **Optional burnout persona** (default OFF, settings toggle): one subagent
   per run swears like a dev at 2am. Clean by default for shareable clips.
+- **Observer pacing encounters find their voice**: the disclosed staged
+  encounters in quiet stretches now draw from twelve dry, session-aware
+  disclosure lines (referencing the actual task, date, or harness) instead of
+  five generic ones. Verified on a zero-error factual card: no invented
+  'recorded' enemies, max three staged encounters, every line unique.
 
 ## [2.7.0] — 2026-07-13
 
