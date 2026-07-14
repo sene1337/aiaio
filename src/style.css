@@ -136,11 +136,16 @@ html, body {
 #screen-briefing .briefing-inner { max-width: 860px; padding: 12px 0; }
 .briefing-mode #tl-rail-scroll, .briefing-mode #tl-peek,
 .briefing-mode #tl-continue-wrap, .briefing-mode #tl-tracks { display: none !important; }
-#wall-wipe {
-  position: fixed; inset: 0; z-index: 200; pointer-events: none; margin: 0;
-  color: rgba(244, 112, 103, .55); background: transparent;
-  font-family: inherit; font-size: 12px; line-height: 15px; white-space: pre;
-  overflow: hidden; text-shadow: 0 0 6px rgba(244, 112, 103, .35);
+#wall-wipe { position: fixed; inset: 0; z-index: 200; pointer-events: none; overflow: hidden; }
+#wall-wipe .wipe-solid {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 0;
+  background: linear-gradient(90deg, #140b0a 60%, #1d0e0c 92%, rgba(29,14,12,0));
+}
+#wall-wipe .wipe-runes {
+  position: absolute; inset: 0; margin: 0;
+  color: rgba(244, 112, 103, .6); background: transparent;
+  font-family: inherit; font-size: 13px; line-height: 13px; white-space: pre;
+  overflow: hidden; text-shadow: 0 0 6px rgba(244, 112, 103, .4);
 }
 #recap-banner { text-align: center; }
 #recap-banner h2 { font-size: 26px; letter-spacing: .13em; font-weight: normal; }

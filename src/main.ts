@@ -826,9 +826,12 @@ function frameBody(t: number): void {
       const r = run;
       window.setTimeout(() => {
         if (run === r && r.over) {
-          ui.buildRecap(r, lastRankInfo ?? undefined, buildForward(r));
-          wireRecapActions(r);
-          showScreen('recap');
+          // the wall always wins in the end: the run closes THROUGH it too
+          wallWipe(() => {
+            ui.buildRecap(r, lastRankInfo ?? undefined, buildForward(r));
+            wireRecapActions(r);
+            showScreen('recap');
+          });
         }
       }, 1500);
     }

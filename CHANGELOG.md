@@ -47,6 +47,11 @@ patch = fixes and copy).
 - **The wall never leaves your sight.** In-game, whenever the wall is
   offscreen, a faint red rune-lap breathes at the screen's left edge, growing
   hungrier as the gap closes. You are never safe. Only ahead.
+- **The wall always wins in the end.** Every run now closes the way it
+  opened: the grinding sweep carries you from the dying session to the recap.
+  And the sweep itself has mass now — a solid dark front behind the rune
+  texture (no more see-through glyph gaps) with tightened rows, so it
+  consumes the screen instead of ghosting over it.
 
 ### Fixed
 - The briefing's observer-review box no longer stacks a copy of every

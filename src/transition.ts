@@ -17,13 +17,22 @@ export function wallWipe(onCovered: () => void): void {
   if (localStorage.getItem('aiaio-reduced-fx') === '1') { onCovered(); return; }
   running = true;
 
+  // two layers: a solid front (the wall's mass) and the rune texture on top.
+  // without the solid backing the old screen showed through glyph gaps and
+  // the whole sweep read as translucent instead of consuming.
+  const wrap = document.createElement('div');
+  wrap.id = 'wall-wipe';
+  const solid = document.createElement('div');
+  solid.className = 'wipe-solid';
   const el = document.createElement('pre');
-  el.id = 'wall-wipe';
-  document.body.appendChild(el);
+  el.className = 'wipe-runes';
+  wrap.appendChild(solid);
+  wrap.appendChild(el);
+  document.body.appendChild(wrap);
   audio.ensure();
   audio.wallSweep();
 
-  const rowH = 15;
+  const rowH = 13;
   const colW = 7.5;
   const rows = Math.ceil(window.innerHeight / rowH) + 1;
   const cols = Math.ceil(window.innerWidth / colW) + 6;
@@ -39,7 +48,7 @@ export function wallWipe(onCovered: () => void): void {
   // screen change is not
   window.setTimeout(() => { if (!swapped) { swapped = true; onCovered(); } }, COVER_MS + 40);
   window.setTimeout(() => {
-    if (!done) { done = true; el.remove(); running = false; }
+    if (!done) { done = true; wrap.remove(); running = false; }
   }, COVER_MS + HOLD_MS + REVEAL_MS + 150);
 
   const paint = (frac: number, t: number): void => {
@@ -58,6 +67,7 @@ export function wallWipe(onCovered: () => void): void {
       out.push(line);
     }
     el.textContent = out.join('\n');
+    solid.style.width = `${Math.max(0, frac * 100 - 2.5)}%`;
   };
 
   const step = (now: number): void => {
@@ -70,7 +80,7 @@ export function wallWipe(onCovered: () => void): void {
     } else if (t < COVER_MS + HOLD_MS + REVEAL_MS) {
       paint(1 - easeInOut((t - COVER_MS - HOLD_MS) / REVEAL_MS), now);
     } else {
-      if (!done) { done = true; el.remove(); running = false; }
+      if (!done) { done = true; wrap.remove(); running = false; }
       return;
     }
     if (!done) requestAnimationFrame(step);
