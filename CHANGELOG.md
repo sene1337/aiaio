@@ -21,6 +21,14 @@ patch = fixes and copy).
 - **Double-outlined gameplay glyphs** (XAG 102 pattern): enemies, crates, and
   projectile heads draw with a dark halo + faint bright rim, readable over any
   terrain or particle weather. Atmosphere stays quiet.
+- **Every attack is now telegraphed**: timeout blobs and tool turrets charge
+  visibly (tightening amber ring + blinking !) for ~half a second before
+  firing — nothing hits you without a beat to react. Snipers keep their aim
+  line.
+- **Offscreen threats warn from the screen edge**: a charging enemy outside
+  the view draws a pulsing chevron at its height.
+- **Directional damage**: the struck side of the screen burns brighter, so
+  you know where the hit came from mid-chaos.
 
 ## [2.7.0] — 2026-07-13
 

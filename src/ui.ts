@@ -69,6 +69,7 @@ export class UI {
   private shakeMag = 0;
   private glitchTtl = 0;
   private hitFlashTtl = 0;
+  private hitFlashDir = 0; // -1 hit from the left, 1 from the right, 0 unknown
   private muzzleTtl = 0;
   private whiteFlashTtl = 0;
   private rings: Array<{ x: number; y: number; maxR: number; ttl: number; maxTtl: number; color: string }> = [];
@@ -197,7 +198,7 @@ export class UI {
         }
         break;
       }
-      case 'damage': this.hitFlashTtl = 0.3; this.shakeMag = Math.min(14, this.shakeMag + 3); break;
+      case 'damage': this.hitFlashTtl = 0.3; this.hitFlashDir = Number(data.dir) || 0; this.shakeMag = Math.min(14, this.shakeMag + 3); break;
       case 'compaction': this.glitchTtl = 1.0; this.shakeMag = Math.min(16, this.shakeMag + 9); break;
       case 'task_eaten': this.glitchTtl = Math.max(this.glitchTtl, 0.5); break;
       case 'subagent_corrupted': this.glitchTtl = Math.max(this.glitchTtl, 0.35); break;
@@ -433,14 +434,27 @@ export class UI {
       ctx.lineWidth = 2.5 / this.camZoom;
       ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke();
     }
-    // sniper telegraphs
+    // attack telegraphs: snipers show their aim; everyone else shows a charge
     for (const e of run.enemies) {
-      if (!e.dead && e.telegraphing) {
+      if (e.dead || !e.telegraphing) continue;
+      if (e.def.kind === 'false_positive_sniper') {
         ctx.strokeStyle = `rgba(244,112,103,${0.15 + 0.35 * Math.abs(Math.sin(this.time * 10))})`;
         ctx.setLineDash([6, 6]);
         ctx.lineWidth = 1 / this.camZoom;
         ctx.beginPath(); ctx.moveTo(e.x, e.y - 8); ctx.lineTo(e.aimX, e.aimY); ctx.stroke();
         ctx.setLineDash([]);
+      } else {
+        // charge-up: a tightening amber ring and a blinking ! — you always
+        // get a beat to react before anything fires (XAG redundant cues)
+        const pulse = 0.35 + 0.6 * Math.abs(Math.sin(this.time * 12));
+        ctx.strokeStyle = `rgba(227,179,65,${pulse})`;
+        ctx.lineWidth = 1.5 / this.camZoom;
+        const r = 20 - 9 * Math.min(1, e.stateTimer / 0.55);
+        ctx.beginPath(); ctx.arc(e.x, e.y - 8, r, 0, Math.PI * 2); ctx.stroke();
+        ctx.font = 'bold 12px monospace';
+        ctx.textAlign = 'center';
+        this.outlinedGlyph(ctx, '!', e.x, e.y - 30, '#e3b341');
+        ctx.textAlign = 'left';
       }
     }
 
@@ -512,6 +526,19 @@ export class UI {
         ctx.fillRect(0, 0, W, H);
       }
     }
+    // offscreen threat chevrons: a charging enemy you can't see still warns
+    // you from the screen edge at its height (XAG offscreen redundant cues)
+    for (const e of run.enemies) {
+      if (e.dead || !e.telegraphing) continue;
+      const sx = W / 2 + (e.x - this.camX) * this.camZoom;
+      if (sx >= -12 && sx <= W + 12) continue;
+      const sy = Math.max(70, Math.min(H - 96, H / 2 + (e.y - this.camY) * this.camZoom));
+      ctx.font = 'bold 13px ui-monospace, monospace';
+      ctx.fillStyle = `rgba(227,179,65,${0.45 + 0.5 * Math.abs(Math.sin(this.time * 8))})`;
+      ctx.textAlign = 'center';
+      ctx.fillText(sx < 0 ? '‹‹ !' : '! ››', sx < 0 ? 28 : W - 28, sy);
+      ctx.textAlign = 'left';
+    }
     if (this.whiteFlashTtl > 0) {
       this.whiteFlashTtl -= dt;
       ctx.fillStyle = `rgba(255,255,255,${Math.max(0, this.whiteFlashTtl / 0.08) * 0.3})`;
@@ -524,6 +551,15 @@ export class UI {
       vg.addColorStop(1, `rgba(244,112,103,${0.28 * a})`);
       ctx.fillStyle = vg;
       ctx.fillRect(0, 0, W, H);
+      // directional cue: the struck side burns brighter (you know where it
+      // came from even mid-chaos — XAG redundant cues)
+      if (this.hitFlashDir !== 0) {
+        const side = ctx.createLinearGradient(this.hitFlashDir > 0 ? W : 0, 0, W / 2, 0);
+        side.addColorStop(0, `rgba(244,112,103,${0.4 * a})`);
+        side.addColorStop(1, 'rgba(244,112,103,0)');
+        ctx.fillStyle = side;
+        ctx.fillRect(0, 0, W, H);
+      }
     }
 
     // DOM refresh

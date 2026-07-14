@@ -406,7 +406,7 @@ export class Run {
     return this.recentDamage.filter((d) => this.time - d.t < 4).reduce((s, d) => s + d.dmg, 0);
   }
 
-  damageAvatar(dmg: number, source: string, fromEnemy = true): void {
+  damageAvatar(dmg: number, source: string, fromEnemy = true, fromX?: number): void {
     if (this.over) return;
     let d = fromEnemy ? Math.round(dmg * this.combat.enemyDamageMultiplier) : dmg;
     if (this.avatar.headsDown) {
@@ -424,7 +424,7 @@ export class Run {
       this.avatar.hp = Math.max(0, this.avatar.hp - d);
       this.recentDamage.push({ t: this.time, dmg: d });
       this.pushLog(`💢 took ${d} from ${source} (${Math.round(this.avatar.hp)} hp)`);
-      this.emit('damage', { amount: d, source, headsDown: this.avatar.headsDown, hp: Math.round(this.avatar.hp) });
+      this.emit('damage', { amount: d, source, headsDown: this.avatar.headsDown, hp: Math.round(this.avatar.hp), dir: fromX === undefined ? 0 : Math.sign(fromX - this.avatar.x) });
       if (this.avatar.hp <= 0) this.finish(false, 'killed');
     }
     this.dirty++;
@@ -1154,9 +1154,14 @@ export class Run {
 
       switch (e.def.kind) {
         case 'timeout_blob':
-          if (e.cooldown <= 0 && dist < 520) {
-            e.cooldown = 2.6;
+          // telegraphed: warning -> visible 0.55s charge -> lob (never same-tick)
+          if (!e.telegraphing && e.cooldown <= 0 && dist < 520) {
+            e.telegraphing = true;
+            e.stateTimer = 0;
             this.emit('threat_warning', { kind: 'timeout_mortar', x: Math.round(e.x), y: Math.round(e.y) });
+          } else if (e.telegraphing && e.stateTimer > 0.55) {
+            e.telegraphing = false;
+            e.cooldown = 2.6;
             const dx = a.x - e.x;
             this.projectiles.push({
               x: e.x, y: e.y - 10, vx: dx * 0.55, vy: -180,
@@ -1205,7 +1210,7 @@ export class Run {
             this.lasers.push({ x1: e.x, y1: e.y - 8, x2: e.aimX, y2: e.aimY, ttl: 0.35, hostile: true });
             const d = Math.hypot(a.x - e.aimX, a.y - 10 - e.aimY);
             const subHit = this.subagents.find((sa) => Math.hypot(sa.x - e.aimX, sa.y - e.aimY) < 16);
-            if (d < 18) this.damageAvatar(14, 'false-positive laser');
+            if (d < 18) this.damageAvatar(14, 'false-positive laser', true, e.x);
             else if (subHit) {
               subHit.hp -= 14;
               this.spawnParticles(subHit.x, subHit.y, 6, '#f47067');
@@ -1215,9 +1220,14 @@ export class Run {
           }
           break;
         case 'tool_turret':
-          if (e.cooldown <= 0 && dist < 560) {
-            e.cooldown = 2.4;
+          // telegraphed: barrel tracks during a 0.45s charge, then the bolt
+          if (!e.telegraphing && e.cooldown <= 0 && dist < 560) {
+            e.telegraphing = true;
+            e.stateTimer = 0;
             this.emit('threat_warning', { kind: 'tool_bolt', x: Math.round(e.x), y: Math.round(e.y) });
+          } else if (e.telegraphing && e.stateTimer > 0.45) {
+            e.telegraphing = false;
+            e.cooldown = 2.4;
             const dx = a.x - e.x, dy = (a.y - 10) - (e.y - 8);
             const len = Math.hypot(dx, dy) || 1;
             this.projectiles.push({
@@ -1272,7 +1282,7 @@ export class Run {
             this.touchCooldowns.set(e, this.time + 0.8);
             let dmg = e.def.touchDamage;
             if (e.def.kind === 'hallucination_ghost') dmg = Math.round(dmg * (1 - a.hardening * 0.4));
-            this.damageAvatar(dmg, e.def.name);
+            this.damageAvatar(dmg, e.def.name, true, e.x);
           }
         }
       }
