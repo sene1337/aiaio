@@ -76,6 +76,11 @@ html, body {
 .set-val { width: 38px; text-align: right; color: var(--dim); font-size: 11px; }
 .set-check { cursor: pointer; }
 .set-check input { accent-color: var(--clay); }
+#enrich-transcript {
+  border: 1px solid var(--border); background: var(--bg);
+  padding: 10px 12px; margin: 10px 0; font-size: 11px; line-height: 1.7;
+  max-height: 220px; overflow-y: auto; white-space: pre-wrap;
+}
 .ascii-logo {
   color: var(--clay); font-size: 11px; line-height: 1.15; text-align: left;
   user-select: none;

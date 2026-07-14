@@ -5,6 +5,28 @@ All notable changes to AIAIO are documented here. Format follows
 [semver](https://semver.org/) (minor = new player-facing capability,
 patch = fixes and copy).
 
+## [2.9.0] — 2026-07-14 — ENRICH, honestly this time
+
+### Added
+- **✦ ENRICH YOUR HISTORY ships for real** (spec: docs/specs/enrich-campaign.md):
+  depth chooser with factual eligibility counts before you commit; a consent
+  screen that names the exact AI command that will read your redacted excerpts;
+  a live job transcript where every ⏺ line is a real persisted unit (episode
+  n/total + elapsed clock — no interpolated meters, ever); reload-resume that
+  reattaches to a running job; cancel that discards staging while any prior
+  ready campaign survives; a failure screen with retry and always-works
+  deterministic baseline; and a persistent **MY CAMPAIGN** menu entry.
+- Enrichment writes **one episode per AI call** with per-unit baseline
+  fallback (writerStatus: custom/mixed/baseline) instead of one all-or-nothing
+  batch — the reason progress can be honest at all.
+
+### Fixed
+- A freshly built campaign no longer fails its own snapshot check: the client
+  now digests the card file exactly as the manifest builder did, instead of
+  the normalized parse (which injects token_peak).
+- Cancel actually cancels: the dev endpoint never consumed its request stream,
+  so its handler never ran.
+
 ## [2.8.0] — 2026-07-14 — THE FEEL PASS (overnight build)
 
 ### Changed

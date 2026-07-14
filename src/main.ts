@@ -363,10 +363,14 @@ async function startCampaign(manifest: CampaignManifest, entry: CampaignEntry): 
   try {
     const response = await fetch(`./cards/${entry.file}`, { cache: 'no-store' });
     if (!response.ok) throw new Error('The campaign source card is unavailable.');
-    const card = parseSessionCard(await response.text());
-    if (manifest.kind !== 'fictional' && sourceDigest(card) !== entry.sourceDigest) {
+    const text = await response.text();
+    // digest the FILE content, exactly as the manifest builder did —
+    // parseSessionCard normalizes (e.g. injects token_peak), which must not
+    // count as the source having changed
+    if (manifest.kind !== 'fictional' && sourceDigest(JSON.parse(text)) !== entry.sourceDigest) {
       throw new Error('This campaign no longer matches its source snapshot. Enrich again after rescanning.');
     }
+    const card = parseSessionCard(text);
     const mode: SessionMode = manifest.kind === 'fictional' ? 'fictional' : manifest.kind === 'remix' ? 'remix' : 'real';
     prepareRun(card, mode, { manifest, entry });
   } catch (error) {
@@ -375,54 +379,134 @@ async function startCampaign(manifest: CampaignManifest, entry: CampaignEntry): 
   }
 }
 
-function openEnrichment(profile: 'opening' | 'campaign'): void {
-  const modal = $('modal-enrich');
-  const need = profile === 'opening' ? 6 : 15;
-  $('enrich-title').textContent = profile === 'opening' ? 'SHAPE MY OPENING' : 'BUILD MY CAMPAIGN';
-  $('enrich-copy').textContent = profile === 'opening'
-    ? 'Creates six chronological real-session levels. Your raw SessionCards stay unchanged.'
-    : 'Creates a curated 15–24-level campaign. Your raw SessionCards stay unchanged.';
-  $('enrich-consent').textContent = `This sends redacted session excerpts from ${need} or more local cards to your configured AI for campaign presentation. It never uploads them in a hosted build.`;
-  $('enrich-status').textContent = gallerySessionCount < need
-    ? `You need ${need} eligible sessions; ${gallerySessionCount} are currently available. Library play remains available — try the public campaign meanwhile.`
-    : 'Review the notice, then begin the local job.';
-  const begin = $('btn-enrich-start') as HTMLButtonElement;
-  begin.disabled = gallerySessionCount < need || !import.meta.env.DEV;
-  begin.onclick = () => { void beginEnrichment(profile); };
-  modal.classList.remove('hidden');
-}
+// ---------------------------------------------------------------------------
+// ENRICH flow — normative UX in docs/specs/enrich-campaign.md §4.
+// choose depth -> consent (one CONFIRM) -> unit transcript -> premiere.
+// Progress renders ONLY persisted job units; never an interpolated meter.
+// ---------------------------------------------------------------------------
+
+type EnrichUnit = { order: number; title: string; state: 'pending' | 'done' | 'fallback' };
+type EnrichStatus = {
+  status?: string; detail?: string; profile?: string;
+  count?: number; unitsDone?: number; units?: EnrichUnit[];
+  llmCmd?: string; jobLive?: boolean; required?: number; found?: number;
+};
 
 let enrichmentPoll: number | null = null;
+let enrichProfile: 'opening' | 'campaign' = 'opening';
+let enrichStartedAt = 0;
 
-async function beginEnrichment(profile: 'opening' | 'campaign'): Promise<void> {
-  if (!import.meta.env.DEV) { $('enrich-status').textContent = 'Personal enrichment is local-dev only. The public campaign is ready to play.'; return; }
-  $('enrich-status').textContent = 'Starting local campaign enrichment…';
+function enrichShow(section: 'choose' | 'consent' | 'progress' | 'failed'): void {
+  for (const id of ['enrich-choose', 'enrich-consent-box', 'enrich-progress-box', 'enrich-failed-box']) {
+    $(id).classList.toggle('hidden', id !== `enrich-${section === 'choose' ? 'choose' : section === 'consent' ? 'consent-box' : section === 'progress' ? 'progress-box' : 'failed-box'}`);
+  }
+}
+
+/** the job transcript IS the progress bar: one ⏺ line per episode, honest */
+export function renderEnrichTranscript(status: EnrichStatus, elapsedS: number): string {
+  const lines: string[] = [];
+  const units = status.units ?? [];
+  for (const u of units) {
+    if (u.state === 'pending') { lines.push(`⏺ episode ${u.order}: waiting…`); continue; }
+    lines.push(`⏺ episode ${u.order}: ${u.title}`);
+    lines.push(u.state === 'done' ? '  ⎿ written by your AI' : '  ⎿ baseline copy (AI unavailable for this one)');
+  }
+  const done = status.unitsDone ?? units.filter((u) => u.state !== 'pending').length;
+  const total = status.count ?? units.length;
+  if (total > 0) lines.push('', `${done}/${total} episodes · ${Math.floor(elapsedS / 60)}:${String(Math.floor(elapsedS % 60)).padStart(2, '0')} elapsed`);
+  return lines.join('\n');
+}
+
+async function fetchEnrichStatus(): Promise<EnrichStatus> {
+  const response = await fetch('/__enrich/status', { cache: 'no-store' });
+  return await response.json() as EnrichStatus;
+}
+
+async function openEnrichChooser(): Promise<void> {
+  const modal = $('modal-enrich');
+  modal.classList.remove('hidden');
+  $('enrich-copy').textContent = 'your agent turns your history into an authored campaign. raw SessionCards never change; originals stay playable.';
+  $('enrich-status').textContent = '';
+  // factual eligibility BEFORE the player commits (spec §4.1)
+  const enough6 = gallerySessionCount >= 6, enough15 = gallerySessionCount >= 15;
+  $('desc-enrich-opening').textContent = `six chronological real sessions · you have ${gallerySessionCount} eligible ${enough6 ? '✓' : `— need 6`}`;
+  $('desc-enrich-campaign').textContent = `15–24 curated real sessions · you have ${gallerySessionCount} eligible ${enough15 ? '✓' : `— need 15`}`;
+  ($('btn-enrich-opening') as HTMLButtonElement).disabled = !enough6 || !import.meta.env.DEV;
+  ($('btn-enrich-campaign') as HTMLButtonElement).disabled = !enough15 || !import.meta.env.DEV;
+  if (!import.meta.env.DEV) {
+    $('enrich-status').textContent = 'personal enrichment runs in the local app only. the fictional campaign below is ready right now.';
+  }
+  enrichShow('choose');
+  // resume: if a job is already running, attach to it instead (spec §4.3)
+  try {
+    const status = await fetchEnrichStatus();
+    if (status.jobLive || status.status === 'running' || status.status === 'writing') {
+      enrichProfile = status.profile === 'campaign' ? 'campaign' : 'opening';
+      enrichStartedAt = enrichStartedAt || Date.now();
+      enrichShow('progress');
+      startEnrichPolling();
+      $('enrich-status').textContent = 'attached to the running job.';
+    }
+  } catch { /* dev server absent; the DEV gate above already explains */ }
+}
+
+async function openEnrichConsent(profile: 'opening' | 'campaign'): Promise<void> {
+  enrichProfile = profile;
+  $('enrich-title').textContent = profile === 'opening' ? '✦ SHAPE MY OPENING' : '✦ BUILD MY CAMPAIGN';
+  let cmd = 'your configured AI';
+  try { cmd = (await fetchEnrichStatus()).llmCmd ?? cmd; } catch { /* keep generic */ }
+  const n = profile === 'opening' ? 6 : Math.min(24, Math.max(15, gallerySessionCount));
+  $('enrich-consent').textContent = `${cmd} will read short REDACTED excerpts from about ${n} of your local sessions to write episode titles and Observer lines. Nothing uploads from a hosted build; raw cards stay byte-identical. If the AI fails, a deterministic baseline builds the same campaign.`;
+  enrichShow('consent');
+}
+
+function startEnrichPolling(): void {
+  if (enrichmentPoll !== null) window.clearInterval(enrichmentPoll);
+  enrichmentPoll = window.setInterval(() => { void pollEnrichment(); }, 1000);
+}
+
+async function beginEnrichment(baseline = false): Promise<void> {
+  const begin = $('btn-enrich-start') as HTMLButtonElement;
+  begin.disabled = true; // pressed-state within 100ms (spec §4.2)
+  begin.querySelector('.cmd-name')!.textContent = 'starting…';
+  $('enrich-status').textContent = '';
   try {
     const response = await fetch('/__enrich/campaign', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ profile, selection: 'story', pace: 'balanced', tone: 'dry mission control' }),
+      body: JSON.stringify({ profile: enrichProfile, selection: 'story', pace: 'balanced', tone: 'dry mission control', baseline }),
     });
-    const status = await response.json() as { status?: string; detail?: string };
-    $('enrich-status').textContent = status.detail ?? 'Enrichment started.';
-    if (enrichmentPoll !== null) window.clearInterval(enrichmentPoll);
-    enrichmentPoll = window.setInterval(() => { void pollEnrichment(); }, 1200);
-  } catch { $('enrich-status').textContent = 'Could not start the local enrichment job.'; }
+    const status = await response.json() as EnrichStatus;
+    enrichStartedAt = Date.now();
+    enrichShow('progress');
+    $('enrich-transcript').textContent = status.detail ?? 'starting the local job…';
+    startEnrichPolling();
+  } catch {
+    $('enrich-status').textContent = 'could not reach the local dev server. run the game with npm run dev for personal enrichment.';
+  } finally {
+    begin.disabled = false;
+    begin.querySelector('.cmd-name')!.textContent = 'CONFIRM — start enrichment';
+  }
 }
 
 async function pollEnrichment(): Promise<void> {
   try {
-    const response = await fetch('/__enrich/status', { cache: 'no-store' });
-    const status = await response.json() as { status?: string; detail?: string };
-    $('enrich-status').textContent = status.detail ?? String(status.status ?? 'working');
+    const status = await fetchEnrichStatus();
+    const elapsed = (Date.now() - enrichStartedAt) / 1000;
+    $('enrich-transcript').textContent = renderEnrichTranscript(status, elapsed) || (status.detail ?? 'working…');
     if (status.status === 'ready') {
       if (enrichmentPoll !== null) { window.clearInterval(enrichmentPoll); enrichmentPoll = null; }
       $('modal-enrich').classList.add('hidden');
       showPremiere(await fetchCampaign('./cards/campaigns/latest.json'));
-    }
-    if (status.status === 'failed' || status.status === 'cancelled') {
+    } else if (status.status === 'failed') {
       if (enrichmentPoll !== null) { window.clearInterval(enrichmentPoll); enrichmentPoll = null; }
+      $('enrich-failed-detail').textContent = `the job failed: ${status.detail ?? 'no detail recorded'}. nothing was overwritten — any prior ready campaign is untouched.`;
+      enrichShow('failed');
+    } else if (status.status === 'cancelled') {
+      if (enrichmentPoll !== null) { window.clearInterval(enrichmentPoll); enrichmentPoll = null; }
+      $('enrich-status').textContent = 'cancelled. finished staging was discarded; any prior ready campaign is untouched.';
+      enrichShow('choose');
     }
-  } catch { /* the next poll can recover after Vite reloads */ }
+  } catch { /* transient; next poll recovers */ }
 }
 
 function prepareRun(card: SessionCard, mode: SessionMode, campaign?: CampaignRun): void {
@@ -780,26 +864,28 @@ function main(): void {
   // ENRICH UX is being rebuilt per docs/specs/enrich-campaign.md (Stage B);
   // gate the entry point until the honest flow ships so players never hit
   // the known-broken chooser
-  const ENRICH_UI_READY = false;
+  const ENRICH_UI_READY = true; // Stage B honest flow (spec §4) shipped
   if (!ENRICH_UI_READY) $('btn-enrich').classList.add('hidden');
-  $('btn-enrich').addEventListener('click', () => {
-    $('enrich-title').textContent = 'ENRICH YOUR HISTORY';
-    $('enrich-copy').textContent = 'Choose a focused opening or a curated campaign.';
-    $('enrich-consent').textContent = 'The configured local AI receives only redacted local SessionCard excerpts after you explicitly begin.';
-    $('enrich-status').textContent = 'Choose a campaign shape.';
-    const begin = $('btn-enrich-start') as HTMLButtonElement;
-    begin.disabled = true;
-    $('modal-enrich').classList.remove('hidden');
+  $('btn-enrich').addEventListener('click', () => { void openEnrichChooser(); });
+  // a ready personal campaign stays one click away (spec §4.4)
+  $('btn-my-campaign').addEventListener('click', () => {
+    void fetchCampaign('./cards/campaigns/latest.json').then(showPremiere)
+      .catch(() => { $('desc-my-campaign').textContent = 'campaign file unavailable — enrich again'; });
   });
-  $('btn-enrich-opening').addEventListener('click', () => openEnrichment('opening'));
-  $('btn-enrich-campaign').addEventListener('click', () => openEnrichment('campaign'));
-  $('btn-enrich-cancel').addEventListener('click', () => {
-    if (enrichmentPoll !== null && import.meta.env.DEV) {
-      void fetch('/__enrich/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-      window.clearInterval(enrichmentPoll); enrichmentPoll = null;
-    }
-    $('modal-enrich').classList.add('hidden');
+  void fetchCampaign('./cards/campaigns/latest.json').then((manifest) => {
+    $('desc-my-campaign').textContent = `${manifest.entries.length} enriched episodes · ${manifest.kind}`;
+    $('btn-my-campaign').classList.remove('hidden');
+  }).catch(() => { /* no personal campaign yet — the button stays hidden */ });
+  $('btn-enrich-opening').addEventListener('click', () => { void openEnrichConsent('opening'); });
+  $('btn-enrich-campaign').addEventListener('click', () => { void openEnrichConsent('campaign'); });
+  $('btn-enrich-back').addEventListener('click', () => { void openEnrichChooser(); });
+  $('btn-enrich-start').addEventListener('click', () => { void beginEnrichment(false); });
+  $('btn-enrich-retry').addEventListener('click', () => { enrichShow('progress'); void beginEnrichment(false); });
+  $('btn-enrich-baseline').addEventListener('click', () => { enrichShow('progress'); void beginEnrichment(true); });
+  $('btn-enrich-job-cancel').addEventListener('click', () => {
+    void fetch('/__enrich/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
   });
+  $('btn-enrich-cancel').addEventListener('click', () => $('modal-enrich').classList.add('hidden'));
   $('btn-openclaw').addEventListener('click', () => {
     void fetchCampaign('./cards/campaigns/openclaw-hermes.json').then(showPremiere).catch((error) => {
       $('enrich-title').textContent = 'PUBLIC CAMPAIGN';

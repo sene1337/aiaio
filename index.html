@@ -42,6 +42,7 @@
           <div class="cmd-list">
             <button class="cmd primary" id="btn-run"><span class="caret">❯</span><span class="cmd-name">/run session</span><span class="cmd-desc">enter the loaded (or random) session</span></button>
             <button class="cmd primary" id="btn-enrich"><span class="caret">✦</span><span class="cmd-name">ENRICH YOUR HISTORY</span><span class="cmd-desc">shape six sessions or build a personal campaign</span></button>
+            <button class="cmd primary hidden" id="btn-my-campaign"><span class="caret">▶</span><span class="cmd-name">MY CAMPAIGN</span><span class="cmd-desc" id="desc-my-campaign">your enriched episodes</span></button>
             <button class="cmd" id="btn-openclaw"><span class="caret">❯</span><span class="cmd-name">THE OPENCLAW + HERMES CAMPAIGN</span><span class="cmd-desc">12 authored fictional levels · public and ready now</span></button>
             <button class="cmd" id="btn-schema"><span class="caret">❯</span><span class="cmd-name">/schema</span><span class="cmd-desc">SessionCard format (copyable)</span></button>
             <button class="cmd" id="btn-settings"><span class="caret">❯</span><span class="cmd-name">/settings</span><span class="cmd-desc">audio mix · captions · motion · the rude subagent</span></button>
@@ -130,18 +131,38 @@
       </div>
     </div>
 
-    <!-- ============ ENRICHMENT ============ -->
+    <!-- ============ ENRICHMENT (spec: docs/specs/enrich-campaign.md §4) ============ -->
     <div id="modal-enrich" class="modal hidden">
-      <div class="modal-box" style="max-width:620px">
-        <h3 id="enrich-title">ENRICH YOUR HISTORY</h3>
+      <div class="modal-box" style="max-width:640px">
+        <h3 id="enrich-title">✦ ENRICH YOUR HISTORY</h3>
         <p id="enrich-copy" class="hint"></p>
-        <p id="enrich-consent" class="hint"></p>
+        <div id="enrich-choose" class="cmd-list">
+          <button class="cmd" id="btn-enrich-opening"><span class="caret">❯</span><span class="cmd-name">SHAPE MY OPENING</span><span class="cmd-desc" id="desc-enrich-opening">six chronological real sessions</span></button>
+          <button class="cmd" id="btn-enrich-campaign"><span class="caret">❯</span><span class="cmd-name">BUILD MY CAMPAIGN</span><span class="cmd-desc" id="desc-enrich-campaign">15–24 curated real sessions</span></button>
+        </div>
+        <div id="enrich-consent-box" class="hidden">
+          <p id="enrich-consent" class="hint"></p>
+          <div class="cmd-list">
+            <button class="cmd primary" id="btn-enrich-start"><span class="caret">❯</span><span class="cmd-name">CONFIRM — start enrichment</span><span class="cmd-desc">creates a campaign overlay; raw cards never change</span></button>
+            <button class="cmd" id="btn-enrich-back"><span class="caret">❯</span><span class="cmd-name">back</span><span class="cmd-desc">choose a different depth</span></button>
+          </div>
+        </div>
+        <div id="enrich-progress-box" class="hidden">
+          <pre id="enrich-transcript" aria-live="polite"></pre>
+          <div class="cmd-list">
+            <button class="cmd" id="btn-enrich-job-cancel"><span class="caret">❯</span><span class="cmd-name">cancel job</span><span class="cmd-desc">keeps finished episodes' copy out; prior ready campaign survives</span></button>
+          </div>
+        </div>
+        <div id="enrich-failed-box" class="hidden">
+          <p id="enrich-failed-detail" class="hint"></p>
+          <div class="cmd-list">
+            <button class="cmd primary" id="btn-enrich-retry"><span class="caret">❯</span><span class="cmd-name">retry with your AI</span><span class="cmd-desc">same selection, fresh attempt</span></button>
+            <button class="cmd" id="btn-enrich-baseline"><span class="caret">❯</span><span class="cmd-name">build baseline campaign instead</span><span class="cmd-desc">deterministic titles, no AI involved, always works</span></button>
+          </div>
+        </div>
         <p id="enrich-status" class="hint"></p>
         <div class="cmd-list">
-          <button class="cmd" id="btn-enrich-opening"><span class="caret">❯</span><span class="cmd-name">SHAPE MY OPENING</span><span class="cmd-desc">six chronological real sessions</span></button>
-          <button class="cmd" id="btn-enrich-campaign"><span class="caret">❯</span><span class="cmd-name">BUILD MY CAMPAIGN</span><span class="cmd-desc">15–24 curated real sessions</span></button>
-          <button class="cmd primary" id="btn-enrich-start"><span class="caret">❯</span><span class="cmd-name">BEGIN LOCAL ENRICHMENT</span><span class="cmd-desc">creates a campaign overlay; raw cards remain intact</span></button>
-          <button class="cmd" id="btn-enrich-cancel"><span class="caret">❯</span><span class="cmd-name">CANCEL / CLOSE</span><span class="cmd-desc">discards staging only; keeps any ready campaign</span></button>
+          <button class="cmd" id="btn-enrich-cancel"><span class="caret">❯</span><span class="cmd-name">close</span><span class="cmd-desc">a running job keeps running; reopen to check on it</span></button>
         </div>
       </div>
     </div>

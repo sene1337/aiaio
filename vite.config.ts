@@ -199,10 +199,13 @@ function campaignEnrichmentPlugin(): Plugin {
       });
       server.middlewares.use('/__enrich/status', (req, res) => {
         if (req.method !== 'GET') { res.statusCode = 405; res.end(); return; }
-        json(res, job?.status ?? readStatus());
+        // llmCmd powers the consent screen: the player sees WHICH command
+        // will read their excerpts before confirming
+        json(res, { ...(job?.status ?? readStatus()), llmCmd: process.env.AIAIO_LLM_CMD ?? 'claude -p', jobLive: !!job });
       });
       server.middlewares.use('/__enrich/cancel', (req, res) => {
         if (!guardDevEndpoint(req, res)) return;
+        req.resume(); // consume the body — 'end' never fires on an unread stream
         req.on('end', () => {
           if (job) job.child.kill();
           job = null;
@@ -222,7 +225,7 @@ function campaignEnrichmentPlugin(): Plugin {
         let body = '';
         req.on('data', (chunk) => { body += chunk; if (body.length > 20_000) req.destroy(); });
         req.on('end', () => {
-          let payload: { profile?: string; selection?: string; pace?: string; tone?: string; remix?: string };
+          let payload: { profile?: string; selection?: string; pace?: string; tone?: string; remix?: string; baseline?: boolean };
           try { payload = JSON.parse(body); } catch { json(res, { status: 'failed', detail: 'Malformed enrichment request.' }, 400); return; }
           if (job) { json(res, { ...job.status, attached: true }); return; }
           const profile = payload.profile === 'opening' ? 'opening' : payload.profile === 'campaign' ? 'campaign' : null;
@@ -232,6 +235,7 @@ function campaignEnrichmentPlugin(): Plugin {
           if (!profile) { json(res, { status: 'failed', detail: 'Choose an Opening or Campaign.' }, 400); return; }
           const command = ['scripts/enrich-campaign.mjs', '--profile', profile, '--selection', selection, '--pace', pace, '--tone', String(payload.tone ?? 'dry mission control').slice(0, 80), '--status', statusPath];
           if (remix) command.push('--remix', remix);
+          if (payload.baseline === true) command.push('--baseline'); // the failure path's "build it deterministic" rescue
           const child = spawn('node', command, { env: envForLlmCmd(process.env.AIAIO_LLM_CMD ?? 'claude -p'), stdio: ['ignore', 'pipe', 'pipe'] });
           const initial = { status: 'running', detail: 'Starting local campaign enrichment.', profile, updatedAt: new Date().toISOString() };
           try { writeFileSync(statusPath, JSON.stringify(initial, null, 2) + '\n'); } catch { /* poller can still use in-memory status */ }
