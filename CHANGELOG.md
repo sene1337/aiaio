@@ -29,6 +29,12 @@ patch = fixes and copy).
   the view draws a pulsing chevron at its height.
 - **Directional damage**: the struck side of the screen burns brighter, so
   you know where the hit came from mid-chaos.
+- **The audio speaks a language now**: repeated zapper fire walks a pentatonic
+  run instead of detuned repeats (weapon spam becomes melody); subagents get a
+  three-fate motif family (ascending hire, inverted death, diminished-slide
+  corruption); shield absorbs, near misses, and permission grants earn
+  confirmation earcons (the warning/execution/confirmation rule); and the wall
+  heartbeat accelerates and rises in pitch as the forgetting closes in.
 
 ## [2.7.0] — 2026-07-13
 

@@ -143,7 +143,14 @@ class Audio {
     src.stop(t0 + dur + 0.02);
   }
 
-  zap(pan = 0): void { this.tone(this.vary(900), this.vary(240), 0.08, 'square', 0.5, 0, pan); }
+  private zapStep = 0;
+  /** repeated zaps walk a pentatonic run — weapon spam becomes music */
+  zap(pan = 0): void {
+    const run = [0, 3, 5, 7, 10, 7, 5, 3];
+    const semi = run[this.zapStep++ % run.length];
+    const f = 900 * Math.pow(2, semi / 12);
+    this.tone(this.vary(f, 0.01), this.vary(f * 0.28, 0.01), 0.08, 'square', 0.5, 0, pan);
+  }
 
   fire(heavy: boolean, pan = 0): void {
     if (heavy) { this.noise(0.18, 1600, 0.7, 0, pan); this.tone(160, 60, 0.22, 'sine', 0.9, 0, pan); }
@@ -187,11 +194,15 @@ class Audio {
   taskDone(): void { [523, 659, 784, 1047].forEach((f, i) => this.tone(f, f, 0.1, 'square', 0.5, i * 0.09, 0, 'ui')); }
   taskEaten(): void { this.tone(392, 370, 0.18, 'square', 0.6); this.tone(311, 260, 0.3, 'square', 0.6, 0.18); this.noise(0.25, 700, 0.4, 0.3); }
 
-  wallHeartbeat(): void {
+  /** closeness 0..1 (1 = wall on top of you): beats faster and higher */
+  wallHeartbeat(closeness = 0.5): void {
     const now = performance.now();
-    if (now - this.lastHeartbeat < 700) return;
+    const interval = 950 - 600 * Math.min(1, Math.max(0, closeness));
+    if (now - this.lastHeartbeat < interval) return;
     this.lastHeartbeat = now;
-    this.tone(55, 40, 0.16, 'sine', 1, 0, -0.85);
+    const f = 52 + 26 * closeness;
+    this.tone(f, f * 0.72, 0.16, 'sine', 0.85 + 0.3 * closeness, 0, -0.85);
+    if (closeness > 0.75) this.tone(f * 2, f * 1.6, 0.07, 'triangle', 0.3, 0.05, -0.85);
   }
 
   threatWarning(kind: string, pan = 0): void {
@@ -218,6 +229,24 @@ class Audio {
     if (perfect) base.forEach((f, i) => this.tone(f * 1.5, f * 1.5, 0.12, 'triangle', 0.4, 0.6 + i * 0.09, 0, 'ui'));
   }
   select(): void { this.tone(1600, 1600, 0.03, 'square', 0.25, 0, 0, 'ui'); }
+
+  /** subagent family: a small ascending hire-motif, its inversion for death,
+   *  and a diminished slide for corruption — one identity, three fates */
+  subagentSpawn(pan = 0): void {
+    [523, 659, 784].forEach((f, i) => this.tone(f, f, 0.07, 'triangle', 0.42, i * 0.07, pan));
+  }
+  subagentCorrupted(pan = 0): void {
+    this.tone(784, 740, 0.12, 'triangle', 0.5, 0, pan);
+    this.tone(622, 554, 0.16, 'sawtooth', 0.45, 0.12, pan);
+    this.tone(440, 311, 0.24, 'sawtooth', 0.5, 0.26, pan);
+  }
+  subagentDied(pan = 0): void {
+    [784, 659, 523].forEach((f, i) => this.tone(f, f * 0.96, 0.08, 'triangle', 0.4, i * 0.08, pan));
+  }
+  /** confirmation layer (three-part rule): danger resolved near you */
+  nearMiss(pan = 0): void { this.noise(0.09, 3200, 0.3, 0, pan); this.tone(1200, 300, 0.1, 'sine', 0.2, 0, pan); }
+  shieldAbsorb(): void { this.tone(330, 392, 0.09, 'triangle', 0.5); this.tone(392, 392, 0.05, 'triangle', 0.35, 0.08); }
+  permissionGranted(): void { [392, 523, 659, 784].forEach((f, i) => this.tone(f, f, 0.08, 'triangle', 0.45, i * 0.06, 0, 'ui')); }
 }
 
 export const audio = new Audio();

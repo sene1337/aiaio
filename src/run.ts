@@ -418,6 +418,7 @@ export class Run {
     if (this.avatar.shield > 0) {
       const absorbed = Math.min(this.avatar.shield, d);
       this.avatar.shield -= absorbed;
+      if (absorbed > 0) this.emit('shield_absorb', { absorbed });
       d -= absorbed;
     }
     if (d > 0) {

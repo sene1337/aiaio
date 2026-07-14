@@ -549,9 +549,13 @@ function routeAudio(type: string, data: Record<string, unknown>): void {
     case 'task_eaten': audio.taskEaten(); break;
     case 'update_install': audio.update(data.netBuff === true); break;
     case 'model_upgrade': audio.win(false); break;
-    case 'subagent_spawn': audio.pickup(); break;
-    case 'subagent_corrupted': audio.taskEaten(); break;
-    case 'subagent_eaten': audio.taskEaten(); break;
+    case 'subagent_spawn': audio.subagentSpawn(pan); break;
+    case 'subagent_corrupted': audio.subagentCorrupted(pan); break;
+    case 'subagent_eaten': audio.subagentDied(pan); break;
+    case 'subagent_died': audio.subagentDied(pan); break;
+    case 'perm_granted': audio.permissionGranted(); break;
+    case 'shield_absorb': audio.shieldAbsorb(); break;
+    case 'near_miss': audio.nearMiss(pan); break;
     case 'voluntary_compact': audio.update(true); break;
     case 'crate_choice': audio.select(); break;
     case 'pickup': audio.pickup(); break;
@@ -706,7 +710,8 @@ function frameBody(t: number): void {
       });
     }
     // wall proximity heartbeat (self rate-limited)
-    if (!run.over && run.avatar.x - run.wallX < 240) audio.wallHeartbeat();
+    const wallGapNow = run.avatar.x - run.wallX;
+    if (!run.over && wallGapNow < 300) audio.wallHeartbeat(1 - Math.max(0, wallGapNow) / 300);
     // observer's ambient judgment
     observer.tick(dt, run.over ? null : {
       wallGap: run.avatar.x - run.wallX,
