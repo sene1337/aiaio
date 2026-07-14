@@ -67,6 +67,25 @@ function setCard(card: SessionCard, sourceName: string): void {
   const errs = (card.errors ?? []).reduce((s, e) => s + (e.count ?? 1), 0);
   status.textContent = `✔ ${sourceName}: "${card.session_id ?? '?'}", ${errs} errors, ` +
     `${card.tasks?.length ?? 0} tasks, stability ${card.stability_score ?? 'n/a'}`;
+  // the hero panel is the menu's focal point: what you picked, why it matters
+  const hero = document.getElementById('hero-episode');
+  if (hero) {
+    const kicker = hero.querySelector('.hero-kicker');
+    const headline = hero.querySelector('.hero-headline');
+    const facts = hero.querySelector('.hero-facts');
+    if (kicker) kicker.textContent = 'SELECTED EPISODE';
+    if (headline) {
+      headline.textContent = episodeHeadline(card);
+      headline.classList.remove('dim');
+    }
+    if (facts) {
+      facts.textContent = [
+        card.when, card.harness,
+        `${card.tasks?.length ?? 0} tasks`, `${errs} errors`,
+        card.goal ? `goal: ${card.goal.slice(0, 90)}` : '',
+      ].filter(Boolean).join(' · ');
+    }
+  }
 }
 
 function wireCardSlot(): void {

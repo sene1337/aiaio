@@ -41,12 +41,35 @@ html, body {
 .hidden { display: none !important; }
 .dim { color: var(--dim); }
 
-/* ---- menu ---- */
-.menu-inner, .briefing-inner {
+/* ---- menu: a no-scroll TUI workspace. The page never scrolls; panes do. ---- */
+.briefing-inner {
   margin: auto; max-width: 920px; width: 94%;
   display: flex; flex-direction: column; align-items: center; gap: 14px;
   padding: 24px 0; overflow-y: auto; max-height: 100vh;
 }
+#menu-header {
+  display: flex; align-items: center; gap: 22px;
+  padding: 10px 20px 8px; border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+#menu-header .ascii-logo { font-size: 8px; line-height: 1.1; }
+#menu-title-block { font-size: 12px; line-height: 1.6; }
+#menu-title-block .credit { margin-top: 2px; }
+#menu-workspace {
+  flex: 1 1 auto; min-height: 0;
+  display: grid; grid-template-columns: minmax(400px, 46%) minmax(0, 1fr);
+}
+.pane { min-height: 0; overflow-y: auto; padding: 12px 18px; }
+#pane-map { border-right: 1px solid var(--border); }
+#pane-hero { display: flex; flex-direction: column; gap: 12px; max-width: 620px; }
+#hero-episode {
+  border: 1px solid var(--border); background: var(--bg-panel);
+  padding: 12px 14px; line-height: 1.6;
+}
+.hero-kicker { color: var(--green); font-size: 11px; letter-spacing: 0.09em; margin-bottom: 4px; }
+.hero-headline { font-size: 14px; color: var(--text); }
+.hero-facts { font-size: 11px; color: var(--dim); margin-top: 4px; }
+.drop-mini { padding: 8px; font-size: 11px; }
 .ascii-logo {
   color: var(--clay); font-size: 11px; line-height: 1.15; text-align: left;
   user-select: none;

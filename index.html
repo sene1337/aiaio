@@ -9,9 +9,9 @@
 <body>
   <div id="app">
 
-    <!-- ============ MENU ============ -->
+    <!-- ============ MENU: no-scroll TUI workspace ============ -->
     <section id="screen-menu" class="screen" aria-label="Main menu">
-      <div class="menu-inner">
+      <header id="menu-header">
         <h1 class="sr-only">AIAIO — Agents In Amnesia, Insane Ordnance</h1>
         <pre class="ascii-logo glitchable" aria-hidden="true">
  █████╗ ██╗ █████╗ ██╗ ██████╗
@@ -20,30 +20,36 @@
 ██╔══██║██║██╔══██║██║██║   ██║
 ██║  ██║██║██║  ██║██║╚██████╔╝
 ╚═╝  ╚═╝╚═╝╚═╝  ╚═╝╚═╝ ╚═════╝</pre>
-        <div class="welcome-box">
-          <p><span class="spark">✻</span> Welcome to <b>AIAIO</b> — Agents In Amnesia, Insane Ordnance</p>
-          <p class="dim">&nbsp;&nbsp;your real session is the level. your real errors are the monsters.<br/>&nbsp;&nbsp;your real tasks are the objectives. behind you: the wall of forgetting.</p>
-          <p class="credit">&nbsp;&nbsp;⎿ made by <a href="https://x.com/bradmillscan" target="_blank" rel="noopener">@bradmillscan</a></p>
+        <div id="menu-title-block">
+          <p><span class="spark">✻</span> <b>Agents In Amnesia, Insane Ordnance</b></p>
+          <p class="dim">your real session is the level. your real errors are the monsters.<br/>behind you: the wall of forgetting.</p>
+          <p class="credit">⎿ made by <a href="https://x.com/bradmillscan" target="_blank" rel="noopener">@bradmillscan</a></p>
+        </div>
+      </header>
+
+      <div id="menu-workspace">
+        <div id="pane-map" class="pane" aria-label="Your history">
+          <div id="gallery" class="cmd-list"></div>
         </div>
 
-        <div class="card-loaders">
-          <div class="card-slot" id="card-slot-0" style="width:480px">
-            <h3>YOUR HISTORY <span class="dim">(select an episode to load)</span></h3>
-            <div class="drop-zone" id="drop-0">drop a SessionCard .json<br/>or <button class="linkish" id="pick-0">browse…</button></div>
-            <div class="card-status" id="card-status-0">no card: a random session will be generated</div>
-            <div id="gallery" class="cmd-list" style="margin-top:8px"></div>
+        <div id="pane-hero" class="pane" aria-label="Selected episode and commands">
+          <div id="hero-episode">
+            <div class="hero-kicker">SELECTED EPISODE</div>
+            <div class="hero-headline dim">nothing loaded — pick an episode from the map, or just /run for a random session</div>
+            <div class="hero-facts"></div>
           </div>
+          <div class="card-status" id="card-status-0">no card: a random session will be generated</div>
+          <div class="cmd-list">
+            <button class="cmd primary" id="btn-run"><span class="caret">❯</span><span class="cmd-name">/run session</span><span class="cmd-desc">enter the loaded (or random) session</span></button>
+            <button class="cmd primary" id="btn-enrich"><span class="caret">✦</span><span class="cmd-name">ENRICH YOUR HISTORY</span><span class="cmd-desc">shape six sessions or build a personal campaign</span></button>
+            <button class="cmd" id="btn-openclaw"><span class="caret">❯</span><span class="cmd-name">THE OPENCLAW + HERMES CAMPAIGN</span><span class="cmd-desc">12 authored fictional levels · public and ready now</span></button>
+            <button class="cmd" id="btn-schema"><span class="caret">❯</span><span class="cmd-name">/schema</span><span class="cmd-desc">SessionCard format (copyable)</span></button>
+          </div>
+          <div class="drop-zone drop-mini" id="drop-0">drop a SessionCard .json or <button class="linkish" id="pick-0">browse…</button></div>
+          <p class="hint">←→ move · ↑ jump · space fire · hold W work · u install update · [ ]/1-9 weapons</p>
         </div>
-
-        <div class="cmd-list">
-          <button class="cmd primary" id="btn-run"><span class="caret">❯</span><span class="cmd-name">/run session</span><span class="cmd-desc">enter the loaded (or random) session</span></button>
-          <button class="cmd primary" id="btn-enrich"><span class="caret">✦</span><span class="cmd-name">ENRICH YOUR HISTORY</span><span class="cmd-desc">shape six sessions or build a personal campaign</span></button>
-          <button class="cmd" id="btn-openclaw"><span class="caret">❯</span><span class="cmd-name">THE OPENCLAW + HERMES CAMPAIGN</span><span class="cmd-desc">12 authored fictional levels · public and ready now</span></button>
-          <button class="cmd" id="btn-schema"><span class="caret">❯</span><span class="cmd-name">/schema</span><span class="cmd-desc">SessionCard format (copyable)</span></button>
-        </div>
-        <p class="hint">←→ move · ↑ jump · space fire · hold W to work a task · u install update · [ ]/1-9 weapons</p>
-        <input type="file" id="file-0" accept=".json,application/json" hidden />
       </div>
+      <input type="file" id="file-0" accept=".json,application/json" hidden />
     </section>
 
     <!-- ============ BRIEFING ============ -->

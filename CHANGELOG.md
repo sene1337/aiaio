@@ -5,6 +5,17 @@ All notable changes to AIAIO are documented here. Format follows
 [semver](https://semver.org/) (minor = new player-facing capability,
 patch = fixes and copy).
 
+## [2.8.0] — 2026-07-14 — THE FEEL PASS (overnight build)
+
+### Changed
+- **No-scroll front door**: the menu is now a viewport-locked TUI workspace —
+  compact logo header, Memory Map / Library in a left pane that scrolls
+  internally, and a hero panel on the right showing the selected episode
+  (headline, date, harness, tasks, errors, goal) beside the commands. The
+  page body never scrolls.
+- ENRICH entry point gated behind a readiness flag until the Stage B honest
+  UX ships (docs/specs/enrich-campaign.md).
+
 ## [2.7.0] — 2026-07-13
 
 ### Added
