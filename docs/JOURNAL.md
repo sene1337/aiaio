@@ -303,6 +303,11 @@ turns out wrong, append a correction.
   (md5 sweep before/after), tests green throughout. Found and fixed two
   latent Stage B bugs: manifest/client digest parity, unconsumed cancel
   stream.
+- Addendum (same night): BUILD MY CAMPAIGN verified end-to-end through the
+  real UI too — 24/24 episodes custom-written, premiere shown, cards still
+  byte-identical. NOTE: both depths write cards/campaigns/latest.json, so the
+  24-level personal campaign REPLACED the 6-level Opening (MY CAMPAIGN now
+  shows the campaign). Multi-slot manifests are a v-next spec question.
 - Open: main is merged LOCALLY only — Brad defers the Pages deploy;
   `git push origin main` is the one-command morning deploy. Remix (Stage D)
   and richer error-wave staging remain per spec. The burnout persona ships
