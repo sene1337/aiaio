@@ -14,8 +14,10 @@ import {
 } from './context';
 import { rollUpdate, UpdateTarget } from './updates';
 import { AgentLoadout, SessionCard } from './session';
-import { Enemy, EnemyKind, makeEnemy, categoryToEnemy, ENEMY_DEFS, allocateSpawns } from './enemies';
+import { Enemy, EnemyKind, makeEnemy, ENEMY_DEFS } from './enemies';
 import { hashString } from './rng';
+import { CampaignEntry, CampaignRecipe, CombatModifiers } from './campaign';
+import { LevelPlan, SessionDirector } from './session-director';
 
 export const RUN_COST = {
   fireDivisor: 4,   // weapon tokenCost / this = per-shot cost (was 6; firing felt free)
@@ -208,6 +210,8 @@ export interface RunSetup {
   loadout: AgentLoadout;
   card: SessionCard;
   name: string;
+  campaignEntry?: CampaignEntry;
+  campaignRecipe?: CampaignRecipe;
 }
 
 export class Run {
@@ -216,6 +220,7 @@ export class Run {
   loadout: AgentLoadout;
   card: SessionCard;
   name: string;
+  combat: CombatModifiers;
 
   avatar: Avatar;
   ctx: ContextMeter;
@@ -272,6 +277,7 @@ export class Run {
   private touchCooldowns = new Map<Enemy, number>();
   private wallWarned = false;
   private moveAccum = 0;
+  private observerInterventions = new Map<Enemy, string>();
 
   constructor(setup: RunSetup) {
     this.loadout = setup.loadout;
@@ -297,14 +303,22 @@ export class Run {
       aimJitter: 0, damageMult: 1, tokenCostMult: 1,
       hardening: this.loadout.hardening,
     };
-    // struggle handicap, solo edition: unstable agents get compensation up front
-    if (this.loadout.stability < 45) {
+    const plan = SessionDirector.compile(this.card, {
+      width,
+      entry: setup.campaignEntry,
+      recipe: setup.campaignRecipe,
+    });
+    this.combat = plan.combat;
+    // struggle handicap, solo edition: unstable agents get compensation up front.
+    // Brutal Remix explicitly removes this compensation.
+    if (this.combat.stabilityHandicap && this.loadout.stability < 45) {
       const gap = 45 - this.loadout.stability;
       this.avatar.shield = Math.round(10 + gap * 0.6);
       this.avatar.damageMult = 1 + gap * 0.006;
       this.pushLog(`⚑ handicap: +${this.avatar.shield} shield, ×${this.avatar.damageMult.toFixed(2)} damage. ` +
         `stability ${this.loadout.stability}/100. struggling agents get armor.`);
     }
+    if (this.combat.bonusShield > 0) this.avatar.shield += this.combat.bonusShield;
 
     this.ctx = makeContextMeter(this.loadout.tokenBudget, this.loadout.compactionThreshold);
     this.queue = makeTaskQueue(this.loadout.tasks);
@@ -324,7 +338,7 @@ export class Run {
       });
     }
 
-    this.buildLevel(width);
+    this.applyLevelPlan(plan);
     this.wallX = -260;
     this.goal = this.card.goal ? String(this.card.goal).slice(0, 120) : null;
     this.pushBanner({
@@ -342,94 +356,24 @@ export class Run {
   // level generation: the session timeline becomes geography
   // -------------------------------------------------------------------------
 
-  private buildLevel(width: number): void {
-    const rng = this.rng.fork('level');
-    // interactables must not stack visually — nudge to >= 110px apart
-    const occupied: number[] = [];
-    const place = (x: number): number => {
-      let nx = Math.max(60, Math.min(width - 80, x));
-      let guard = 0;
-      while (occupied.some((ox) => Math.abs(ox - nx) < 110) && guard++ < 60) nx += 110;
-      nx = Math.min(width - 80, nx);
-      occupied.push(nx);
-      return nx;
-    };
-
-    // task stations: at their REAL timeline positions when the card knows them,
-    // else spread across the timeline in queue order
-    const n = this.queue.tasks.length;
-    for (let i = 0; i < n; i++) {
-      const realAt = this.loadout.tasks[i]?.at;
-      const frac = typeof realAt === 'number'
-        ? Math.max(0.08, Math.min(0.92, realAt))
-        : 0.14 + (i + rng.range(0.1, 0.5)) * (0.72 / n);
-      const x = place(Math.round(width * frac));
-      this.stations.push({ x, y: this.terrain.surfaceAt(x), taskIndex: i, workAccum: 0 });
+  private applyLevelPlan(plan: LevelPlan): void {
+    for (const station of plan.stations) {
+      this.stations.push({ x: station.x, y: this.terrain.surfaceAt(station.x), taskIndex: station.taskIndex, workAccum: 0 });
     }
-
-    // moments: real session lines standing where they happened
-    for (const m of this.card.moments ?? []) {
-      if (!m.text) continue;
-      const frac = typeof m.at === 'number' ? Math.max(0.05, Math.min(0.97, m.at)) : rng.range(0.1, 0.9);
-      this.moments.push({ x: Math.round(width * frac), kind: m.kind ?? 'note', text: String(m.text).slice(0, 110), seen: false });
+    for (const moment of plan.moments) {
+      this.moments.push({ ...moment, seen: false });
     }
-
-    // enemies from the card's real errors, placed along the timeline;
-    // spawn counts come from the ramped global budget (see allocateSpawns)
-    const errors = (this.card.errors ?? []).filter((e) => e && (e.category || e.type));
-    const spawnAlloc = allocateSpawns(errors.map((e) => ({
-      category: e.category || e.type || 'unknown', count: Math.max(1, Math.floor(e.count ?? 1)),
-    })));
-    for (let ei = 0; ei < errors.length; ei++) {
-      const err = errors[ei];
-      const cat = err.category || err.type || 'unknown';
-      const kind = categoryToEnemy(cat);
-      const count = Math.max(1, Math.floor(err.count ?? 1));
-      const spawnN = spawnAlloc[ei];
-      if (spawnN <= 0) continue;
-      const source = err.sample ? `${cat} ×${count}: "${err.sample.slice(0, 70)}"` : `${cat} ×${count}`;
-      const realAts = (err.at ?? []).filter((a) => a > 0.12); // not right on spawn
-      for (let i = 0; i < spawnN; i++) {
-        // spawn where the error actually happened when the card knows it
-        const x = realAts.length > 0
-          ? Math.round(width * Math.max(0.15, Math.min(0.95, realAts[i % realAts.length])))
-          : Math.round(width * rng.range(0.18, 0.95));
-        const floats = kind === 'hallucination_ghost' || kind === 'recovery_sprite';
-        const y = this.terrain.surfaceAt(x) - (floats ? rng.range(60, 150) : 10);
-        this.enemies.push(makeEnemy(kind, x, y, source));
-      }
+    for (const encounter of plan.encounters) {
+      const floats = encounter.kind === 'hallucination_ghost' || encounter.kind === 'recovery_sprite';
+      const y = this.terrain.surfaceAt(encounter.x) - (floats ? this.rng.range(60, 150) : 10);
+      const enemy = makeEnemy(encounter.kind, encounter.x, y, encounter.sourceLine, false, encounter.origin);
+      this.enemies.push(enemy);
+      if (encounter.origin === 'observer' && encounter.observerLine) this.observerInterventions.set(enemy, encounter.observerLine);
     }
-    // playability floor: an empty error log still gets a light welcoming committee
-    if (this.enemies.filter((e) => !e.def.friendly).length === 0) {
-      for (let i = 0; i < 3; i++) {
-        const x = Math.round(width * rng.range(0.3, 0.9));
-        this.enemies.push(makeEnemy('regression_splitter', x, this.terrain.surfaceAt(x) - 10,
-          'no errors on record. these three came anyway'));
-      }
+    for (const crate of plan.crates) {
+      this.crates.push({ x: crate.x, y: this.terrain.surfaceAt(crate.x) - 10, used: false, kind: crate.kind });
     }
-    // recoveries → a couple of skittish friendly sprites (they flee — recovery
-    // is never where you need it)
-    const recoveries = Math.floor(this.card.recoveries ?? 0);
-    for (let i = 0; i < Math.min(2, Math.ceil(recoveries / 3)); i++) {
-      const x = Math.round(width * rng.range(0.25, 0.9));
-      this.enemies.push(makeEnemy('recovery_sprite', x, this.terrain.surfaceAt(x) - rng.range(40, 90),
-        `recoveries: ${recoveries} on record`));
-    }
-
-    // patch crates from restarts + model_switches (risk rolls)
-    const crateN = Math.max(1, Math.min(4, Math.floor((this.card.restarts ?? 0) + (this.card.model_switches ?? 0))));
-    for (let i = 0; i < crateN; i++) {
-      const x = place(Math.round(width * rng.range(0.2, 0.88)));
-      this.crates.push({ x, y: this.terrain.surfaceAt(x) - 10, used: false, kind: 'patch' });
-    }
-    // one ◈ MODEL UPGRADE crate mid-to-late level — the "new model released" moment
-    const mx = place(Math.round(width * rng.range(0.5, 0.78)));
-    this.crates.push({ x: mx, y: this.terrain.surfaceAt(mx) - 10, used: false, kind: 'model' });
-
-    // the Task-tool permission terminal, early in the timeline: delegation
-    // must be granted, not assumed
-    const px = place(Math.round(width * rng.range(0.09, 0.16)));
-    this.permTerminal = { x: px, y: this.terrain.surfaceAt(px), claimed: false };
+    this.permTerminal = { x: plan.permissionTerminalX, y: this.terrain.surfaceAt(plan.permissionTerminalX), claimed: false };
   }
 
   // -------------------------------------------------------------------------
@@ -462,9 +406,9 @@ export class Run {
     return this.recentDamage.filter((d) => this.time - d.t < 4).reduce((s, d) => s + d.dmg, 0);
   }
 
-  damageAvatar(dmg: number, source: string): void {
+  damageAvatar(dmg: number, source: string, fromEnemy = true): void {
     if (this.over) return;
-    let d = dmg;
+    let d = fromEnemy ? Math.round(dmg * this.combat.enemyDamageMultiplier) : dmg;
     if (this.avatar.headsDown) {
       d = Math.round(d * 1.25);
       this.pushLog(`⌨ caught heads-down by ${source} (+25% damage)`);
@@ -1164,7 +1108,7 @@ export class Run {
       this.emit('kill', { enemy: e.def.kind, mini: e.mini, direct, x: e.x, y: e.y, by });
       if (e.def.kind === 'regression_splitter' && !e.mini) {
         for (let i = 0; i < 2; i++) {
-          const m = makeEnemy('regression_splitter', e.x + this.rng.range(-24, 24), e.y - 8, e.sourceLine, true);
+          const m = makeEnemy('regression_splitter', e.x + this.rng.range(-24, 24), e.y - 8, e.sourceLine, true, e.origin);
           this.enemies.push(m);
         }
         this.pushLog('☢ it split. of course it split.');
@@ -1192,6 +1136,11 @@ export class Run {
       if (e.dead) continue;
       const dist = Math.abs(e.x - a.x);
       if (dist > 1000) continue; // sleep until the player is near
+      const intervention = this.observerInterventions.get(e);
+      if (intervention && dist < 700) {
+        this.observerInterventions.delete(e);
+        this.emit('observer_intervention', { line: intervention, x: Math.round(e.x), y: Math.round(e.y) });
+      }
       e.cooldown -= dt;
       e.stateTimer += dt;
 
@@ -1490,7 +1439,7 @@ export class Run {
     // self splash
     const dSelf = Math.hypot(this.avatar.x - x, this.avatar.y - 6 - y);
     if (dSelf < radius * 0.8 && damage > 0) {
-      this.damageAvatar(Math.round(damage * 0.3 * Math.max(0.3, 1 - dSelf / radius)), 'your own ordnance');
+      this.damageAvatar(Math.round(damage * 0.3 * Math.max(0.3, 1 - dSelf / radius)), 'your own ordnance', false);
     }
     this.dirty++;
   }

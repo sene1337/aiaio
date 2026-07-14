@@ -5,7 +5,7 @@ import { Run, RunInput } from './run';
 import { UI, escapeHtml } from './ui';
 import {
   SessionCard, parseSessionCard, loadoutFromCard, randomCard,
-  EXAMPLE_CLEAN, EXAMPLE_CHAOTIC, SESSION_CARD_SCHEMA, SessionMode,
+  SESSION_CARD_SCHEMA, SessionMode,
 } from './session';
 import { qa } from './telemetry';
 import { audio } from './audio';
@@ -15,7 +15,9 @@ import { startLogoLoop } from './logo';
 import {
   LevelEntry, difficulty, tierOf, TIERS, getProgress, isCleared,
   isPerfect, isSurvived, campaignOutcome, computeRank, recordResult, CampaignOutcome,
+  getCampaignProgress, isCampaignOrderUnlocked, recordCampaignResult,
 } from './levels';
+import { CampaignEntry, CampaignManifest, sourceDigest, validateManifest } from './campaign';
 import { doneUnits, progressFrac, totalUnits } from './tasks';
 import { buildMemoryMap, focusedChapter, MemoryChapter } from './history';
 import { episodeHeadline } from './episode-summary.js';
@@ -45,6 +47,8 @@ type QAAutoplayController = import('../qa/autoplay').AutoplayController;
 let qaAutoplay: QAAutoplayController | null = null;
 let qaAutoplayCard: SessionCard | null = null;
 let qaAutoplayMode: SessionMode = 'demo';
+let gallerySessionCount = 0;
+type CampaignRun = { manifest: CampaignManifest; entry: CampaignEntry };
 
 function showScreen(id: ScreenId): void {
   for (const s of ['menu', 'briefing', 'match', 'recap']) {
@@ -120,6 +124,7 @@ async function loadGallery(): Promise<void> {
     const index: Array<{ file: string; session_id: string; errors: number; enemies?: number; tasks: number; stability: number | null }> = await res.json();
     if (!Array.isArray(index) || index.length === 0) throw new Error('empty');
     const entries = index as LevelEntry[];
+    gallerySessionCount = entries.filter((entry) => entry.harness !== 'fictional').length;
     const PER_FOLDER = 24;
     const openTiers = new Set<number>();
     let view: 'journey' | 'library' = 'journey';
@@ -144,12 +149,6 @@ async function loadGallery(): Promise<void> {
       try {
         const cardRes = await fetch(`./cards/${entry.file}`);
         setCard(parseSessionCard(await cardRes.text()), entry.file);
-        if (import.meta.env.DEV) {
-          fetch('/__enrich', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ file: entry.file }),
-          }).catch(() => { /* enrichment is a bonus, never a blocker */ });
-        }
       } catch {
         $('card-status-0').textContent = `✕ could not load ${entry.file}`;
       }
@@ -157,9 +156,8 @@ async function loadGallery(): Promise<void> {
     const makeEntryButton = (entry: LevelEntry, extra = ''): HTMLButtonElement => {
       const btn = document.createElement('button');
       btn.className = 'cmd level';
-      const star = entry.file.endsWith('.enriched.json') ? '<span style="color:var(--purple)">✦ </span>' : '';
       btn.title = [entryHeadline(entry), entry.goal, entryMeta(entry)].filter(Boolean).join('\n');
-      btn.innerHTML = `<span class="caret">❯</span><span class="cmd-name">${entryGlyph(entry)} ${star}${escapeHtml(entryHeadline(entry))}</span>` +
+      btn.innerHTML = `<span class="caret">❯</span><span class="cmd-name">${entryGlyph(entry)} ${escapeHtml(entryHeadline(entry))}</span>` +
         `<span class="cmd-desc">${escapeHtml(entryMeta(entry))}${extra}</span>`;
       btn.addEventListener('click', () => { void loadEntry(entry); });
       return btn;
@@ -235,8 +233,7 @@ async function loadGallery(): Promise<void> {
       const q = libraryFilter.trim().toLowerCase();
       const buckets: LevelEntry[][] = TIERS.map(() => []);
       for (const entry of entries) {
-        const enrichedKey = entry.file.endsWith('.enriched.json') ? 'enriched curated' : '';
-        if (q && !`${entryGoal(entry)} ${entry.session_id} ${entry.harness ?? ''} ${entry.when ?? ''} ${enrichedKey}`.toLowerCase().includes(q)) continue;
+        if (q && !`${entryGoal(entry)} ${entry.session_id} ${entry.harness ?? ''} ${entry.when ?? ''}`.toLowerCase().includes(q)) continue;
         buckets[tierOf(difficulty(entry)).index].push(entry);
       }
       buckets.forEach((bucket) => bucket.sort((a, b) => {
@@ -253,7 +250,7 @@ async function loadGallery(): Promise<void> {
       const input = document.createElement('input');
       input.id = 'gallery-filter';
       input.setAttribute('aria-label', 'Filter sessions by goal, harness, or date');
-      input.placeholder = 'filter by goal, harness (openclaw/hermes/claude), date, or "enriched"…';
+      input.placeholder = 'filter by goal, harness (openclaw/hermes/claude), or date…';
       input.value = libraryFilter;
       input.addEventListener('input', () => { libraryFilter = input.value; render(); });
       box.appendChild(input);
@@ -304,10 +301,120 @@ async function loadGallery(): Promise<void> {
 // run setup
 // ---------------------------------------------------------------------------
 
-function prepareRun(card: SessionCard, mode: SessionMode): void {
+async function fetchCampaign(path: string): Promise<CampaignManifest> {
+  const response = await fetch(path, { cache: 'no-store' });
+  if (!response.ok) throw new Error('Campaign is not ready yet.');
+  const manifest: unknown = await response.json();
+  if (!validateManifest(manifest)) throw new Error('Campaign manifest is malformed and was not loaded.');
+  return manifest;
+}
+
+function showPremiere(manifest: CampaignManifest): void {
+  const modal = $('modal-premiere');
+  const first = manifest.entries[0];
+  const mode = manifest.kind === 'fictional' ? 'FICTIONAL PUBLIC CAMPAIGN'
+    : manifest.kind === 'remix' ? `REMIX · ${manifest.recipe.remixProfile?.toUpperCase() ?? 'BALANCED'}`
+      : 'FACTUAL LOCAL CAMPAIGN';
+  $('premiere-title').textContent = manifest.kind === 'fictional' ? 'THE OPENCLAW + HERMES CAMPAIGN' : `${manifest.kind === 'opening' ? 'MY OPENING' : 'MY CAMPAIGN'}`;
+  $('premiere-copy').textContent = `${mode} · ${manifest.entries.length} levels · ${manifest.writerStatus === 'custom' ? 'authored presentation ready' : 'baseline presentation ready'}`;
+  $('premiere-first').textContent = `01 · ${first.title ?? first.sourceSessionId}`;
+  $('btn-premiere-begin').onclick = () => { modal.classList.add('hidden'); void startCampaign(manifest, first); };
+  const levels = $('premiere-levels');
+  levels.replaceChildren();
+  const progress = getCampaignProgress(manifest);
+  for (const entry of manifest.entries) {
+    const button = document.createElement('button');
+    const unlocked = isCampaignOrderUnlocked(progress, entry.order);
+    button.className = `cmd${unlocked ? '' : ' disabled'}`;
+    button.disabled = !unlocked;
+    button.innerHTML = `<span class="caret">${unlocked ? '❯' : '·'}</span><span class="cmd-name">${String(entry.order).padStart(2, '0')} · ${escapeHtml(entry.title ?? entry.sourceSessionId)}</span><span class="cmd-desc">${unlocked ? 'play level' : 'clear the previous level to unlock'}</span>`;
+    if (unlocked) button.addEventListener('click', () => { modal.classList.add('hidden'); void startCampaign(manifest, entry); });
+    levels.appendChild(button);
+  }
+  modal.classList.remove('hidden');
+}
+
+async function startCampaign(manifest: CampaignManifest, entry: CampaignEntry): Promise<void> {
+  const progress = getCampaignProgress(manifest);
+  if (!isCampaignOrderUnlocked(progress, entry.order)) {
+    $('enrich-status').textContent = `Level ${entry.order} unlocks after you clear level ${entry.order - 1}.`;
+    $('modal-enrich').classList.remove('hidden');
+    return;
+  }
+  try {
+    const response = await fetch(`./cards/${entry.file}`, { cache: 'no-store' });
+    if (!response.ok) throw new Error('The campaign source card is unavailable.');
+    const card = parseSessionCard(await response.text());
+    if (manifest.kind !== 'fictional' && sourceDigest(card) !== entry.sourceDigest) {
+      throw new Error('This campaign no longer matches its source snapshot. Enrich again after rescanning.');
+    }
+    const mode: SessionMode = manifest.kind === 'fictional' ? 'fictional' : manifest.kind === 'remix' ? 'remix' : 'real';
+    prepareRun(card, mode, { manifest, entry });
+  } catch (error) {
+    $('enrich-status').textContent = error instanceof Error ? error.message : String(error);
+    $('modal-enrich').classList.remove('hidden');
+  }
+}
+
+function openEnrichment(profile: 'opening' | 'campaign'): void {
+  const modal = $('modal-enrich');
+  const need = profile === 'opening' ? 6 : 15;
+  $('enrich-title').textContent = profile === 'opening' ? 'SHAPE MY OPENING' : 'BUILD MY CAMPAIGN';
+  $('enrich-copy').textContent = profile === 'opening'
+    ? 'Creates six chronological real-session levels. Your raw SessionCards stay unchanged.'
+    : 'Creates a curated 15–24-level campaign. Your raw SessionCards stay unchanged.';
+  $('enrich-consent').textContent = `This sends redacted session excerpts from ${need} or more local cards to your configured AI for campaign presentation. It never uploads them in a hosted build.`;
+  $('enrich-status').textContent = gallerySessionCount < need
+    ? `You need ${need} eligible sessions; ${gallerySessionCount} are currently available. Library play remains available — try the public campaign meanwhile.`
+    : 'Review the notice, then begin the local job.';
+  const begin = $('btn-enrich-start') as HTMLButtonElement;
+  begin.disabled = gallerySessionCount < need || !import.meta.env.DEV;
+  begin.onclick = () => { void beginEnrichment(profile); };
+  modal.classList.remove('hidden');
+}
+
+let enrichmentPoll: number | null = null;
+
+async function beginEnrichment(profile: 'opening' | 'campaign'): Promise<void> {
+  if (!import.meta.env.DEV) { $('enrich-status').textContent = 'Personal enrichment is local-dev only. The public campaign is ready to play.'; return; }
+  $('enrich-status').textContent = 'Starting local campaign enrichment…';
+  try {
+    const response = await fetch('/__enrich/campaign', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profile, selection: 'story', pace: 'balanced', tone: 'dry mission control' }),
+    });
+    const status = await response.json() as { status?: string; detail?: string };
+    $('enrich-status').textContent = status.detail ?? 'Enrichment started.';
+    if (enrichmentPoll !== null) window.clearInterval(enrichmentPoll);
+    enrichmentPoll = window.setInterval(() => { void pollEnrichment(); }, 1200);
+  } catch { $('enrich-status').textContent = 'Could not start the local enrichment job.'; }
+}
+
+async function pollEnrichment(): Promise<void> {
+  try {
+    const response = await fetch('/__enrich/status', { cache: 'no-store' });
+    const status = await response.json() as { status?: string; detail?: string };
+    $('enrich-status').textContent = status.detail ?? String(status.status ?? 'working');
+    if (status.status === 'ready') {
+      if (enrichmentPoll !== null) { window.clearInterval(enrichmentPoll); enrichmentPoll = null; }
+      $('modal-enrich').classList.add('hidden');
+      showPremiere(await fetchCampaign('./cards/campaigns/latest.json'));
+    }
+    if (status.status === 'failed' || status.status === 'cancelled') {
+      if (enrichmentPoll !== null) { window.clearInterval(enrichmentPoll); enrichmentPoll = null; }
+    }
+  } catch { /* the next poll can recover after Vite reloads */ }
+}
+
+function prepareRun(card: SessionCard, mode: SessionMode, campaign?: CampaignRun): void {
   runCounter++;
   const name = card.session_id ? `agent:${String(card.session_id).slice(0, 14)}` : 'AGENT-01';
-  const loadout = loadoutFromCard(card, name, { mode });
+  let loadout = loadoutFromCard(card, name, { mode });
+  // Campaign task labels are display copy only. Counts, timeline positions,
+  // completion, and the untouched SessionCard remain source-derived.
+  if (campaign?.entry.taskLabel && loadout.tasks.length > 0) {
+    loadout = { ...loadout, tasks: loadout.tasks.map((task, index) => index === 0 ? { ...task, name: campaign.entry.taskLabel! } : task) };
+  }
   // campaign context for the briefing: computed difficulty + any existing rank
   const entryLike: LevelEntry = {
     file: '', session_id: String(card.session_id ?? 'unknown'),
@@ -320,7 +427,7 @@ function prepareRun(card: SessionCard, mode: SessionMode): void {
   const diff = difficulty(entryLike);
   const prevProgress = getProgress(entryLike.session_id);
 
-  run = new Run({ loadout, card, name });
+  run = new Run({ loadout, card, name, campaignEntry: campaign?.entry, campaignRecipe: campaign?.manifest.recipe });
   (window as any).__aiaio = run; // debug/testing handle
   recapShown = false;
   progressRecorded = false;
@@ -354,6 +461,7 @@ function prepareRun(card: SessionCard, mode: SessionMode): void {
       const rec = isRealRun
         ? recordResult(run.loadout.cardSummary.sessionId, rank, Number(data.score) || 0, outcome)
         : { newBest: false, rankUp: false, prev: null };
+      if (campaign) recordCampaignResult(campaign.manifest, campaign.entry.order, type === 'win', Number(data.score) || 0);
       lastRankInfo = {
         rank, newBest: rec.newBest, rankUp: rec.rankUp, prevBest: rec.prev?.bestScore ?? null,
         outcome, campaignRecorded: isRealRun,
@@ -373,9 +481,8 @@ function prepareRun(card: SessionCard, mode: SessionMode): void {
   });
   showScreen('briefing');
 
-  // the memory-lane roast: compositional immediately, LLM version (your own
-  // agent, dev-server only) swaps in when it arrives; whichever is current
-  // gets spoken once
+  // Campaign copy is authored during explicit enrichment. Starting a run never
+  // invokes an agent; the built-in roast remains the no-network fallback.
   const meta = {
     sessionId: String(card.session_id ?? 'unknown'),
     harness: card.harness ?? null,
@@ -397,34 +504,7 @@ function prepareRun(card: SessionCard, mode: SessionMode): void {
     spoken = true;
     observer.speakRoast(lines);
   };
-  if (import.meta.env.DEV) {
-    fetch('/__quip', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: meta.sessionId + ':briefing', data: meta }),
-    })
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('no quip'))))
-      .then(({ lines }: { lines: string[] }) => {
-        if (Array.isArray(lines) && lines.length > 0 && run === thisRun) {
-          ui.setBriefingRoast(lines, 'llm');
-          speakIfCurrent(lines);
-        }
-      })
-      .catch(() => { /* compositional fallback speaks below */ });
-    // bespoke in-game one-liner pack, written by your agent for THIS session
-    fetch('/__quip', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: meta.sessionId + ':pack', data: meta }),
-    })
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('no pack'))))
-      .then(({ lines }: { lines: string[] }) => {
-        if (Array.isArray(lines) && run === thisRun) observer.setSessionPack(lines);
-      })
-      .catch(() => observer.setSessionPack([]));
-  } else {
-    observer.setSessionPack([]);
-  }
+  observer.setSessionPack([]);
   window.setTimeout(() => speakIfCurrent(composed), 6000);
 }
 
@@ -673,8 +753,32 @@ function main(): void {
   $('btn-run').addEventListener('click', () => {
     prepareRun(loadedCard ?? randomCard(`random-session-${runCounter + 1}`), loadedCard ? 'real' : 'random');
   });
-  $('btn-example-clean').addEventListener('click', () => prepareRun(EXAMPLE_CLEAN, 'demo'));
-  $('btn-example-chaos').addEventListener('click', () => prepareRun(EXAMPLE_CHAOTIC, 'demo'));
+  $('btn-enrich').addEventListener('click', () => {
+    $('enrich-title').textContent = 'ENRICH YOUR HISTORY';
+    $('enrich-copy').textContent = 'Choose a focused opening or a curated campaign.';
+    $('enrich-consent').textContent = 'The configured local AI receives only redacted local SessionCard excerpts after you explicitly begin.';
+    $('enrich-status').textContent = 'Choose a campaign shape.';
+    const begin = $('btn-enrich-start') as HTMLButtonElement;
+    begin.disabled = true;
+    $('modal-enrich').classList.remove('hidden');
+  });
+  $('btn-enrich-opening').addEventListener('click', () => openEnrichment('opening'));
+  $('btn-enrich-campaign').addEventListener('click', () => openEnrichment('campaign'));
+  $('btn-enrich-cancel').addEventListener('click', () => {
+    if (enrichmentPoll !== null && import.meta.env.DEV) {
+      void fetch('/__enrich/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      window.clearInterval(enrichmentPoll); enrichmentPoll = null;
+    }
+    $('modal-enrich').classList.add('hidden');
+  });
+  $('btn-openclaw').addEventListener('click', () => {
+    void fetchCampaign('./cards/campaigns/openclaw-hermes.json').then(showPremiere).catch((error) => {
+      $('enrich-title').textContent = 'PUBLIC CAMPAIGN';
+      $('enrich-status').textContent = error instanceof Error ? error.message : String(error);
+      $('modal-enrich').classList.remove('hidden');
+    });
+  });
+  $('btn-premiere-close').addEventListener('click', () => $('modal-premiere').classList.add('hidden'));
 
   $('btn-start-match').addEventListener('click', () => {
     if (!run) return;

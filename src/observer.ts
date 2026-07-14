@@ -407,6 +407,16 @@ export class Observer {
 
   onEvent(type: string, data: Record<string, unknown>): void {
     switch (type) {
+      case 'observer_intervention':
+        // A Director-planned line is its disclosure. Do not replace it with a
+        // random pool or an individual enemy badge; that would obscure why the
+        // otherwise unrecorded encounter is here.
+        if (typeof data.line === 'string' && data.line.trim()) {
+          this.lastSpokeAt = this.time;
+          this.sink(`☏ observer: ${data.line}`);
+          this.speak(data.line);
+        }
+        break;
       case 'explosion':
         if (data.weapon === 'context_nuke') {
           this.nukeCount++;

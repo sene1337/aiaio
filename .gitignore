@@ -5,3 +5,4 @@ qa-logs/
 session-dumps/
 public/packs/
 promo/
+.gstack/

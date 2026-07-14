@@ -175,7 +175,7 @@ function main() {
   const freshIndex = [];
   // Preserve old mappings too: a capped rescan must not turn a retained card
   // into an orphaned dev-mode enrichment target.
-  const sources = existingSources(); // card file -> absolute source log path (for auto-enrich)
+  const sources = existingSources(); // card file -> absolute source log path (for explicit campaign enrichment)
   const usedNames = new Set();
   const seenBasenames = new Set(); // sessions get copied around — scan each once
   for (const root of roots) {
@@ -217,18 +217,9 @@ function main() {
         let file = `${slug}.json`;
         writeFileSync(join(outDir, file), JSON.stringify(card, null, 2) + '\n');
         sources[file] = f.path;
-        // if this session has been agent-enriched (see docs/ENRICH.md), the gallery
-        // gets that version — matched by session stem, since the content hash
-        // suffix changes whenever the log grows
-        const stem = slug.replace(/-[0-9a-f]{8}(-2)*$/, '');
-        const enriched = readdirSync(outDir)
-          .filter((f) => f.startsWith(stem) && f.endsWith('.enriched.json'))
-          .sort()
-          .pop();
-        if (enriched) file = enriched;
-        const enrichedNarrative = enriched ? readJson(join(outDir, enriched), card) : card;
-        const narrative = enrichedNarrative && typeof enrichedNarrative === 'object' && !Array.isArray(enrichedNarrative)
-          ? enrichedNarrative : card;
+        // Cards are immutable factual snapshots. Campaign enrichment publishes
+        // a separate manifest overlay instead of replacing a gallery card.
+        const narrative = card;
         // real threat estimate: mirrors the ramped global budget in
         // src/enemies.ts allocateSpawns() — keep the curve in sync
         const errTotal = (card.errors ?? []).reduce((s, e) => s + Math.max(1, e.count ?? 1), 0);
@@ -262,7 +253,7 @@ function main() {
   }
   const index = mergeIndex(priorIndex, freshIndex);
   writeFileSync(join(outDir, 'index.json'), JSON.stringify(index, null, 2) + '\n');
-  // card-file -> source-log mapping for dev-mode auto-enrichment (gitignored;
+  // card-file -> source-log mapping for explicit local campaign enrichment (gitignored;
   // absolute paths never go into shareable cards)
   try {
     mkdirSync(join(process.cwd(), 'qa-logs'), { recursive: true });

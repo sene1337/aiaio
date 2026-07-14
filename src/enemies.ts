@@ -148,17 +148,22 @@ export interface Enemy {
   mini: boolean;
   /** the real log line this enemy came from */
   sourceLine: string;
+  /** Recorded source error or an internally disclosed Observer pacing beat. */
+  origin: 'recorded' | 'observer';
   dead: boolean;
   /** run-time until which this enemy is stunned (distraction barrage) */
   stunnedUntil: number;
 }
 
-export function makeEnemy(kind: EnemyKind, x: number, y: number, sourceLine: string, mini = false): Enemy {
+export function makeEnemy(
+  kind: EnemyKind, x: number, y: number, sourceLine: string, mini = false,
+  origin: 'recorded' | 'observer' = 'recorded',
+): Enemy {
   const def = ENEMY_DEFS[kind];
   return {
     def, x, y, vx: 0, vy: 0,
     hp: mini ? Math.ceil(def.hp / 2) : def.hp,
     cooldown: 1.2, stateTimer: 0, aimX: 0, aimY: 0, telegraphing: false,
-    respawnUsed: false, spawnX: x, mini, sourceLine, dead: false, stunnedUntil: 0,
+    respawnUsed: false, spawnX: x, mini, sourceLine, origin, dead: false, stunnedUntil: 0,
   };
 }

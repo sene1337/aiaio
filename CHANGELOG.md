@@ -5,6 +5,30 @@ All notable changes to AIAIO are documented here. Format follows
 [semver](https://semver.org/) (minor = new player-facing capability,
 patch = fixes and copy).
 
+## [2.7.0] — 2026-07-13
+
+### Added
+- **✦ ENRICH YOUR HISTORY**: an explicit local campaign flow with the
+  six-session chronological **SHAPE MY OPENING** gate, the fifteen-session
+  **BUILD MY CAMPAIGN** gate, privacy notice, local job status, and campaign
+  premiere.
+- Versioned `CampaignManifest` overlays, source digests, atomic baseline
+  fallback, campaign/Remix/fictional progress namespaces, and a pure
+  `SessionDirector` level compiler.
+- **THE OPENCLAW + HERMES CAMPAIGN**: twelve authored, explicitly fictional
+  levels across three acts, isolated from personal-history ranks.
+- Fixed explicit Remix profiles: `gentle`, `balanced`, and `brutal`.
+
+### Changed
+- Quiet factual sessions no longer receive an undisclosed empty-log fallback.
+  The Director may stage at most three disclosed Observer pacing encounters in
+  long quiet gaps, reusing normal enemy visuals without a badge.
+- Opening a card or starting a run no longer triggers an enrichment/LLM call.
+  Agent-written presentation is created only through the visible flow or
+  `npm run enrich`.
+- Production assembly now removes all copied card assets before emitting only
+  the fictional public campaign; a test seeds a fake private card to enforce it.
+
 ## [2.6.1] — 2026-07-13
 
 ### Fixed

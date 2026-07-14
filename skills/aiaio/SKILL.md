@@ -16,13 +16,17 @@ Hermes SQLite history natively. Repo: https://github.com/sene1337/aiaio
 - "set up aiaio" / "turn my sessions into a game" / "install that session game"
 - "aiaio can't find my sessions" / "the vault is empty"
 - "find me good levels" / "make levels from my worst week"
+- "enrich my history" / "make a brutal AIAIO campaign"
 - "customize the announcer" / "make the commentator sound like ..."
 
 ## Ground rules
-- You write narrative only: goals, task names, moments, commentary. NEVER alter
-  stats, counts, token numbers, stability, or ids — difficulty derives from the
-  user's real data. Stat/difficulty customization is deliberately unsupported.
-- Never invent events. Style the truth; don't fabricate it.
+- Raw card mechanics stay factual: never alter counts, positions, work units,
+  completion, token numbers, stability, error provenance, or ids. A campaign is
+  a manifest overlay, not a rewritten SessionCard.
+- You may author campaign titles, display labels, moment display copy, and short
+  Observer commentary after the user consents to the configured AI call.
+- Remix is allowed only on an explicit request. Use the fixed `gentle`,
+  `balanced`, or `brutal` profile; it has separate progress and must be labelled.
 - Cards contain short redacted snippets of the user's real prompts. Never
   share, commit, or publish a card the user hasn't personally read.
   `public/cards/`, `public/packs/`, `qa-logs/`, `session-dumps/` are gitignored
@@ -52,27 +56,27 @@ scan -- --all` for the full archive, a custom root path, or missing `sqlite3`.
 If the user genuinely has no qualifying sessions, say so honestly — the game
 refuses to fake personalization.
 
-## Curation ("find me great levels")
+## Campaign enrichment ("find me great levels")
 
 1. `npm run scan -- --all`
-2. Read `public/cards/index.json` and skim cards. Pick 8–12 sessions with YOUR
-   JUDGMENT, not a formula: error storms, compaction spirals, restarts,
-   late-night saves, the user's first session ever. Vary harness and era.
-3. Enrich each pick: `node scripts/enrich-sessioncard.mjs <card> <source-log>`
-   (source paths are in `qa-logs/sources.json`; `AIAIO_LLM_CMD` overrides the
-   default `claude -p` — any CLI that takes a prompt on stdin works).
-4. Re-run `npm run scan -- --all`; the gallery prefers enriched cards.
+2. Tell the user the gate: six eligible sessions for **SHAPE MY OPENING**,
+   fifteen for **BUILD MY CAMPAIGN**. If the gate is not met, stop and explain.
+3. Request consent before a configured AI sees redacted SessionCard excerpts.
+4. Call the canonical compiler, not a per-card rewrite:
 
-You may also write a card's `.enriched.json` yourself. Rewrite ONLY these
-fields, keeping every event real and every secret out:
-- `goal` — one line, ≤140 chars
-- `tasks` — 3–6 of `{name ≤60 chars, work_units 1–6, completed, at 0..1}`
-- `moments` — 6–12 of `{kind: win|frustration|note, text ≤110 chars, at 0..1}`
+```bash
+npm run enrich -- --selection story --pace balanced
+npm run enrich -- --selection hardest --pace intense --remix brutal
+```
+
+The second command is valid only when the user explicitly asked for Remix.
+The job validates source snapshots, locks duplicate starts, atomically publishes
+`public/cards/campaigns/latest.json`, and has a deterministic baseline fallback.
 
 ## Customization ("change the feel")
 
-**Narrative voice:** pass `--style "noir detective"` (or set
-`AIAIO_ENRICH_STYLE`) when enriching. Style changes phrasing only.
+**Narrative voice:** use `--tone "noir detective"` with `npm run enrich`.
+Style applies to campaign presentation only; source mechanics stay factual.
 
 **The announcer:** write `public/packs/observer.json` — the in-game Observer
 mixes your lines with its built-in deadpan ~50/50. Format:

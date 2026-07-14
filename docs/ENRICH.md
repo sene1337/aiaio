@@ -1,58 +1,64 @@
-# Enrich your SessionCard with your own agent
+# Enrich an AIAIO campaign
 
-AIAIO's players *have agents*: Hermes, OpenClaw, Claude Code, whatever. So the
-"AI enrichment" tier doesn't ship a model: **your agent writes your level.**
+Campaign enrichment builds a versioned presentation overlay over immutable
+local SessionCards. It never rewrites cards or source logs.
 
-Two ways to run it:
+Use the main menu's **✦ ENRICH YOUR HISTORY** for the normal player flow. It
+shows the selected shape, session gate, configured-AI privacy notice, local job
+status, and a campaign premiere with an explicit **BEGIN** action.
 
-## 1. The script (pipes through your CLI agent)
+- **SHAPE MY OPENING** needs six eligible local sessions and keeps chronological
+  order.
+- **BUILD MY CAMPAIGN** needs fifteen eligible local sessions and curates 15–24.
+
+## Agent / CLI flow
+
+The Hermes skill and local UI call the same compiler:
 
 ```bash
-# default command is `claude -p`; override with AIAIO_LLM_CMD
-node scripts/enrich-sessioncard.mjs public/cards/<card>.json ~/.claude/projects/<session-dir>
+# factual campaign
+npm run enrich -- --selection story --pace balanced --tone "dry mission control"
 
-# examples of other agents:
-AIAIO_LLM_CMD="ollama run llama3.2" node scripts/enrich-sessioncard.mjs card.json session.jsonl
+# explicit user request only: fixed Remix profiles
+npm run enrich -- --selection hardest --pace intense --remix brutal
 ```
 
-It builds the prompt below, sends it to your agent, whitelists + redacts the
-response, and writes `<card>.enriched.json`. Original numeric fields (counts,
-tokens, stability) are **never** changed by the LLM, only the narrative fields.
+The writer is `claude -p` by default. Set `AIAIO_LLM_CMD` to another command
+that accepts a prompt on stdin and returns JSON. Before any such call, obtain
+the player's consent: compact redacted excerpts from the selected SessionCards
+will be sent to that configured command.
 
-## 2. The copy-paste prompt (any chat agent)
+## What is published
 
-Paste this to your agent along with your SessionCard JSON and (optionally) some
-of the session transcript:
+`scripts/enrich-campaign.mjs` validates `qa-logs/sources.json`, card presence,
+and source freshness, then writes `public/cards/campaigns/latest.json` through a
+staging file and atomic rename. A manifest contains only card-relative file
+names, source ids/digests, ordering, recipe, writer status, and bounded
+presentation copy—never log paths or raw excerpts.
 
----
+If the agent times out, is unavailable, or returns invalid output, the compiler
+publishes a complete deterministic baseline manifest. Missing/stale sources,
+malformed input, or an insufficient six/fifteen-session pool publish nothing and
+report the exact reason. Cancelling a dev job discards staging and preserves the
+previous ready manifest.
 
-You are writing the level script for AIAIO, a game where a real agent session
-becomes a playable level. Below is a SessionCard (mechanical summary) and
-excerpts from the actual session log.
+## Factual play, Observer pacing, and Remix
 
-Rewrite ONLY the narrative fields so the level tells this session's story:
+`SessionDirector.compile()` is the single source of stations, moments,
+encounters, crates, terrain positions, and permission terminals. Factual plans
+retain source mechanics. In long quiet gaps only, the Observer may add at most
+three internally recorded pacing encounters; they reuse an existing enemy type,
+have no visual badge, and announce themselves with one short seeded nonrepeating
+line.
 
-- `goal`: one punchy line (≤140 chars): what this session was really about,
-  in the spirit of the user's own words.
-- `tasks`: 3–6 entries. `name` (≤60 chars): the real things worked on, phrased
-  as imperative tasks ("fix the OAuth refresh loop", not "user asked about
-  auth"). `at` (0..1): where in the session each began. `work_units` (1–6):
-  proportional to how much of the session it consumed. `completed`: whether it
-  actually got done.
-- `moments`: 6–12 entries. Real, specific beats. `kind` is "win",
-  "frustration", or "note"; `text` (≤110 chars) should quote or tightly
-  paraphrase the actual moment; `at` (0..1) is its timeline position.
+Remix is never a slider:
 
-Rules: do not change any other field. Do not invent events that didn't happen.
-Never include secrets, API keys, tokens, emails, or personally sensitive
-content in any text field. Output ONLY the complete updated JSON object.
+| Profile | Hostiles | Enemy damage | Other |
+|---|---:|---:|---|
+| gentle | 70% | 80% | +10 shield, no Observer injections |
+| balanced | normal | normal | up to three Observer injections |
+| brutal | 150%, cap 36 total / 10 per type | 125% | no stability handicap, up to three injections |
 
----
-
-## Privacy note
-
-Enrichment sends session content to whatever model your command invokes. For
-private sessions, point `AIAIO_LLM_CMD` at a **local** model (Ollama, LM
-Studio). The script additionally re-redacts every text field it accepts
-(API-key/token/email/hex patterns) and enforces length caps, but the model
-already saw the transcript, so choose the model accordingly.
+Remix must be explicitly requested and writes to an isolated progress namespace.
+Factual session recovery retains the existing history namespace; fictional public
+campaign progress is isolated too.

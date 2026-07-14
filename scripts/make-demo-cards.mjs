@@ -5,36 +5,49 @@
 //
 // usage: node scripts/make-demo-cards.mjs <dist-dir>
 
-import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 const dist = process.argv[2] ?? 'dist';
 const outDir = join(dist, 'cards');
+// Vite copies public/cards before this runs. Delete it wholesale so a local
+// production build cannot accidentally ship private scanned cards.
+rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
 
-const index = [];
-for (const file of readdirSync('examples').filter((f) => f.endsWith('.json'))) {
-  const card = JSON.parse(readFileSync(join('examples', file), 'utf8'));
-  card.harness = 'demo';
-  card.when = card.when ?? '2026-07-01';
-  const out = file.replace('.sessioncard', '');
-  writeFileSync(join(outDir, out), JSON.stringify(card, null, 2) + '\n');
-  const errTotal = (card.errors ?? []).reduce((s, e) => s + Math.max(1, e.count ?? 1), 0);
-  index.push({
-    file: out,
-    session_id: card.session_id,
-    harness: 'demo',
-    when: card.when,
-    errors: errTotal,
-    enemies: errTotal === 0 ? 0 : Math.max(4, Math.min(30, Math.round(4 + 4.5 * Math.log2(1 + errTotal / 6)))),
-    tasks: card.tasks?.length ?? 0,
-    stability: card.stability_score ?? null,
-    messages: card.message_count ?? 0,
-    mtime: 0,
-    token_peak: card.token_peak ?? null,
-    compactions: card.compaction_events ?? 0,
-    work: (card.tasks ?? []).reduce((s, t) => s + (t.work_units ?? 2), 0),
-  });
+const campaign = JSON.parse(readFileSync('examples/openclaw-hermes-campaign.json', 'utf8'));
+const campaignDir = join(outDir, 'openclaw-hermes');
+mkdirSync(campaignDir, { recursive: true });
+const entries = [];
+let order = 0;
+for (const act of campaign.acts) {
+  for (const level of act.levels) {
+    order++;
+    const file = `openclaw-hermes/${String(order).padStart(2, '0')}.json`;
+    const card = {
+      session_id: `fictional-openclaw-hermes-${String(order).padStart(2, '0')}`,
+      harness: 'fictional', when: 'THE LONG NOW', goal: level.goal,
+      message_count: level.messages, token_peak: 9000 + order * 550,
+      compaction_events: Math.floor(order / 4), restarts: Math.floor(order / 3),
+      recoveries: Math.floor(order / 4), model_switches: Math.floor(order / 5),
+      stability_score: Math.max(40, 78 - order * 2),
+      tasks: [{ name: level.task, work_units: 2 + Math.floor(order / 3), completed: false, at: 0.42 }],
+      errors: [{ category: level.error, count: level.count, sample: 'fictional campaign signal', at: [0.3, 0.62, 0.79] }],
+      moments: [{ at: 0.18, kind: 'note', text: `${act.name}: ${level.title}` }],
+    };
+    writeFileSync(join(outDir, file), JSON.stringify(card, null, 2) + '\n');
+    entries.push({ file, sourceSessionId: card.session_id, sourceDigest: `fiction-${String(order).padStart(2, '0')}`, order, title: level.title, taskLabel: level.task });
+  }
 }
-writeFileSync(join(outDir, 'index.json'), JSON.stringify(index, null, 2) + '\n');
-console.error(`wrote ${index.length} demo cards to ${outDir}`);
+const manifest = {
+  schemaVersion: 1, id: campaign.id, revision: 1, kind: 'fictional', createdAt: '2026-07-13T00:00:00.000Z',
+  sourceCardDigest: 'openclaw-hermes-fiction-v1', selectedSourceIds: entries.map((entry) => entry.sourceSessionId),
+  recipe: { selection: 'story', pace: 'intense', observerTone: 'dry mission control', ruleset: 'factual' },
+  writerStatus: 'custom', entries,
+};
+mkdirSync(join(outDir, 'campaigns'), { recursive: true });
+writeFileSync(join(outDir, 'campaigns', 'openclaw-hermes.json'), JSON.stringify(manifest, null, 2) + '\n');
+// A hosted build is public-fiction-only. The personal History gallery stays
+// empty, while the main page offers the campaign CTA directly.
+writeFileSync(join(outDir, 'index.json'), '[]\n');
+console.error(`wrote ${entries.length} fictional campaign cards to ${outDir}`);

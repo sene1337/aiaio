@@ -1023,7 +1023,7 @@ export class UI {
 
   buildBriefing(
     loadout: AgentLoadout, card: SessionCard, name: string,
-    campaign?: { diff: number; tierName: string; prevRank: string | null; mode: 'real' | 'demo' | 'random' },
+    campaign?: { diff: number; tierName: string; prevRank: string | null; mode: import('./session').SessionMode },
   ): void {
     const cols = $('briefing-cols');
     cols.innerHTML = '';

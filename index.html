@@ -37,8 +37,8 @@
 
         <div class="cmd-list">
           <button class="cmd primary" id="btn-run"><span class="caret">❯</span><span class="cmd-name">/run session</span><span class="cmd-desc">enter the loaded (or random) session</span></button>
-          <button class="cmd" id="btn-example-clean"><span class="caret">❯</span><span class="cmd-name">/run example-clean</span><span class="cmd-desc">a tidy agent's morning. gentle level</span></button>
-          <button class="cmd" id="btn-example-chaos"><span class="caret">❯</span><span class="cmd-name">/run example-chaotic</span><span class="cmd-desc">4 hours of everything going wrong. hard level</span></button>
+          <button class="cmd primary" id="btn-enrich"><span class="caret">✦</span><span class="cmd-name">ENRICH YOUR HISTORY</span><span class="cmd-desc">shape six sessions or build a personal campaign</span></button>
+          <button class="cmd" id="btn-openclaw"><span class="caret">❯</span><span class="cmd-name">THE OPENCLAW + HERMES CAMPAIGN</span><span class="cmd-desc">12 authored fictional levels · public and ready now</span></button>
           <button class="cmd" id="btn-schema"><span class="caret">❯</span><span class="cmd-name">/schema</span><span class="cmd-desc">SessionCard format (copyable)</span></button>
         </div>
         <p class="hint">←→ move · ↑ jump · space fire · hold W to work a task · u install update · [ ]/1-9 weapons</p>
@@ -103,6 +103,35 @@
       <div class="modal-box">
         <h3>SessionCard format <button class="linkish" id="btn-copy-schema">copy</button> <button class="linkish" id="btn-close-schema">close ✕</button></h3>
         <pre id="schema-pre"></pre>
+      </div>
+    </div>
+
+    <!-- ============ ENRICHMENT ============ -->
+    <div id="modal-enrich" class="modal hidden">
+      <div class="modal-box" style="max-width:620px">
+        <h3 id="enrich-title">ENRICH YOUR HISTORY</h3>
+        <p id="enrich-copy" class="hint"></p>
+        <p id="enrich-consent" class="hint"></p>
+        <p id="enrich-status" class="hint"></p>
+        <div class="cmd-list">
+          <button class="cmd" id="btn-enrich-opening"><span class="caret">❯</span><span class="cmd-name">SHAPE MY OPENING</span><span class="cmd-desc">six chronological real sessions</span></button>
+          <button class="cmd" id="btn-enrich-campaign"><span class="caret">❯</span><span class="cmd-name">BUILD MY CAMPAIGN</span><span class="cmd-desc">15–24 curated real sessions</span></button>
+          <button class="cmd primary" id="btn-enrich-start"><span class="caret">❯</span><span class="cmd-name">BEGIN LOCAL ENRICHMENT</span><span class="cmd-desc">creates a campaign overlay; raw cards remain intact</span></button>
+          <button class="cmd" id="btn-enrich-cancel"><span class="caret">❯</span><span class="cmd-name">CANCEL / CLOSE</span><span class="cmd-desc">discards staging only; keeps any ready campaign</span></button>
+        </div>
+      </div>
+    </div>
+
+    <div id="modal-premiere" class="modal hidden">
+      <div class="modal-box" style="max-width:620px">
+        <h3 id="premiere-title">CAMPAIGN PREMIERE</h3>
+        <p id="premiere-copy" class="hint"></p>
+        <p id="premiere-first" class="hint"></p>
+        <div id="premiere-levels" class="cmd-list"></div>
+        <div class="cmd-list">
+          <button class="cmd primary" id="btn-premiere-begin"><span class="caret">❯</span><span class="cmd-name">BEGIN</span><span class="cmd-desc">enter level one</span></button>
+          <button class="cmd" id="btn-premiere-close"><span class="caret">❯</span><span class="cmd-name">LATER</span><span class="cmd-desc">return to the menu</span></button>
+        </div>
       </div>
     </div>
 

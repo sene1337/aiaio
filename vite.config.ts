@@ -1,5 +1,5 @@
 import { defineConfig, Plugin } from 'vite';
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { spawn } from 'node:child_process';
@@ -36,6 +36,40 @@ function envForLlmCmd(cmd: string): NodeJS.ProcessEnv {
     } catch { /* claude may be logged in anyway */ }
   }
   return env;
+}
+
+/** Shared dev representation of the assets that make-demo-cards writes at build. */
+function fictionalCampaignAssets(): { manifest: Record<string, unknown>; cards: Map<string, Record<string, unknown>> } {
+  const campaign = JSON.parse(readFileSync(join(process.cwd(), 'examples', 'openclaw-hermes-campaign.json'), 'utf8'));
+  const cards = new Map<string, Record<string, unknown>>();
+  const entries: Array<Record<string, unknown>> = [];
+  let order = 0;
+  for (const act of campaign.acts) {
+    for (const level of act.levels) {
+      order++;
+      const file = `openclaw-hermes/${String(order).padStart(2, '0')}.json`;
+      const card = {
+        session_id: `fictional-openclaw-hermes-${String(order).padStart(2, '0')}`,
+        harness: 'fictional', when: 'THE LONG NOW', goal: level.goal,
+        message_count: level.messages, token_peak: 9000 + order * 550,
+        compaction_events: Math.floor(order / 4), restarts: Math.floor(order / 3),
+        recoveries: Math.floor(order / 4), model_switches: Math.floor(order / 5), stability_score: Math.max(40, 78 - order * 2),
+        tasks: [{ name: level.task, work_units: 2 + Math.floor(order / 3), completed: false, at: 0.42 }],
+        errors: [{ category: level.error, count: level.count, sample: 'fictional campaign signal', at: [0.3, 0.62, 0.79] }],
+        moments: [{ at: 0.18, kind: 'note', text: `${act.name}: ${level.title}` }],
+      };
+      cards.set(file, card);
+      entries.push({ file, sourceSessionId: card.session_id, sourceDigest: `fiction-${String(order).padStart(2, '0')}`, order, title: level.title, taskLabel: level.task });
+    }
+  }
+  return {
+    cards,
+    manifest: {
+      schemaVersion: 1, id: campaign.id, revision: 1, kind: 'fictional', createdAt: '2026-07-13T00:00:00.000Z',
+      sourceCardDigest: 'openclaw-hermes-fiction-v1', selectedSourceIds: entries.map((entry) => entry.sourceSessionId),
+      recipe: { selection: 'story', pace: 'intense', observerTone: 'dry mission control', ruleset: 'factual' }, writerStatus: 'custom', entries,
+    },
+  };
 }
 
 /**
@@ -130,43 +164,82 @@ function quipPlugin(): Plugin {
 }
 
 /**
- * Dev-only auto-enrichment: when the player selects an unenriched card in the
- * gallery, the game POSTs its filename here; we look up the source log in
- * qa-logs/sources.json and run the enrich script in the background. Next
- * rescan/gallery-load prefers the enriched card. Fire-and-forget, deduplicated.
+ * Dev-only local campaign enrichment. It is started only from the explicit
+ * ENRICH flow (or npm run enrich), never merely by opening a session. One job
+ * owns the staging manifest at a time; a second start attaches to its status.
  */
-function autoEnrichPlugin(): Plugin {
-  const inflight = new Set<string>();
+function campaignEnrichmentPlugin(): Plugin {
+  let job: { child: ReturnType<typeof spawn>; status: Record<string, unknown> } | null = null;
+  const statusPath = join(process.cwd(), 'qa-logs', 'enrichment-status.json');
+  const readStatus = (): Record<string, unknown> => {
+    try { return JSON.parse(readFileSync(statusPath, 'utf8')); } catch { return { status: 'idle' }; }
+  };
+  const json = (res: ServerResponse, value: unknown, code = 200) => {
+    res.statusCode = code; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(value));
+  };
   return {
-    name: 'auto-enrich',
+    name: 'campaign-enrichment',
     configureServer(server) {
-      server.middlewares.use('/__enrich', (req, res) => {
+      const fictional = fictionalCampaignAssets();
+      // The build writes these assets to dist/cards. The dev server creates the
+      // identical fictional surface in memory, without putting it in a player's
+      // private public/cards directory.
+      server.middlewares.use((req, res, next) => {
+        if (req.method !== 'GET') { next(); return; }
+        const pathname = new URL(req.url ?? '/', 'http://localhost').pathname;
+        if (pathname === '/cards/campaigns/openclaw-hermes.json') {
+          res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(fictional.manifest)); return;
+        }
+        const match = pathname.match(/^\/cards\/(openclaw-hermes\/\d{2}\.json)$/);
+        if (match) {
+          const card = fictional.cards.get(match[1]);
+          if (card) { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(card)); return; }
+        }
+        next();
+      });
+      server.middlewares.use('/__enrich/status', (req, res) => {
+        if (req.method !== 'GET') { res.statusCode = 405; res.end(); return; }
+        json(res, job?.status ?? readStatus());
+      });
+      server.middlewares.use('/__enrich/cancel', (req, res) => {
+        if (!guardDevEndpoint(req, res)) return;
+        req.on('end', () => {
+          if (job) job.child.kill();
+          job = null;
+          try {
+            const campaignDir = join(process.cwd(), 'public', 'cards', 'campaigns');
+            for (const file of readdirSync(campaignDir)) {
+              if (file.startsWith('latest.json.') && file.endsWith('.staging')) rmSync(join(campaignDir, file));
+            }
+          } catch { /* no staging directory yet */ }
+          const status = { status: 'cancelled', detail: 'Campaign staging discarded; the prior ready campaign remains available.', updatedAt: new Date().toISOString() };
+          try { writeFileSync(statusPath, JSON.stringify(status, null, 2) + '\n'); } catch { /* best effort */ }
+          json(res, status);
+        });
+      });
+      server.middlewares.use('/__enrich/campaign', (req, res) => {
         if (!guardDevEndpoint(req, res)) return;
         let body = '';
-        req.on('data', (c) => { body += c; });
+        req.on('data', (chunk) => { body += chunk; if (body.length > 20_000) req.destroy(); });
         req.on('end', () => {
-          try {
-            const { file } = JSON.parse(body) as { file: string };
-            if (!file || file.includes('..') || file.includes('/')) { res.statusCode = 400; res.end(); return; }
-            const cardPath = join(process.cwd(), 'public', 'cards', file);
-            const enrichedPath = cardPath.replace(/\.json$/, '.enriched.json');
-            if (file.endsWith('.enriched.json') || existsSync(enrichedPath)) {
-              res.end(JSON.stringify({ status: 'already-enriched' })); return;
-            }
-            const sources = JSON.parse(readFileSync(join(process.cwd(), 'qa-logs', 'sources.json'), 'utf8'));
-            const source = sources[file];
-            if (!source || !existsSync(source) || inflight.has(file)) {
-              res.end(JSON.stringify({ status: source ? 'busy' : 'no-source' })); return;
-            }
-            inflight.add(file);
-            const child = spawn('node', ['scripts/enrich-sessioncard.mjs', cardPath, source],
-              { env: envForLlmCmd(process.env.AIAIO_LLM_CMD ?? 'claude -p') });
-            child.on('close', () => inflight.delete(file));
-            child.on('error', () => inflight.delete(file));
-            res.end(JSON.stringify({ status: 'started' }));
-          } catch {
-            res.statusCode = 400; res.end();
-          }
+          let payload: { profile?: string; selection?: string; pace?: string; tone?: string; remix?: string };
+          try { payload = JSON.parse(body); } catch { json(res, { status: 'failed', detail: 'Malformed enrichment request.' }, 400); return; }
+          if (job) { json(res, { ...job.status, attached: true }); return; }
+          const profile = payload.profile === 'opening' ? 'opening' : payload.profile === 'campaign' ? 'campaign' : null;
+          const selection = ['story', 'hardest', 'longest'].includes(String(payload.selection)) ? String(payload.selection) : 'story';
+          const pace = ['calm', 'balanced', 'intense'].includes(String(payload.pace)) ? String(payload.pace) : 'balanced';
+          const remix = ['gentle', 'balanced', 'brutal'].includes(String(payload.remix)) ? String(payload.remix) : null;
+          if (!profile) { json(res, { status: 'failed', detail: 'Choose an Opening or Campaign.' }, 400); return; }
+          const command = ['scripts/enrich-campaign.mjs', '--profile', profile, '--selection', selection, '--pace', pace, '--tone', String(payload.tone ?? 'dry mission control').slice(0, 80), '--status', statusPath];
+          if (remix) command.push('--remix', remix);
+          const child = spawn('node', command, { env: envForLlmCmd(process.env.AIAIO_LLM_CMD ?? 'claude -p'), stdio: ['ignore', 'pipe', 'pipe'] });
+          const initial = { status: 'running', detail: 'Starting local campaign enrichment.', profile, updatedAt: new Date().toISOString() };
+          try { writeFileSync(statusPath, JSON.stringify(initial, null, 2) + '\n'); } catch { /* poller can still use in-memory status */ }
+          job = { child, status: initial };
+          child.stdout.on('data', () => { if (job) job.status = readStatus(); });
+          child.on('close', () => { const finished = readStatus(); if (job) job.status = finished; job = null; });
+          child.on('error', () => { const failed = { status: 'failed', detail: 'Could not start the local enrichment job.' }; try { writeFileSync(statusPath, JSON.stringify(failed)); } catch { /* ignore */ } job = null; });
+          json(res, initial);
         });
       });
     },
@@ -176,5 +249,5 @@ function autoEnrichPlugin(): Plugin {
 export default defineConfig({
   base: './',
   build: { target: 'es2020' },
-  plugins: [qaTelemetryPlugin(), quipPlugin(), autoEnrichPlugin()],
+  plugins: [qaTelemetryPlugin(), quipPlugin(), campaignEnrichmentPlugin()],
 });

@@ -1,17 +1,18 @@
 {
   "name": "aiaio",
   "private": true,
-  "version": "2.6.1",
+  "version": "2.7.0",
   "description": "AIAIO — Agents In Amnesia, Insane Ordnance. Your real agent session is the level: errors are monsters, tasks are objectives, and the wall of forgetting is right behind you.",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
-    "test": "node scripts/test-levels.mjs && node --test tests/scan-sessions.test.mjs tests/episode-summary.test.mjs",
+    "build": "tsc && vite build && node scripts/make-demo-cards.mjs dist",
+    "test": "node scripts/test-levels.mjs && node --test tests/scan-sessions.test.mjs tests/episode-summary.test.mjs tests/public-build.test.mjs tests/enrich-campaign.test.mjs",
     "preview": "vite preview",
     "extract": "node scripts/extract-sessioncard.mjs",
     "scan": "node scripts/scan-sessions.mjs",
-    "doctor": "node scripts/scan-sessions.mjs --doctor"
+    "doctor": "node scripts/scan-sessions.mjs --doctor",
+    "enrich": "node scripts/enrich-campaign.mjs --profile campaign"
   },
   "devDependencies": {
     "typescript": "^5.6.0",

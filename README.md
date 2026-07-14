@@ -2,8 +2,8 @@
 
 *Operation: Inner Space, except the world is your agent's actual session log.*
 
-**🎮 [Play the hosted demo](https://sene1337.github.io/aiaio/)** (two fictional
-example sessions). The real game is your own history: clone this repo, run
+**🎮 [Play the hosted demo](https://sene1337.github.io/aiaio/)** (**THE OPENCLAW
++ HERMES CAMPAIGN**, 12 explicitly fictional levels). The real game is your own history: clone this repo, run
 `npm run scan`, and every Claude Code, OpenClaw, or Hermes session on your
 machine becomes a playable level. Your prompts are the tasks, your errors are
 the monsters, your compactions are the wall chasing you.
@@ -38,8 +38,9 @@ npm run dev      # open the printed URL
 npm run build    # static bundle in dist/
 ```
 
-No network calls. Fully playable offline with zero setup (two inline example
-sessions plus random generation).
+Production builds make no network calls and ship only the fictional public
+campaign. Local enrichment is an explicit opt-in dev action and may call the AI
+command you configure after showing its privacy notice.
 
 ## Or let your agent do all of it
 
@@ -57,10 +58,11 @@ commentator"*. Any other agent (Claude Code, OpenClaw, Codex): point it at
 empty, `npm run doctor` prints exactly what was scanned and why each file was
 rejected; your agent can read it and fix the cause.
 
-Customization is narrative-only by design: agents write goals, task names,
-moments, and Observer commentary ([persona packs](AGENTS.md#observer-persona-packs-customizing-the-announcer)),
-but difficulty always derives from your real session data. That line is what
-keeps the levels honest.
+Campaign presentation is customizable: agents can write titles, display copy,
+and Observer lines over an immutable source-card snapshot. Factual campaigns
+retain source-derived mechanics. An explicit **Remix** request may select one
+of the fixed `gentle`, `balanced`, or `brutal` combat profiles; it has separate
+progress and is always labelled Remix.
 
 ## Play
 
@@ -157,21 +159,32 @@ All of it is heuristic, deterministic, and on-machine, with no LLM involved.
 Redaction applies to every snippet, but a card still contains fragments of your
 actual prompts, so **skim before sharing.**
 
-### Tier 2: your agent writes your level
+### Campaign enrichment: an explicit local action
 
-AIAIO's players have agents, so the deep enrichment doesn't ship a model. **Your
-own agent novelizes your session** (see [docs/ENRICH.md](docs/ENRICH.md)):
+The main menu's **✦ ENRICH YOUR HISTORY** offers two honest shapes:
+
+- **SHAPE MY OPENING** requires six eligible sessions and preserves chronological order.
+- **BUILD MY CAMPAIGN** requires fifteen and curates 15–24 eligible sessions.
+
+It displays a consent notice before it sends redacted SessionCard excerpts to
+the configured AI command. No session is automatically enriched merely by
+opening or playing it. The raw card remains unchanged; enrichment publishes a
+versioned `CampaignManifest` overlay with source digests, ordered entries, and
+presentation copy. If the writer is unavailable, AIAIO atomically publishes a
+complete deterministic baseline campaign instead.
+
+For an agent-driven flow, use the same engine:
 
 ```bash
-node scripts/enrich-sessioncard.mjs public/cards/<card>.json <session-dir>
-# default is claude -p. override with AIAIO_LLM_CMD="ollama run llama3.2"
+npm run enrich -- --selection hardest --pace intense --remix brutal
+# default writer is claude -p; set AIAIO_LLM_CMD for another CLI agent
 ```
 
-The model rewrites ONLY goal/tasks/moments (imperative task names, real completion
-flags, verbatim moment quotes). Every mechanical field is whitelist-protected, and
-every accepted string is re-redacted and capped. `npm run scan` automatically
-prefers `<card>.enriched.json` in the gallery when one exists. For private
-sessions, point `AIAIO_LLM_CMD` at a local model.
+`--remix gentle|balanced|brutal` is explicit. `gentle` uses 70% hostile budget,
+80% damage, +10 shield, and no Observer injections; `balanced` preserves the
+normal values; `brutal` uses 150% hostile budget (cap 36 total / 10 per type),
+125% damage, and removes the stability handicap. Remix unlocks never alter
+factual-history ranks.
 
 ## `npm run scan`: your sessions become levels
 
@@ -184,10 +197,9 @@ scans the entire archive. The default takes the 12 most recent per root.
 
 **Quality gate.** Only sessions with real extractable human asks become levels.
 Cron jobs, heartbeats, and ask-less machine runs are excluded entirely, because
-the game never fakes personalization. In dev mode, selecting a level also quietly
-asks your agent (claude -p / AIAIO_LLM_CMD) to enrich it in the background: a
-bespoke roast, per-session Observer one-liners, and rewritten tasks land in the
-cache for every later play.
+the game never fakes personalization. Selecting or starting a level never asks
+an agent to enrich it; enrichment only runs from the visible command or an
+explicit agent/CLI request.
 
 - Read-and-aggregate only. Log content is inert data, never executed or followed.
 - Samples are redacted (API keys, tokens, JWTs, credentials, emails, hex blobs) and
@@ -251,7 +263,9 @@ All fields optional. Missing data degrades gracefully. Copyable in-game via
 
 ```
 src/main.ts      menu (card drop + scanned gallery), input, frame loop
-src/run.ts       the session run: avatar, wall of forgetting, stations, economy
+src/session-director.ts pure SessionCard + manifest compiler for all level plans
+src/campaign.ts  versioned CampaignManifest, digests, recipes, Remix profiles
+src/run.ts       renders a compiled level plan: avatar, wall, stations, economy
 src/enemies.ts   the bestiary: error categories as creatures
 src/terrain.ts   per-pixel destructible terrain (seeded from the card)
 src/physics.ts   projectile integration
@@ -263,7 +277,7 @@ src/session.ts   SessionCard schema, deterministic mapping, examples
 src/ui.ts        canvas renderer + TUI HUD (Claude Code / Hermes styling)
 scripts/scan-sessions.mjs        auto-discover sessions into the menu gallery
 scripts/extract-sessioncard.mjs  one dir/file into one SessionCard (CLI + library)
-examples/        two droppable example cards (clean + chaotic)
+examples/        authored source for the 12-level fictional public campaign
 ```
 
 ## Design lineage and simplifications

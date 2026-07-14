@@ -2,6 +2,8 @@
 // so we don't estimate — we calculate), arcade-legible ranks, and persistent
 // progression keyed by session stem (stable across rescans).
 
+import { CampaignManifest, campaignProgressKey } from './campaign';
+
 export interface LevelEntry {
   file: string;
   session_id: string;
@@ -194,6 +196,37 @@ export function isSurvived(p: LevelProgress | null): boolean {
 
 export function isPerfect(p: LevelProgress | null): boolean {
   return p !== null && hadLegacyPerfect(p);
+}
+
+/** Campaign unlocks never share a key with historical session recovery. */
+export interface CampaignProgress {
+  clearedOrders: number[];
+  bestScores: Record<string, number>;
+}
+
+export function getCampaignProgress(manifest: Pick<CampaignManifest, 'id' | 'revision' | 'kind'>): CampaignProgress {
+  try {
+    const raw = JSON.parse(localStorage.getItem(campaignProgressKey(manifest)) ?? '{}');
+    return {
+      clearedOrders: Array.isArray(raw.clearedOrders) ? raw.clearedOrders.filter((order: unknown): order is number => Number.isInteger(order) && Number(order) > 0) : [],
+      bestScores: raw.bestScores && typeof raw.bestScores === 'object' ? raw.bestScores : {},
+    };
+  } catch { return { clearedOrders: [], bestScores: {} }; }
+}
+
+export function recordCampaignResult(
+  manifest: Pick<CampaignManifest, 'id' | 'revision' | 'kind'>, order: number, won: boolean, score: number,
+): CampaignProgress {
+  const progress = getCampaignProgress(manifest);
+  if (won && !progress.clearedOrders.includes(order)) progress.clearedOrders.push(order);
+  progress.clearedOrders.sort((a, b) => a - b);
+  progress.bestScores[String(order)] = Math.max(progress.bestScores[String(order)] ?? 0, score);
+  try { localStorage.setItem(campaignProgressKey(manifest), JSON.stringify(progress)); } catch { /* storage full */ }
+  return progress;
+}
+
+export function isCampaignOrderUnlocked(progress: CampaignProgress, order: number): boolean {
+  return order <= 1 || progress.clearedOrders.includes(order - 1);
 }
 
 /** tier N+1 unlocks when 2 levels of tier N are cleared (tier 1 always open) */

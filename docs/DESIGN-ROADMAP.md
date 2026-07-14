@@ -201,16 +201,22 @@ Open refinement: encode the introduction/build/escalation/capstone rhythm as
 strictly data-derived chapter annotations after the beat compiler exists; do not
 write a story label that the source history cannot prove.
 
-### P1: Add a deterministic level-beat compiler
+### P1: Campaign Director and enrichment (initial version completed in v2.7.0)
 
-- Convert the timeline into factual quiet, task, error, recovery, compaction,
-  and exit bands while preserving event order and true `at` values.
-- Stage clustered errors as telegraphed waves near their real point instead of
-  stacking active enemies at one coordinate.
-- Add concurrency limits, recovery windows, enemy-combination rules, and
-  data-derived climaxes.
-- Flatten terrain around stations and validate a traversable spawn-to-exit
-  route.
+- [x] Add a pure, deterministic `SessionDirector` as the only compiler for
+  stations, moments, encounters, crates, and permission terminals.
+- [x] Preserve raw SessionCards and publish versioned manifest overlays with
+  source ids/digests, atomic baseline fallback, and separate campaign progress.
+- [x] Replace hidden empty-log combat with disclosed, capped Observer pacing
+  encounters that are never placed at spawn, a station, or the exit.
+- [x] Ship the explicit 12-level fictional **OpenClaw + Hermes Campaign** and
+  prove production assets exclude private cards.
+- [x] Add explicit local Opening/Campaign enrichment gates, consent, job status,
+  premiere, and fixed isolated Remix profiles.
+
+Open refinement: stage clustered recorded errors into telegraphed waves near
+their true points, add richer concurrency/recovery rules, and flatten terrain
+around stations while retaining the compiler's reachability guarantees.
 
 ### P2: Complete the agentic grammar
 
@@ -233,8 +239,9 @@ write a story label that the source history cannot prove.
 
 - Identical card and campaign version produce identical level plans and
   chapter ordering.
-- No task, error, moment, date, chapter label, or campaign justification is
-  invented.
+- No source mechanics, task/error provenance, or historical rank is invented.
+  Manifest presentation copy and disclosed Observer pacing encounters are the
+  intentional, bounded authored layer.
 - Clustered errors do not share an active coordinate; original timestamps
   remain inspectable.
 - Spawn, stations, required interactions, and exit pass automated reachability

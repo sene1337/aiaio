@@ -92,7 +92,7 @@ export interface GeneratedTask {
 }
 
 /** Whether a run is the player's history or an explicitly labeled fictional mode. */
-export type SessionMode = 'real' | 'demo' | 'random';
+export type SessionMode = 'real' | 'demo' | 'random' | 'fictional' | 'remix';
 
 export interface LoadoutOptions {
   mode?: SessionMode;
@@ -160,7 +160,9 @@ function clamp(v: number, lo: number, hi: number): number {
 
 export function loadoutFromCard(card: SessionCard, label: string, options: LoadoutOptions = {}): AgentLoadout {
   const mode = options.mode ?? 'real';
-  const allowsFallbackContent = mode !== 'real';
+  // Remix remains grounded in its source card. Only explicitly fictional/demo
+  // modes may use synthetic fallback content when a card is sparse.
+  const allowsFallbackContent = mode === 'demo' || mode === 'random' || mode === 'fictional';
   const sessionId = card.session_id ?? 'anonymous-session';
   const seed = hashString(sessionId);
   const rng = new Rng(seed ^ 0xa1a10);

@@ -1,0 +1,33 @@
+{
+  "id": "openclaw-hermes",
+  "title": "THE OPENCLAW + HERMES CAMPAIGN",
+  "acts": [
+    {
+      "name": "ACT I — THE HANDSHAKE",
+      "levels": [
+        { "title": "PORT KNOCK", "goal": "wake the relay before the night shift", "error": "timeout", "count": 4, "task": "verify the relay", "messages": 190 },
+        { "title": "PROMPT TIDE", "goal": "route a distressed signal through Hermes", "error": "tool_error", "count": 5, "task": "authorize the courier", "messages": 230 },
+        { "title": "THE FALSE MAP", "goal": "find the real corridor in a shifting network", "error": "hallucination", "count": 6, "task": "ground the route", "messages": 260 },
+        { "title": "RETRY ORBIT", "goal": "keep the first outpost alive until dawn", "error": "restart", "count": 7, "task": "stabilize the beacon", "messages": 300 }
+      ]
+    },
+    {
+      "name": "ACT II — THE RELAY WAR",
+      "levels": [
+        { "title": "CACHE GHOSTS", "goal": "recover the archive without waking its defenses", "error": "regression", "count": 8, "task": "seal the cache", "messages": 330 },
+        { "title": "DEAD LETTERS", "goal": "deliver the messages the system buried", "error": "timeout", "count": 10, "task": "drain the queue", "messages": 360 },
+        { "title": "CONFIDENTLY WRONG", "goal": "disprove a perfect-looking attack plan", "error": "false_positive", "count": 12, "task": "break the assertion", "messages": 390 },
+        { "title": "CONTEXT FLOOD", "goal": "hold the archive line as memory rises", "error": "context_overflow", "count": 14, "task": "compact the signal", "messages": 430 }
+      ]
+    },
+    {
+      "name": "ACT III — THE LONG EXIT",
+      "levels": [
+        { "title": "FORKED SKY", "goal": "reunite OpenClaw and Hermes across the split", "error": "tool_error", "count": 15, "task": "grant the bridge", "messages": 460 },
+        { "title": "THE REGRESSION GARDEN", "goal": "cross a garden that grows back every time", "error": "regression", "count": 18, "task": "prune the loop", "messages": 500 },
+        { "title": "LAST GOOD STATE", "goal": "restore the city from one surviving checkpoint", "error": "restart", "count": 20, "task": "commit the recovery", "messages": 540 },
+        { "title": "EXIT ZERO", "goal": "open a future where the relay stays awake", "error": "context_overflow", "count": 24, "task": "ship the dawn", "messages": 580 }
+      ]
+    }
+  ]
+}
