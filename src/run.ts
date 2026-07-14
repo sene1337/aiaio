@@ -752,16 +752,17 @@ export class Run {
     const alive = this.subagents.length;
     if (alive >= 2) { this.pushLog('🤖 subagent limit reached (2 concurrent, rate limits)'); return; }
     if (!cached) this.spendTokens(RUN_COST.subagentSpawn);
-    this.subagents.push({
+    const sa = {
       x: this.avatar.x - 20, y: this.avatar.y - 46,
       hp: 20, corrupted: false, corruptedAt: 0,
       zapCd: 1, dripAccum: 0, slot: alive, cached,
       label: `${cached ? 'cache' : 'sub'}-${this.rng.int(100, 999)}`,
-    });
+    };
+    this.subagents.push(sa);
     this.pushLog(cached
       ? '🤖 cached subagent restored: prebaked context, no upkeep drip'
       : '🤖 subagent spawned: weaker model, burns tokens while it lives');
-    this.emit('subagent_spawn', { alive: alive + 1, cached });
+    this.emit('subagent_spawn', { alive: alive + 1, cached, label: sa.label });
   }
 
   /** C: voluntary /compact — clean summary, no wall surge, no amnesia. cooldown 20s. */
@@ -800,7 +801,7 @@ export class Run {
       title: `⚠ SUBAGENT CORRUPTED: ${sa.label}`,
       lines: [`cause: ${cause}`, 'it is now targeting YOU. terminate it or outrun it.'],
     });
-    this.emit('subagent_corrupted', { cause });
+    this.emit('subagent_corrupted', { cause, label: sa.label });
   }
 
   private stepSubagents(dt: number): void {

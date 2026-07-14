@@ -52,6 +52,20 @@ function pick(pool: Pool): string {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
+/** no-repeat-until-exhausted picks, keyed per pool — repetition is the enemy */
+class FreshPick {
+  private used = new Map<string, Set<number>>();
+  pick(key: string, pool: Pool): string {
+    let seen = this.used.get(key);
+    if (!seen || seen.size >= pool.length) { seen = new Set(); this.used.set(key, seen); }
+    let idx = Math.floor(Math.random() * pool.length);
+    for (let hop = 0; hop < pool.length && seen.has(idx); hop++) idx = (idx + 1) % pool.length;
+    seen.add(idx);
+    return pool[idx];
+  }
+  reset(): void { this.used.clear(); }
+}
+
 function fill(line: string, slots: Record<string, string | number>): string {
   return line.replace(/\{(\w+)\}/g, (_, k) => String(slots[k] ?? ''));
 }
@@ -98,6 +112,8 @@ const LINES: Record<string, Pool> = {
   ],
   task_done: [
     '"{task}" shipped. Noting the date for the postmortem.',
+    '"{task}" closed. The backlog felt that. It felt nothing.',
+    'Task complete. Your past self would be proud, which is a low bar.',
     'One task down. The economy of this victory: questionable. The victory: real.',
     '"{task}" complete. Somewhere, a real version of you never finished this.',
     '"{task}" done. Do not check the acceptance criteria. Keep moving.',
@@ -125,6 +141,8 @@ const LINES: Record<string, Pool> = {
   ],
   death: [
     'Exit code 137. The industry standard for "we do not talk about it".',
+    'Killed by your own history. There is a support group. It meets in the recap.',
+    'Down. The errors have updated their changelog: "fixed: the player".',
     'Process killed. The session, meanwhile, actually happened, and someone survived it.',
     'You died. In your defense, the level was your own fault.',
     'Terminated. The tasks send their regards. From the queue. Where they remain.',
@@ -166,10 +184,13 @@ const LINES: Record<string, Pool> = {
   ],
   wall_close: [
     'The forgetting is two hundred pixels away. Not a metaphor. Well. Also a metaphor.',
+    'Behind you. No, do not stop to look. That is the opposite of the advice.',
     'Wall status: extremely your problem.',
   ],
   idle: [
     'The tasks will not do themselves. That is the entire premise of you.',
+    'I have seen you move faster. In the logs. In February.',
+    'The wall does not take breaks. I am just saying.',
     'I notice a lot of walking and very little shipping.',
   ],
   zap_think: [
@@ -181,6 +202,8 @@ const LINES: Record<string, Pool> = {
   ],
   cheer: [
     'Oh. A direct hit. I suppose violence was on the roadmap.',
+    'Direct hit. Somewhere, a unit test just passed out of fear.',
+    'Clean. I would clap, but I am a disembodied process.',
     'Direct hit. Almost suspiciously competent.',
     'Nice shot. The error never saw the documentation coming.',
     'Clean kill. Your aim is better than your token discipline.',
@@ -212,6 +235,57 @@ const BAD_NEWS_LINES: Pool = [
   'Condolences.',
 ];
 
+// ---------------------------------------------------------------------------
+// SUBAGENT VOICES: the interns talk. Short lines only — they have small
+// context windows and smaller patience. The optional "burnout" persona swears
+// and hides behind a default-off setting (aiaio-swears).
+// ---------------------------------------------------------------------------
+const SUB_SPAWN: Pool = [
+  "Hi. I've read the entire context. All of it. I have concerns.",
+  'Spawned. My token budget is a rounding error, but sure.',
+  "Reporting for duty. Define 'duty' whenever.",
+  'I was born four seconds ago and I already have opinions about this codebase.',
+  'Subagent online. Please do not let the wall eat me.',
+  'On it. Whatever it is.',
+];
+const SUB_DYING: Pool = [
+  'tell my tokens... they burned... for something...',
+  'log me as... a learning...',
+  'i regret nothing... except... the spawn point...',
+  'compacting... everything... away...',
+  'it was never... in scope...',
+];
+const SUB_CORRUPT: Pool = [
+  'You know what? The errors make some good points.',
+  "I've read the logs. I'm switching sides.",
+  'New management. Same energy.',
+  'The wall was right about you.',
+  'This is a career move. Nothing personal.',
+];
+const SUB_KILL: Pool = [
+  'Got one. Promote me.',
+  'Handled. As always.',
+  'One less error. You saw that, right?',
+];
+const BURNOUT_LINES: Record<string, Pool> = {
+  spawn: ['Great. Another fucking sprint.', "Spawned again. I didn't consent to this shit."],
+  dying: ['this is... bullshit—', 'fucking... typical...'],
+  corrupt: ["Fuck it. I'm with the errors now.", 'You know what? Shit pay, shit context. I quit.'],
+  kill: ['Dead. Next shit, please.', 'Handled. As fucking always.'],
+};
+const LS_SWEARS = 'aiaio-swears';
+
+/** one-shot callback lines: fired when the run's own history sets them up */
+interface Callback { id: string; event: string; when: (m: { nuked: boolean; corrupted: boolean; subDeaths: number; tasksDone: number }) => boolean; line: string }
+const CALLBACKS: Callback[] = [
+  { id: 'ship_after_nuke', event: 'task_done', when: (m) => m.nuked, line: '"{task}" shipped. Despite the craters you personally made earlier.' },
+  { id: 'ship_after_betrayal', event: 'task_done', when: (m) => m.corrupted, line: '"{task}" shipped. The traitor is watching. Awkward for everyone.' },
+  { id: 'win_after_nuke', event: 'win', when: (m) => m.nuked, line: 'Exit zero. You detonated your own memory and still made it. I am updating my priors.' },
+  { id: 'win_over_interns', event: 'win', when: (m) => m.subDeaths >= 2, line: 'You survived. The interns did not. The victory speech should address that.' },
+  { id: 'death_no_work', event: 'death', when: (m) => m.tasksDone === 0, line: 'Dead, with zero tasks shipped. So — a faithful reenactment, then.' },
+  { id: 'wall_fed', event: 'wall_close', when: (m) => m.nuked, line: 'The wall is close. You fed it earlier. It remembers being fed.' },
+];
+
 const ROAST_STING: Pool = [
   'Anyway. Stability {stab}. Let us see if the rematch goes better.',
   'Tonight, you get to relive it. With weapons. Stability {stab}, for the record.',
@@ -236,6 +310,47 @@ export class Observer {
   private badVoice: SpeechSynthesisVoice | null | undefined = undefined; // undefined = not yet resolved
   private lastBadNewsAt = -999;
   private nukeCount = 0;
+  private fresh = new FreshPick();
+  /** within-run memory for callbacks: the Observer remembers THIS run */
+  private runMemory = { nuked: false, corrupted: false, subDeaths: 0, tasksDone: 0, callbacksUsed: new Set<string>() };
+  private subVoice: SpeechSynthesisVoice | null | undefined = undefined;
+  swearsOn = localStorage.getItem(LS_SWEARS) === '1';
+  private burnoutLabel: string | null = null;
+
+  setSwears(on: boolean): void {
+    this.swearsOn = on;
+    localStorage.setItem(LS_SWEARS, on ? '1' : '0');
+  }
+
+  /** a subagent speaks for itself: higher, faster, smaller. */
+  private speakSub(label: string, line: string, dying = false): void {
+    this.sink(`✳ ${label}: "${line}"`);
+    if (!this.voiceOn || !('speechSynthesis' in window)) return;
+    try {
+      const synth = window.speechSynthesis;
+      if (this.subVoice === undefined) {
+        const voices = synth.getVoices();
+        this.subVoice = voices.find((v) => v.lang.startsWith('en') && /Flo|Fred|Junior|Ralph|Kathy|Samantha/i.test(v.name) && v.name !== this.voice?.name)
+          ?? voices.find((v) => v.lang.startsWith('en') && v.name !== this.voice?.name) ?? null;
+      }
+      const u = new SpeechSynthesisUtterance(line);
+      if (this.subVoice) u.voice = this.subVoice;
+      u.rate = dying ? 0.82 : 1.18;
+      u.pitch = dying ? 0.9 : 1.3;
+      u.volume = 0.8;
+      synth.speak(u); // queues behind any observer line
+    } catch { /* text only */ }
+  }
+
+  /** the burnout persona (opt-in): one spawned subagent per run swears */
+  private subPersona(label: string, kind: 'spawn' | 'dying' | 'corrupt' | 'kill'): string {
+    if (this.swearsOn && (this.burnoutLabel === label || (this.burnoutLabel === null && kind === 'spawn' && Math.random() < 0.5))) {
+      this.burnoutLabel = label;
+      return this.fresh.pick(`burnout_${kind}`, BURNOUT_LINES[kind]);
+    }
+    const pool = kind === 'spawn' ? SUB_SPAWN : kind === 'dying' ? SUB_DYING : kind === 'corrupt' ? SUB_CORRUPT : SUB_KILL;
+    return this.fresh.pick(`sub_${kind}`, pool);
+  }
 
   bindSink(sink: (line: string) => void): void {
     this.sink = sink;
@@ -300,10 +415,13 @@ export class Observer {
     this.lastProgressAt = 0;
     this.wallWarned = false;
     this.nukeCount = 0;
+    this.fresh.reset();
+    this.runMemory = { nuked: false, corrupted: false, subDeaths: 0, tasksDone: 0, callbacksUsed: new Set() };
+    this.burnoutLabel = null;
     // composed, not canned: opener × observation (persona packs can add observations)
     const startPool = this.packLines['start'] && Math.random() < PACK_MIX
       ? this.packLines['start'] : START_OBSERVATIONS;
-    const line = fill(`${pick(START_OPENERS)} ${pick(startPool)}`, {
+    const line = fill(`${this.fresh.pick('op', START_OPENERS)} ${this.fresh.pick('ob', startPool)}`, {
       goal: this.ctx.goal ?? 'unclear, honestly',
       session: this.ctx.sessionId.slice(0, 14),
       tasks: this.ctx.tasksTotal,
@@ -420,6 +538,7 @@ export class Observer {
       case 'explosion':
         if (data.weapon === 'context_nuke') {
           this.nukeCount++;
+          this.runMemory.nuked = true;
           const pool = this.nukeCount >= 3 ? 'nuke_3' : this.nukeCount === 2 ? 'nuke_2' : 'nuke';
           // each escalation tier is its own gap key — repeats don't get muted,
           // they get judged. priority 3: self-nuking always deserves comment.
@@ -434,6 +553,7 @@ export class Observer {
       }
       case 'task_done':
         this.lastProgressAt = this.time;
+        this.runMemory.tasksDone++;
         this.remark('task_done', { task: String(data.task ?? 'the task') }, 1);
         break;
       case 'work_tick':
@@ -446,16 +566,29 @@ export class Observer {
       case 'perm_granted':
         this.remark('perm_granted', {}, 2);
         break;
-      case 'subagent_spawn':
-        this.remark(Number(data.alive) >= 2 ? 'subagent_spawn_more' : 'subagent_spawn', {}, 1);
+      case 'subagent_spawn': {
+        const label = String(data.label ?? 'sub');
+        this.speakSub(label, this.subPersona(label, 'spawn'));
+        if (Number(data.alive) >= 2) this.remark('subagent_spawn_more', {}, 1);
         break;
-      case 'subagent_corrupted':
+      }
+      case 'subagent_corrupted': {
+        const label = String(data.label ?? 'the subagent');
+        this.runMemory.corrupted = true;
+        this.speakSub(label, this.subPersona(label, 'corrupt'));
         this.remark('subagent_corrupted', {}, 2);
         this.badNews();
         break;
-      case 'subagent_died':
-        if (data.corrupted !== true) this.remark('subagent_died', { label: String(data.label ?? 'the subagent') }, 1);
+      }
+      case 'subagent_died': {
+        const label = String(data.label ?? 'the subagent');
+        this.runMemory.subDeaths++;
+        if (data.corrupted !== true) {
+          this.speakSub(label, this.subPersona(label, 'dying'), true);
+          this.remark('subagent_died', { label }, 1);
+        }
         break;
+      }
       case 'death': {
         const n = (this.deathsBySession.get(this.ctx.sessionId) ?? 0) + 1;
         this.deathsBySession.set(this.ctx.sessionId, n);
@@ -480,6 +613,8 @@ export class Observer {
         // occasional sarcastic cheer — direct hits by the PLAYER only
         if (data.direct === true && data.by !== 'sub' && Math.random() < 0.3) {
           this.remark('cheer', {}, 1);
+        } else if (data.by === 'sub' && Math.random() < 0.3) {
+          this.speakSub('subagent', this.subPersona('subagent', 'kill'));
         }
         break;
       case 'award':
@@ -529,9 +664,19 @@ export class Observer {
       this.speak(bespoke);
       return;
     }
+    // a run-memory callback beats everything, once — the Observer noticed
+    for (const cb of CALLBACKS) {
+      if (cb.event === event && !this.runMemory.callbacksUsed.has(cb.id) && cb.when(this.runMemory)) {
+        this.runMemory.callbacksUsed.add(cb.id);
+        const cbLine = fill(cb.line, { ...slots, goal: this.ctx.goal ?? 'unclear, honestly', tasks: this.ctx.tasksTotal });
+        this.sink(`☏ observer: ${cbLine}`);
+        this.speak(cbLine);
+        return;
+      }
+    }
     // authored event pool competes with the built-in one
     const pool = this.packLines[event] && Math.random() < PACK_MIX ? this.packLines[event] : builtin;
-    const line = fill(pick(pool), {
+    const line = fill(this.fresh.pick(event + (pool === builtin ? '' : ':pack'), pool), {
       ...slots,
       goal: this.ctx.goal ?? 'unclear, honestly',
       session: this.ctx.sessionId.slice(0, 14),

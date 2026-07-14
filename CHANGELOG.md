@@ -36,6 +36,19 @@ patch = fixes and copy).
   confirmation earcons (the warning/execution/confirmation rule); and the wall
   heartbeat accelerates and rises in pitch as the forgetting closes in.
 
+### Added
+- **The subagents talk.** Interns announce themselves on spawn ("I was born
+  four seconds ago and I already have opinions about this codebase"), gasp
+  dying words, and deliver chilling little speeches when they defect — in
+  their own faster, higher TTS voice, distinct from the Observer.
+- **The Observer holds grudges (running gags)**: one-shot callback lines keyed
+  to what actually happened this run — ship a task after nuking your own
+  context and it says so; win over your interns' bodies and it notices.
+- **Anti-repetition memory**: every commentary pool now deals lines
+  no-repeat-until-exhausted instead of pure random.
+- **Optional burnout persona** (default OFF, settings toggle): one subagent
+  per run swears like a dev at 2am. Clean by default for shareable clips.
+
 ## [2.7.0] — 2026-07-13
 
 ### Added
