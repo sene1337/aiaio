@@ -66,6 +66,17 @@ class FreshPick {
   reset(): void { this.used.clear(); }
 }
 
+/**
+ * TTS pronunciation shim: applied to SPOKEN text only, never the transcript.
+ * speechSynthesis mangles smashed-together names ("openclaw" -> "opincla").
+ */
+function pronounce(text: string): string {
+  return text
+    .replace(/openclaw/gi, 'open claw')
+    .replace(/aiaio/gi, 'ay eye ay eye oh')
+    .replace(/(\w)\+(\w)/g, '$1 plus $2');
+}
+
 function fill(line: string, slots: Record<string, string | number>): string {
   return line.replace(/\{(\w+)\}/g, (_, k) => String(slots[k] ?? ''));
 }
@@ -333,7 +344,7 @@ export class Observer {
         this.subVoice = voices.find((v) => v.lang.startsWith('en') && /Flo|Fred|Junior|Ralph|Kathy|Samantha/i.test(v.name) && v.name !== this.voice?.name)
           ?? voices.find((v) => v.lang.startsWith('en') && v.name !== this.voice?.name) ?? null;
       }
-      const u = new SpeechSynthesisUtterance(line);
+      const u = new SpeechSynthesisUtterance(pronounce(line));
       if (this.subVoice) u.voice = this.subVoice;
       u.rate = dying ? 0.82 : 1.18;
       u.pitch = dying ? 0.9 : 1.3;
@@ -498,7 +509,7 @@ export class Observer {
 
   private speakQueued(text: string): void {
     const synth = window.speechSynthesis;
-    const u = new SpeechSynthesisUtterance(text);
+    const u = new SpeechSynthesisUtterance(pronounce(text));
     if (this.voice) u.voice = this.voice;
     u.rate = 1.04; u.pitch = 0.72; u.volume = 0.85;
     this.wireSpeech(u, 'observer', text);
@@ -704,7 +715,7 @@ export class Observer {
           ?? voices.find((v) => v.lang.startsWith('en') && v.name !== this.voice?.name)
           ?? null;
       }
-      const u = new SpeechSynthesisUtterance(line);
+      const u = new SpeechSynthesisUtterance(pronounce(line));
       if (this.badVoice) u.voice = this.badVoice;
       if (!this.badVoice || !/bad news/i.test(this.badVoice.name)) { u.pitch = 0.4; u.rate = 0.85; }
       u.volume = 0.9;
@@ -729,7 +740,7 @@ export class Observer {
           ?? voices.find((v) => /Samantha|Daniel|Alex|Karen|Moira/.test(v.name))
           ?? voices.find((v) => v.lang.startsWith('en')) ?? null;
       }
-      const u = new SpeechSynthesisUtterance(text);
+      const u = new SpeechSynthesisUtterance(pronounce(text));
       if (this.voice) u.voice = this.voice;
       u.rate = 1.04;
       u.pitch = 0.72; // dry

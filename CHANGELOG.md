@@ -54,6 +54,9 @@ patch = fixes and copy).
   consumes the screen instead of ghosting over it.
 
 ### Fixed
+- The narrator pronounces the ecosystem correctly: spoken text (never the
+  transcript) transforms "openclaw" to "open claw", spells out AIAIO, and
+  reads "+" as "plus". No more "opincla".
 - The briefing's observer-review box no longer stacks a copy of every
   previous review; only the current session's file gets read.
 
