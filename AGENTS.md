@@ -229,3 +229,14 @@ what the agents before you did and why.
    em-dash-free player-visible strings).
 7. **Never push to GitHub Pages content containing real session data.** The
    deploy workflow builds demo cards only; keep it that way.
+
+## Playtest courtesy (added after a live collision)
+
+When a human is playtesting on the dev server, DO NOT edit source files —
+every save triggers a vite reload that destroys their run mid-session, and
+automated browser QA pollutes their telemetry. Before an editing session,
+check for recent human activity: `ls -l qa-logs/qa-$(date +%Y-%m-%d).jsonl`
+(fresh writes within the last few minutes = someone is playing). If in doubt,
+work on a branch without saving into the served worktree, or coordinate in
+docs/JOURNAL.md. The frozen build (`npm run preview`, port 4173) exists so
+playtests can also opt out of HMR entirely.

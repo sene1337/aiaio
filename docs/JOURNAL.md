@@ -365,3 +365,23 @@ turns out wrong, append a correction.
   first human playtest should confirm; the Timeline rail uses its own generic
   act grouping (ACT I/II 0/6) instead of manifest actName — cosmetic,
   candidate polish. Campaign copy awaits Brad's read-through before deploy.
+
+## 2026-07-14 · Claude Fable 5 · SHIPPED: v2.11.1 to the world + playtest session record
+
+- What: Brad read the true-story campaign and approved; pushed main
+  (a4b4986..3085193) — the public Pages demo now runs everything from the
+  feel pass through THE TIMELINE, forward recap, wall transitions, and the
+  autobiographical 12-level campaign. Pre-push gates: tests green, build
+  green, dist grep clean of private-KB references, shipped manifest verified
+  kind:fictional with the 12 authored titles; post-deploy: live manifest
+  fetched and confirmed.
+- Playtest record (earlier today): Brad played fictional eps 01–02, both
+  PERFECT in ~60s, campaign NEXT flow verified by human hands. Session was
+  disrupted by a concurrent Codex agent live-editing src/ (vite reloads ate
+  his runs) and running robot QA on the same dev server — resolved by frozen
+  preview on 4173 + pausing the other agent. AGENTS.md gains a playtest-
+  courtesy rule so this doesn't recur.
+- Open: eps 01-02 are possibly too easy for the author (tutorial-act
+  defensible; revisit after community feedback). Cosmetic: rail act labels
+  vs manifest actName; epigraph-on-win wants one human confirmation. Remix
+  (Stage D), pre-share review UI, and Task Dives remain the ranked backlog.
