@@ -35,6 +35,12 @@ patch = fixes and copy).
 - **The forgetting veil grinds.** The timeline's left edge is now a living
   churn of runes with an undulating edge of grinding teeth glyphs, and the
   BEFORE THE RECORDS label is big enough to fear.
+- **You enter the session THROUGH the wall.** Starting a run sweeps the
+  grinding rune field across the whole screen (with a low surge-and-settle
+  sound), swaps to the match under full cover, then withdraws to where the
+  in-game wall waits — the title-screen veil and the compaction wall are one
+  continuous entity. Reduced-fx mode swaps instantly; the screen change is
+  wall-clock guaranteed even if rendering stalls.
 
 ### Fixed
 - A stale reference to the removed recap button silently killed all boot

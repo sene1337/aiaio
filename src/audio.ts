@@ -278,6 +278,13 @@ class Audio {
   nearMiss(pan = 0): void { this.noise(0.09, 3200, 0.3, 0, pan); this.tone(1200, 300, 0.1, 'sine', 0.2, 0, pan); }
   shieldAbsorb(): void { this.tone(330, 392, 0.09, 'triangle', 0.5); this.tone(392, 392, 0.05, 'triangle', 0.35, 0.08); }
   permissionGranted(): void { [392, 523, 659, 784].forEach((f, i) => this.tone(f, f, 0.08, 'triangle', 0.45, i * 0.06, 0, 'ui')); }
+  /** the wall wipe: a grinding surge left-to-right, then a settling exhale */
+  wallSweep(): void {
+    this.noise(0.55, 700, 0.7, 0, -0.3);
+    this.tone(70, 46, 0.6, 'sawtooth', 0.6, 0, -0.2);
+    this.noise(0.5, 420, 0.45, 0.62, -0.7);
+    this.tone(52, 38, 0.55, 'sine', 0.5, 0.62, -0.8);
+  }
 }
 
 export const audio = new Audio();

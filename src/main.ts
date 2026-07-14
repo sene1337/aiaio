@@ -20,6 +20,7 @@ import {
 import { CampaignEntry, CampaignManifest, sourceDigest, validateManifest } from './campaign';
 import { doneUnits, progressFrac, totalUnits } from './tasks';
 import { Timeline } from './timeline';
+import { wallWipe } from './transition';
 import { episodeHeadline } from './episode-summary.js';
 
 type ScreenId = 'menu' | 'briefing' | 'match' | 'recap';
@@ -892,7 +893,8 @@ function main(): void {
 
   $('btn-start-match').addEventListener('click', () => {
     if (!run) return;
-    showScreen('match');
+    // the veil and the wall are the same entity: enter the session THROUGH it
+    wallWipe(() => showScreen('match'));
   });
   $('btn-back-menu').addEventListener('click', () => { run = null; refreshVault?.(); showScreen('menu'); });
 
