@@ -26,6 +26,12 @@ function kebab(name: string): string {
   return name.toLowerCase().replace(/ /g, '-');
 }
 
+export interface ForwardRecap {
+  rows: { glyph: string; cls: string; text: string }[];
+  observerWord: string | null;
+  nextTitle: string | null;
+}
+
 export function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!
@@ -1158,55 +1164,60 @@ export class UI {
       outcome: { survived: boolean; recovered: boolean; perfect: boolean };
       campaignRecorded: boolean;
     },
+    forward?: ForwardRecap,
   ): void {
     const over = run.over!;
-    $('recap-headline').textContent = over.headline;
-    const body = $('recap-body');
     const s = run.loadout.cardSummary;
     const done = run.queue.tasks.filter((t) => t.done);
     const eaten = run.queue.tasks.filter((t) => t.forgotten && !t.done);
-    const undone = run.queue.tasks.filter((t) => !t.done && !t.forgotten);
-    const cardBits = s.mode === 'real'
-      ? `<p class="dim">real session ${escapeHtml(s.sessionId)}: top error was ${escapeHtml(s.topErrorCategory)} ×${s.topErrorCount};
-         ${s.compactionEvents} real compaction${s.compactionEvents === 1 ? '' : 's'} on record; this run compacted ${run.ctx.compactions}×.
-         ${s.tasksTotal > 0 ? `the real agent finished ${s.tasksCompleted}/${s.tasksTotal} of these tasks; you finished ${done.length}/${run.queue.tasks.length}.` : ''}</p>`
-      : s.mode === 'demo'
-        ? '<p class="dim">fictional demo session. it does not alter your campaign history.</p>'
-        : '<p class="dim">randomly generated session. run `npm run scan` and pick a real one for a personalized level.</p>';
-    // where in the real session the run ended
-    let placeBit = '';
-    if (run.moments.length > 0) {
-      const nearest = [...run.moments].sort((a, b) =>
-        Math.abs(a.x - run.avatar.x) - Math.abs(b.x - run.avatar.x))[0];
-      if (Math.abs(nearest.x - run.avatar.x) < run.terrain.width * 0.15) {
-        placeBit = `<p class="recap-summary dim">the run ended around the part of the session where: "${escapeHtml(nearest.text.slice(0, 90))}"</p>`;
-      }
-    }
+
+    // 1) celebrate: outcome + rank dominate — losses get an equally proud screen
+    const head = $('recap-headline');
+    head.textContent = over.won
+      ? (rankInfo?.outcome.perfect ? 'PERFECT RECALL' : rankInfo?.outcome.recovered ? 'SESSION RECOVERED' : 'SESSION SURVIVED')
+      : (over.reason === 'wall' ? 'EATEN BY THE FORGETTING' : 'SESSION LOST');
+    head.className = over.won ? 'won' : 'lost';
     const RANK_COLORS: Record<string, string> = { S: '#7ee787', A: '#6cb6ff', B: '#dedad2', C: '#e3b341', D: '#f47067' };
-    const rankBit = rankInfo
-      ? `<p class="recap-rank"><span style="color:${RANK_COLORS[rankInfo.rank]}">★ RANK ${rankInfo.rank}</span>` +
-        `${rankInfo.newBest ? ' <span style="color:var(--yellow)">NEW BEST</span>' : rankInfo.prevBest !== null ? ` <span class="dim">best ${rankInfo.prevBest.toLocaleString()}</span>` : ''}` +
-        `${rankInfo.rankUp && rankInfo.prevBest !== null ? ' <span style="color:var(--green)">RANK UP</span>' : ''}</p>`
-      : '';
-    const outcomeBit = rankInfo
-      ? `<p class="recap-outcome">OUTCOME · survived ${rankInfo.outcome.survived ? 'YES' : 'NO'} · recovered ${rankInfo.outcome.recovered ? 'YES' : 'NO'} · perfect ${rankInfo.outcome.perfect ? 'YES' : 'NO'}${rankInfo.campaignRecorded
-        ? rankInfo.outcome.recovered ? ' · <span style="color:var(--green)">CAMPAIGN CREDIT EARNED</span>' : ' · <span class="dim">campaign credit needs exit + half of the real task work</span>'
-        : ' · <span class="dim">demo/random runs do not affect campaign history</span>'}</p>`
-      : '';
-    body.innerHTML = `
-      ${rankBit}
-      ${outcomeBit}
-      <p class="recap-summary">SCORE ${over.score} · ${Math.floor(run.time)}s · ${run.kills} errors resolved · ${run.ctx.compactions} compactions</p>
-      ${placeBit}
-      <div class="recap-cols"><div class="recap-col">
-        <h3 style="color:#7ee787">${escapeHtml(run.name)}</h3>
-        <p>tasks completed: ${done.length ? done.map((t) => escapeHtml(t.name)).join(', ') : 'none'}</p>
-        ${eaten.length ? `<p style="color:var(--red)">eaten by the wall: ${eaten.map((t) => escapeHtml(t.name)).join(', ')}</p>` : ''}
-        ${undone.length ? `<p class="dim">left undone: ${undone.map((t) => escapeHtml(t.name)).join(', ')}</p>` : ''}
-        <p>hp ${Math.max(0, Math.round(run.avatar.hp))}/100 · ${run.ctx.compactions} compactions${run.ctx.compactions > 2 ? ' (memory was… negotiable)' : ''}</p>
-        ${run.awards.length ? `<p style="color:var(--yellow)">🏆 ${run.awards.map((a) => `${escapeHtml(a.title)} <span class="dim">· ${escapeHtml(a.desc)}</span>`).join('<br/>🏆 ')}</p>` : ''}
-        ${cardBits}
-      </div></div>
+    const rankBig = $('recap-rank-big');
+    if (rankInfo) {
+      rankBig.textContent = `★${rankInfo.rank}`;
+      rankBig.style.color = RANK_COLORS[rankInfo.rank];
+      rankBig.style.textShadow = `0 0 26px ${RANK_COLORS[rankInfo.rank]}66`;
+      rankBig.classList.remove('hidden');
+    } else rankBig.classList.add('hidden');
+    $('recap-score-line').innerHTML = `SCORE <b>${over.score.toLocaleString()}</b>` +
+      `${rankInfo?.newBest && (rankInfo.prevBest ?? 0) > 0 ? ` · <span style="color:var(--green)">new best (+${(over.score - (rankInfo.prevBest ?? 0)).toLocaleString()})</span>`
+        : rankInfo?.prevBest ? ` · <span class="dim">best ${rankInfo.prevBest.toLocaleString()}</span>` : ''}`;
+    $('recap-facts').textContent = [
+      `${Math.floor(run.time)}s`, `${run.kills} errors resolved`,
+      `${done.length}/${run.queue.tasks.length} tasks recovered`, `${run.ctx.compactions} compactions`,
+    ].join(' · ');
+
+    // 2) what moved forward — rows arrive precomputed, every one stat-bound
+    const fwd = $('recap-forward');
+    const rowsBox = $('recap-forward-rows');
+    if (forward && forward.rows.length > 0) {
+      rowsBox.innerHTML = forward.rows.map((r) =>
+        `<div class="row ${r.cls}"><div class="g">${escapeHtml(r.glyph)}</div><div>${escapeHtml(r.text)}</div></div>`).join('');
+      fwd.classList.remove('hidden');
+    } else fwd.classList.add('hidden');
+
+    // 3) the Observer's last word
+    const obs = $('recap-observer');
+    if (forward?.observerWord) {
+      $('recap-observer-line').textContent = `"${forward.observerWord}"`;
+      obs.classList.remove('hidden');
+    } else obs.classList.add('hidden');
+
+    // 4) the fine print (kept compact under the celebration)
+    const cardBits = s.mode === 'real'
+      ? `<p class="dim">real session ${escapeHtml(s.sessionId)} · top error ${escapeHtml(s.topErrorCategory)} ×${s.topErrorCount} · ${s.compactionEvents} recorded compaction${s.compactionEvents === 1 ? '' : 's'}${s.tasksTotal > 0 ? ` · the real agent finished ${s.tasksCompleted}/${s.tasksTotal}` : ''}</p>`
+      : s.mode === 'demo' || s.mode === 'fictional'
+        ? '<p class="dim">authored fictional session · it never touches your real-history ranks.</p>'
+        : '<p class="dim">randomly generated session · pick a real one from the timeline for a personalized level.</p>';
+    $('recap-body').innerHTML = `
+      ${eaten.length ? `<p style="color:var(--red);font-size:12px">eaten by the wall: ${eaten.map((t) => escapeHtml(t.name)).join(', ')}</p>` : ''}
+      ${cardBits}
     `;
   }
 }

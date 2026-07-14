@@ -5,6 +5,37 @@ All notable changes to AIAIO are documented here. Format follows
 [semver](https://semver.org/) (minor = new player-facing capability,
 patch = fixes and copy).
 
+## [2.10.0] — 2026-07-14 — THE TIMELINE and the forward recap
+
+### Changed
+- **The front door is now a level-select map.** Your history rides one rail as
+  CLI transcript-artifact chips (box-drawing boxes, ✻/⏺/❯/☐/░ state glyphs)
+  grouped into acts with rune progress. tmux-style track tabs switch what
+  rides the rail: ✦ MY CAMPAIGN · ⏺ MEMORY MAP · ❯ OPENCLAW+HERMES ·
+  ☐ CUSTOM. One dominant CONTINUE action with a factual reason. The logo is
+  big again.
+- **The recap celebrates, then moves something forward.** Win or lose: a proud
+  outcome banner + big rank, a WHAT MOVED FORWARD ledger (episode unlocked,
+  campaign progress, awards, furthest-reach and attempt counts on losses),
+  the Observer's stat-bound last word, and the right primary action (next
+  episode on campaign wins, retry with the attempt number on losses).
+
+### Added
+- Semantic era zoom for the archive: MEMORY MAP shows era blocks; enter one to
+  see its chapters and sessions; esc zooms out. No hundred-node scrolls.
+- Cold-start states: fresh installs land on the fictional campaign, and an
+  unforged MY CAMPAIGN shows a forge-invitation node whose peek card is the
+  consent explainer.
+- The forgetting veil now covers pre-history only ("records begin <date>") —
+  it never claims intact sessions are lost.
+- Attempt scars (dim ticks under a node per failed run), observer peek quips
+  bound to recorded stats, arrow-key/Tab/Enter navigation with a visible
+  focus treatment, /library overlay with add-to-CUSTOM, drop-anywhere cards.
+
+### Fixed
+- A stale reference to the removed recap button silently killed all boot
+  wiring after it (settings, schema, parts of input) — found when a clean
+  fictional run rendered a black match screen.
 ## [2.9.0] — 2026-07-14 — ENRICH, honestly this time
 
 ### Added

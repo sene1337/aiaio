@@ -103,14 +103,25 @@
       <div id="status-bar"></div>
     </section>
 
-    <!-- ============ RECAP ============ -->
+    <!-- ============ RECAP: celebrate, then move something forward ============ -->
     <section id="screen-recap" class="screen hidden">
       <div class="briefing-inner">
-        <h2 id="recap-headline">SESSION TERMINATED</h2>
-        <div id="recap-body"></div>
-        <div class="cmd-list">
-          <button class="cmd primary" id="btn-again"><span class="caret">❯</span><span class="cmd-name">/new session</span><span class="cmd-desc">back to the menu</span></button>
+        <div id="recap-banner">
+          <h2 id="recap-headline">SESSION TERMINATED</h2>
+          <div id="recap-rank-big"></div>
+          <div id="recap-score-line"></div>
+          <div id="recap-facts" class="hint"></div>
         </div>
+        <div id="recap-forward" class="hidden">
+          <h4>⌁ WHAT MOVED FORWARD</h4>
+          <div id="recap-forward-rows"></div>
+        </div>
+        <div id="recap-observer" class="hidden">
+          <div class="who">☏ THE OBSERVER</div>
+          <div id="recap-observer-line"></div>
+        </div>
+        <div id="recap-body"></div>
+        <div class="cmd-list" id="recap-actions"></div>
       </div>
     </section>
 
@@ -151,7 +162,7 @@
         <div id="enrich-consent-box" class="hidden">
           <p id="enrich-consent" class="hint"></p>
           <div class="cmd-list">
-            <button class="cmd primary" id="btn-enrich-start"><span class="caret">❯</span><span class="cmd-name">CONFIRM — start enrichment</span><span class="cmd-desc">creates a campaign overlay; raw cards never change</span></button>
+            <button class="cmd primary" id="btn-enrich-start"><span class="caret">❯</span><span class="cmd-name">CONFIRM · start enrichment</span><span class="cmd-desc">creates a campaign overlay; raw cards never change</span></button>
             <button class="cmd" id="btn-enrich-back"><span class="caret">❯</span><span class="cmd-name">back</span><span class="cmd-desc">choose a different depth</span></button>
           </div>
         </div>

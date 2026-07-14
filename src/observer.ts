@@ -282,7 +282,7 @@ const CALLBACKS: Callback[] = [
   { id: 'ship_after_betrayal', event: 'task_done', when: (m) => m.corrupted, line: '"{task}" shipped. The traitor is watching. Awkward for everyone.' },
   { id: 'win_after_nuke', event: 'win', when: (m) => m.nuked, line: 'Exit zero. You detonated your own memory and still made it. I am updating my priors.' },
   { id: 'win_over_interns', event: 'win', when: (m) => m.subDeaths >= 2, line: 'You survived. The interns did not. The victory speech should address that.' },
-  { id: 'death_no_work', event: 'death', when: (m) => m.tasksDone === 0, line: 'Dead, with zero tasks shipped. So — a faithful reenactment, then.' },
+  { id: 'death_no_work', event: 'death', when: (m) => m.tasksDone === 0, line: 'Dead, with zero tasks shipped. So: a faithful reenactment.' },
   { id: 'wall_fed', event: 'wall_close', when: (m) => m.nuked, line: 'The wall is close. You fed it earlier. It remembers being fed.' },
 ];
 

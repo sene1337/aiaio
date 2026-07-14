@@ -41,6 +41,9 @@ type RankInfo = {
   campaignRecorded: boolean;
 };
 let lastRankInfo: RankInfo | null = null;
+let activeCampaign: CampaignRun | null = null;
+let lastRunCard: SessionCard | null = null;
+let lastRunMode: SessionMode = 'demo';
 /** re-render THE VAULT (set by loadGallery) — call when returning to the menu */
 let refreshVault: (() => void) | null = null;
 type QAAutoplayController = import('../qa/autoplay').AutoplayController;
@@ -360,8 +363,8 @@ async function openEnrichChooser(): Promise<void> {
   $('enrich-status').textContent = '';
   // factual eligibility BEFORE the player commits (spec §4.1)
   const enough6 = gallerySessionCount >= 6, enough15 = gallerySessionCount >= 15;
-  $('desc-enrich-opening').textContent = `six chronological real sessions · you have ${gallerySessionCount} eligible ${enough6 ? '✓' : `— need 6`}`;
-  $('desc-enrich-campaign').textContent = `15–24 curated real sessions · you have ${gallerySessionCount} eligible ${enough15 ? '✓' : `— need 15`}`;
+  $('desc-enrich-opening').textContent = `six chronological real sessions · you have ${gallerySessionCount} eligible ${enough6 ? '✓' : '· need 6'}`;
+  $('desc-enrich-campaign').textContent = `15–24 curated real sessions · you have ${gallerySessionCount} eligible ${enough15 ? '✓' : '· need 15'}`;
   ($('btn-enrich-opening') as HTMLButtonElement).disabled = !enough6 || !import.meta.env.DEV;
   ($('btn-enrich-campaign') as HTMLButtonElement).disabled = !enough15 || !import.meta.env.DEV;
   if (!import.meta.env.DEV) {
@@ -415,7 +418,7 @@ async function beginEnrichment(baseline = false): Promise<void> {
     $('enrich-status').textContent = 'could not reach the local dev server. run the game with npm run dev for personal enrichment.';
   } finally {
     begin.disabled = false;
-    begin.querySelector('.cmd-name')!.textContent = 'CONFIRM — start enrichment';
+    begin.querySelector('.cmd-name')!.textContent = 'CONFIRM · start enrichment';
   }
 }
 
@@ -430,7 +433,7 @@ async function pollEnrichment(): Promise<void> {
       showPremiere(await fetchCampaign('./cards/campaigns/latest.json'));
     } else if (status.status === 'failed') {
       if (enrichmentPoll !== null) { window.clearInterval(enrichmentPoll); enrichmentPoll = null; }
-      $('enrich-failed-detail').textContent = `the job failed: ${status.detail ?? 'no detail recorded'}. nothing was overwritten — any prior ready campaign is untouched.`;
+      $('enrich-failed-detail').textContent = `the job failed: ${status.detail ?? 'no detail recorded'}. nothing was overwritten. any prior ready campaign is untouched.`;
       enrichShow('failed');
     } else if (status.status === 'cancelled') {
       if (enrichmentPoll !== null) { window.clearInterval(enrichmentPoll); enrichmentPoll = null; }
@@ -440,7 +443,81 @@ async function pollEnrichment(): Promise<void> {
   } catch { /* transient; next poll recovers */ }
 }
 
+/**
+ * WHAT MOVED FORWARD — the Hades rule: every run, win or lose, advances
+ * something visible. Every row binds to a recorded stat; no vibes.
+ */
+function buildForward(r: Run): import('./ui').ForwardRecap {
+  const rows: { glyph: string; cls: string; text: string }[] = [];
+  const p = getProgress(String(r.card.session_id ?? ''));
+  const won = r.over?.won === true;
+  const reach = Math.round((r.avatar.x / r.terrain.width) * 100);
+  const done = r.queue.tasks.filter((t) => t.done).length;
+
+  let nextEntry: CampaignEntry | null = null;
+  if (activeCampaign) {
+    const { manifest, entry } = activeCampaign;
+    nextEntry = manifest.entries.find((e) => e.order === entry.order + 1) ?? null;
+    const progress = getCampaignProgress(manifest);
+    if (won && lastRankInfo?.outcome.recovered && nextEntry && isCampaignOrderUnlocked(progress, nextEntry.order)) {
+      rows.push({ glyph: '✦', cls: 'unlock', text: `EPISODE ${String(nextEntry.order).padStart(2, '0')} UNLOCKED · ${nextEntry.title ?? 'next on the rail'}` });
+    }
+    const recovered = manifest.entries.filter((e) => isCleared(getProgress(e.sourceSessionId))).length;
+    rows.push({ glyph: '↑', cls: 'new', text: `campaign: ${recovered}/${manifest.entries.length} recovered` });
+  }
+  if (lastRankInfo?.newBest && (lastRankInfo.prevBest ?? 0) > 0) {
+    rows.push({ glyph: '↑', cls: 'new', text: `new best score · previous ${lastRankInfo.prevBest!.toLocaleString()}` });
+  }
+  for (const a of r.awards) rows.push({ glyph: '⛁', cls: 'new', text: `AWARD: ${a.title} · ${a.desc}` });
+  if (!won) {
+    rows.push({ glyph: '◌', cls: 'dim', text: `furthest reach this attempt: ${reach}% of the session · ${done} task${done === 1 ? '' : 's'} recovered before the end` });
+    if (p) rows.push({ glyph: '◌', cls: 'dim', text: `attempt ${p.plays} on record · best ★${p.rank} ${p.bestScore.toLocaleString()}` });
+  }
+  const eaten = r.queue.tasks.find((t) => t.forgotten && !t.done);
+  if (won && eaten) rows.push({ glyph: '◌', cls: 'dim', text: `missed: "${eaten.name.slice(0, 40)}" fell to the wall. it remembers.` });
+
+  // the Observer's last word: every claim binds to a recorded number
+  let word: string;
+  if (won && p && p.plays > 1) word = `Attempt ${p.plays}. The first ${p.plays - 1} are also on file. The ledger says recovered, so I will allow it.`;
+  else if (won) word = 'First attempt. Statistically suspicious. Recorded anyway.';
+  else if (p && p.plays >= 3) word = `Attempt ${p.plays}. The wall has a chair with your name on it. Your best remains ${reach >= 1 ? `★${p.rank}` : 'theoretical'}.`;
+  else word = `You reached ${reach}% before the forgetting. The session, for the record, actually happened, and someone survived it once.`;
+
+  return { rows, observerWord: word, nextTitle: nextEntry?.title ?? null };
+}
+
+function wireRecapActions(r: Run): void {
+  const box = $('recap-actions');
+  const won = r.over?.won === true;
+  const { manifest, entry } = activeCampaign ?? {};
+  const next = manifest && entry ? manifest.entries.find((e) => e.order === entry.order + 1) : null;
+  const nextPlayable = won && manifest && next && isCampaignOrderUnlocked(getCampaignProgress(manifest), next.order);
+  box.innerHTML = '';
+  const mk = (label: string, desc: string, primary: boolean, fn: () => void) => {
+    const btn = document.createElement('button');
+    btn.className = `cmd${primary ? ' primary' : ''}`;
+    btn.innerHTML = `<span class="caret">❯</span><span class="cmd-name">${escapeHtml(label)}</span><span class="cmd-desc">${escapeHtml(desc)}</span>`;
+    btn.addEventListener('click', fn);
+    box.appendChild(btn);
+  };
+  if (nextPlayable && manifest && next) {
+    mk(`next · ${String(next.title ?? `episode ${next.order}`).slice(0, 40).toLowerCase()}`, 'continue the campaign', true,
+      () => { void startCampaign(manifest, next); });
+    mk('retry · chase a better rank', 'same episode again', false, () => { if (lastRunCard) prepareRun(lastRunCard, lastRunMode, activeCampaign ?? undefined); });
+  } else if (!won && lastRunCard) {
+    const p = getProgress(String(r.card.session_id ?? ''));
+    mk(`retry · attempt ${(p?.plays ?? 0) + 1}`, 'the wall is patient. so are you', true,
+      () => { prepareRun(lastRunCard!, lastRunMode, activeCampaign ?? undefined); });
+  } else if (lastRunCard) {
+    mk('retry · chase the perfect', 'same session again', true, () => { prepareRun(lastRunCard!, lastRunMode, activeCampaign ?? undefined); });
+  }
+  mk('timeline · back to the map', 'choose another episode', false, () => { run = null; refreshVault?.(); showScreen('menu'); });
+}
+
 function prepareRun(card: SessionCard, mode: SessionMode, campaign?: CampaignRun): void {
+  activeCampaign = campaign ?? null;
+  lastRunCard = card;
+  lastRunMode = mode;
   runCounter++;
   const name = card.session_id ? `agent:${String(card.session_id).slice(0, 14)}` : 'AGENT-01';
   let loadout = loadoutFromCard(card, name, { mode });
@@ -744,7 +821,8 @@ function frameBody(t: number): void {
       const r = run;
       window.setTimeout(() => {
         if (run === r && r.over) {
-          ui.buildRecap(r, lastRankInfo ?? undefined);
+          ui.buildRecap(r, lastRankInfo ?? undefined, buildForward(r));
+          wireRecapActions(r);
           showScreen('recap');
         }
       }, 1500);
@@ -817,7 +895,6 @@ function main(): void {
     showScreen('match');
   });
   $('btn-back-menu').addEventListener('click', () => { run = null; refreshVault?.(); showScreen('menu'); });
-  $('btn-again').addEventListener('click', () => { run = null; refreshVault?.(); showScreen('menu'); });
 
   $('schema-pre').textContent = SESSION_CARD_SCHEMA;
   $('btn-schema').addEventListener('click', () => $('modal-schema').classList.remove('hidden'));
