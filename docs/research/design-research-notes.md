@@ -327,3 +327,40 @@ rules it derived (kept here because they are actionable and traceable):
 - **GDC onboarding / replayability talks**: session abstracts only; no slide or talk
   content was fetched (flagged thin in their section).
 - **XAG 103**: goal/overview only; implementation guidelines were not fetched.
+
+---
+
+## Addendum 2026-07-14: menu / level-select / results-screen research
+
+Fetched after Brad's morning feedback on the v2.8.0 front door (dense
+data-terminal, buried ENRICH, campaign hidden behind a button). The original
+audit never covered out-of-combat screens.
+
+### Level select (Game UI Database patterns, UX Planet)
+- Present selection as a MAP or spatial journey, not a list — world-map
+  metaphors with a visible path dominate memorable examples.
+- Locked vs unlocked must be legible at a glance; per-node stats/ranks on the
+  map itself; attractive background is a hallmark, not a luxury.
+- Growing content → scroll horizontally within the map scene rather than
+  navigating away.
+
+### Main menu (multiple design guides)
+- ONE primary action dominates via size/color/position; everything else is
+  visually subordinate.
+- Fewer than 6–7 items; group or hide the rest behind sub-surfaces.
+- The title/identity should be proud — the menu carries the game's aesthetic,
+  not a utility layout. Consistency with in-game HUD style.
+
+### Results / end-of-run (Hades analyses, roguelite progression guides)
+- Every run — win OR lose — must visibly move something forward; show exactly
+  what moved (unlocks, deltas, story). Failure that yields visible progress is
+  the roguelite retention engine.
+- Characters who REMEMBER prior attempts turn death screens into narrative
+  (AIAIO already has Observer run-memory; extend across runs per session).
+- Celebrate first (big outcome/rank reveal), inform second (stats), then ONE
+  continuation action ("next episode"), not a dump back to the menu.
+
+Sources: gameuidatabase.com screens 42/6/53/52, uxplanet.org game-design UX
+best practices, krishnamohanyag.medium.com game-menus-as-ux-masterpieces,
+justinmind.com game UI principles, screenrant/game-wisdom/kokutech Hades
+analyses, bugnet.io roguelite meta-progression.

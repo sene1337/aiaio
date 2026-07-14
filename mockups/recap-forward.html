@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"/><title>MOCKUP — recap that moves forward</title>
+<style>
+:root { --bg:#0f0f0e; --bg-panel:#161615; --text:#dedad2; --dim:#8f8b82; --border:#3a3833;
+  --green:#7ee787; --clay:#ff9440; --purple:#b18aff; --blue:#6cb6ff; --red:#f47067; --yellow:#e3b341; }
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body { height:100%; background:var(--bg); color:var(--text);
+  font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:13px; overflow:hidden; }
+#app { height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; }
+
+/* 1. CELEBRATE: outcome + rank reveal dominate */
+#banner { text-align:center; }
+#banner .outcome { font-size:30px; letter-spacing:.14em; color:var(--green); text-shadow:0 0 24px rgba(126,231,135,.35); }
+#banner .rank { font-size:64px; color:var(--purple); text-shadow:0 0 30px rgba(177,138,255,.5); margin:6px 0 2px; }
+#banner .score { font-size:15px; color:var(--text); }
+#banner .score b { color:var(--yellow); }
+#banner .sub { color:var(--dim); font-size:11px; margin-top:4px; }
+
+/* 2. WHAT MOVED FORWARD: the Hades rule — every run advances something */
+#forward { width:620px; border:1px solid var(--border); background:var(--bg-panel); padding:12px 16px; }
+#forward h4 { font-size:11px; letter-spacing:.12em; color:var(--clay); margin-bottom:8px; font-weight:normal; }
+#forward .row { display:flex; gap:10px; font-size:12px; line-height:1.9; }
+#forward .row .g { width:20px; text-align:center; }
+#forward .new { color:var(--green); }
+#forward .unlock { color:var(--purple); }
+#forward .dim { color:var(--dim); }
+
+/* 3. the Observer gets the last word */
+#observer { width:620px; border-left:2px solid var(--purple); padding:8px 14px; background:rgba(177,138,255,.05);
+  font-size:12px; line-height:1.6; font-style:italic; color:var(--text); }
+#observer .who { color:var(--purple); font-style:normal; font-size:10px; letter-spacing:.1em; }
+
+/* 4. ONE continuation, subordinate extras */
+#next { text-align:center; }
+#next .primary { background:var(--bg-panel); border:1px solid var(--clay); color:var(--clay);
+  font-family:inherit; font-size:15px; padding:11px 30px; cursor:pointer; letter-spacing:.05em; }
+#next .peek { color:var(--dim); font-size:11px; margin-top:6px; }
+#next .others { margin-top:10px; font-size:11px; color:var(--dim); }
+#next .others b { color:var(--blue); font-weight:normal; }
+</style></head><body><div id="app">
+
+  <div id="banner">
+    <div class="outcome">SESSION RECOVERED</div>
+    <div class="rank">★A</div>
+    <div class="score">SCORE <b>9,410</b> · new best (+2,180)</div>
+    <div class="sub">EPISODE 03 · "Sixteen Timeouts, One Cold Restart" · attempt 2 · 4/5 tasks recovered · 2 compactions</div>
+  </div>
+
+  <div id="forward">
+    <h4>⌁ WHAT MOVED FORWARD</h4>
+    <div class="row"><div class="g unlock">✦</div><div><span class="unlock">EPISODE 04 UNLOCKED</span> — "Gateway Health Sweep" <span class="dim">· ACT II continues</span></div></div>
+    <div class="row"><div class="g new">↑</div><div><span class="new">ACT II: 2/3 recovered</span> <span class="dim">— one more for the act trophy</span></div></div>
+    <div class="row"><div class="g new">🏆</div><div><span class="new">AWARD: COLD RESTART SURVIVOR</span> <span class="dim">— beat a level with 16+ timeout errors</span></div></div>
+    <div class="row"><div class="g dim">◌</div><div class="dim">missed: perfect recall — one task fell to the wall at 71%. it remembers.</div></div>
+  </div>
+
+  <div id="observer">
+    <div class="who">☏ THE OBSERVER</div>
+    "Second attempt. You lost this session to timeouts in March and to overconfidence just now — but the ledger says recovered, so I'll allow it. Episode four is the gateway sweep. Historically, you sweep nothing."
+  </div>
+
+  <div id="next">
+    <button class="primary">▶ NEXT — EPISODE 04: GATEWAY HEALTH SWEEP</button>
+    <div class="peek">2026-03-27 · 5 tasks · 21 errors · diff 46</div>
+    <div class="others">/retry <b>chase the ★S</b> · /timeline <b>back to the map</b></div>
+  </div>
+
+</div></body></html>
