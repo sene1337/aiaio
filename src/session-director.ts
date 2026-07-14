@@ -168,7 +168,7 @@ export class SessionDirector {
       const left = anchors[i - 1]; const right = anchors[i];
       if (right - left >= Math.max(520, width * 0.18)) candidates.push(Math.round((left + right) / 2));
     }
-    const injectionCount = Math.min(combat.observerInjectionLimit, candidates.length);
+    const injectionCount = entry?.pacing === false ? 0 : Math.min(combat.observerInjectionLimit, candidates.length);
     const observerLines = new Set<string>();
     const observerVariant = rng.int(0, 4);
     for (let i = 0; i < injectionCount; i++) {

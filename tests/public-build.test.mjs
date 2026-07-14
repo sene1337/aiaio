@@ -10,6 +10,7 @@ test('production card assembly purges private assets and ships only fictional ca
   mkdirSync(join(root, 'examples'), { recursive: true });
   mkdirSync(join(root, 'scripts'), { recursive: true });
   cpSync(join(process.cwd(), 'examples', 'openclaw-hermes-campaign.json'), join(root, 'examples', 'openclaw-hermes-campaign.json'));
+  cpSync(join(process.cwd(), 'scripts', 'fictional-campaign.mjs'), join(root, 'scripts', 'fictional-campaign.mjs'));
   cpSync(join(process.cwd(), 'scripts', 'make-demo-cards.mjs'), join(root, 'scripts', 'make-demo-cards.mjs'));
   mkdirSync(join(root, 'dist', 'cards'), { recursive: true });
   writeFileSync(join(root, 'dist', 'cards', 'private-session.json'), JSON.stringify({ session_id: 'PRIVATE_SENTINEL' }));

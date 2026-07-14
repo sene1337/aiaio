@@ -30,6 +30,15 @@ export interface CampaignEntry {
   taskLabel?: string;
   momentText?: string[];
   observerLines?: string[];
+  /** authored 1-3 line briefing (the Observer reads these instead of composing) */
+  briefing?: string[];
+  /** timeline gap marker rendered before this entry (documentary gap-time) */
+  gapBefore?: string;
+  /** false = the Director stages no pacing encounters (quiet denouements) */
+  pacing?: boolean;
+  /** the Observer's post-level line on a win (the ketsu) */
+  epigraph?: string;
+  actName?: string;
 }
 
 export interface CampaignManifest {

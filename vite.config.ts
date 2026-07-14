@@ -39,37 +39,10 @@ function envForLlmCmd(cmd: string): NodeJS.ProcessEnv {
 }
 
 /** Shared dev representation of the assets that make-demo-cards writes at build. */
+import { buildFictionalAssets } from './scripts/fictional-campaign.mjs';
 function fictionalCampaignAssets(): { manifest: Record<string, unknown>; cards: Map<string, Record<string, unknown>> } {
-  const campaign = JSON.parse(readFileSync(join(process.cwd(), 'examples', 'openclaw-hermes-campaign.json'), 'utf8'));
-  const cards = new Map<string, Record<string, unknown>>();
-  const entries: Array<Record<string, unknown>> = [];
-  let order = 0;
-  for (const act of campaign.acts) {
-    for (const level of act.levels) {
-      order++;
-      const file = `openclaw-hermes/${String(order).padStart(2, '0')}.json`;
-      const card = {
-        session_id: `fictional-openclaw-hermes-${String(order).padStart(2, '0')}`,
-        harness: 'fictional', when: 'THE LONG NOW', goal: level.goal,
-        message_count: level.messages, token_peak: 9000 + order * 550,
-        compaction_events: Math.floor(order / 4), restarts: Math.floor(order / 3),
-        recoveries: Math.floor(order / 4), model_switches: Math.floor(order / 5), stability_score: Math.max(40, 78 - order * 2),
-        tasks: [{ name: level.task, work_units: 2 + Math.floor(order / 3), completed: false, at: 0.42 }],
-        errors: [{ category: level.error, count: level.count, sample: 'fictional campaign signal', at: [0.3, 0.62, 0.79] }],
-        moments: [{ at: 0.18, kind: 'note', text: `${act.name}: ${level.title}` }],
-      };
-      cards.set(file, card);
-      entries.push({ file, sourceSessionId: card.session_id, sourceDigest: `fiction-${String(order).padStart(2, '0')}`, order, title: level.title, taskLabel: level.task });
-    }
-  }
-  return {
-    cards,
-    manifest: {
-      schemaVersion: 1, id: campaign.id, revision: 1, kind: 'fictional', createdAt: '2026-07-13T00:00:00.000Z',
-      sourceCardDigest: 'openclaw-hermes-fiction-v1', selectedSourceIds: entries.map((entry) => entry.sourceSessionId),
-      recipe: { selection: 'story', pace: 'intense', observerTone: 'dry mission control', ruleset: 'factual' }, writerStatus: 'custom', entries,
-    },
-  };
+  const { cards, manifest } = buildFictionalAssets(process.cwd());
+  return { cards, manifest };
 }
 
 /**

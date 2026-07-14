@@ -1125,9 +1125,13 @@ export class UI {
     const s = loadout.cardSummary;
     const campaignLine = campaign?.mode === 'real'
       ? `<div class="stat-line" style="color:var(--yellow)">difficulty ${campaign.diff}/100 · ${escapeHtml(campaign.tierName)}${campaign.prevRank ? ` · your record: ${escapeHtml(campaign.prevRank)}` : ' · unplayed'}</div>`
-      : campaign
-        ? `<div class="stat-line dim">${campaign.mode === 'demo' ? 'fictional demo' : 'random session'} · no campaign progress is recorded</div>`
-      : '';
+      : campaign?.mode === 'fictional'
+        ? `<div class="stat-line" style="color:var(--purple)">authored fiction, based on true events · its own campaign progress${campaign.prevRank ? ` · your record: ${escapeHtml(campaign.prevRank)}` : ''}</div>`
+        : campaign?.mode === 'remix'
+          ? '<div class="stat-line dim">remix · separate progress, tuned combat</div>'
+          : campaign
+            ? `<div class="stat-line dim">${campaign.mode === 'demo' ? 'fictional demo' : 'random session'} · no campaign progress is recorded</div>`
+            : '';
 
     const agentCol = document.createElement('div');
     agentCol.className = 'briefing-col p0';

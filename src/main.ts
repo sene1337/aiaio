@@ -279,10 +279,31 @@ function showPremiere(manifest: CampaignManifest): void {
   $('premiere-copy').textContent = `${mode} · ${manifest.entries.length} levels · ${manifest.writerStatus === 'custom' ? 'authored presentation ready' : 'baseline presentation ready'}`;
   $('premiere-first').textContent = `01 · ${first.title ?? first.sourceSessionId}`;
   $('btn-premiere-begin').onclick = () => { modal.classList.add('hidden'); void startCampaign(manifest, first); };
+  const sub = (manifest as unknown as { subtitle?: string; disclosure?: string });
+  if (manifest.kind === 'fictional' && sub.subtitle) {
+    $('premiere-copy').textContent = `${sub.subtitle} · ${manifest.entries.length} levels`;
+  }
   const levels = $('premiere-levels');
   levels.replaceChildren();
   const progress = getCampaignProgress(manifest);
+  let lastAct: string | undefined;
   for (const entry of manifest.entries) {
+    if (entry.actName && entry.actName !== lastAct) {
+      lastAct = entry.actName;
+      const act = document.createElement('div');
+      act.className = 'hint';
+      act.style.textAlign = 'left';
+      act.style.marginTop = '8px';
+      act.textContent = entry.actName;
+      levels.appendChild(act);
+    }
+    if (entry.gapBefore) {
+      const gap = document.createElement('div');
+      gap.className = 'hint dim';
+      gap.style.textAlign = 'left';
+      gap.textContent = `▓▒░ ${entry.gapBefore}`;
+      levels.appendChild(gap);
+    }
     const button = document.createElement('button');
     const unlocked = isCampaignOrderUnlocked(progress, entry.order);
     button.className = `cmd${unlocked ? '' : ' disabled'}`;
@@ -490,7 +511,10 @@ function buildForward(r: Run): import('./ui').ForwardRecap {
   else if (p && p.plays >= 3) word = `Attempt ${p.plays}. The wall has a chair with your name on it. Your best remains ${reach >= 1 ? `★${p.rank}` : 'theoretical'}.`;
   else word = `You reached ${reach}% before the forgetting. The session, for the record, actually happened, and someone survived it once.`;
 
-  return { rows, observerWord: word, nextTitle: nextEntry?.title ?? null };
+  // an authored campaign epigraph outranks the composed word on a win —
+  // this is where the story gets its last line
+  const epigraph = won ? activeCampaign?.entry.epigraph : undefined;
+  return { rows, observerWord: epigraph && epigraph.trim() ? epigraph : word, nextTitle: nextEntry?.title ?? null };
 }
 
 function wireRecapActions(r: Run): void {
@@ -613,8 +637,10 @@ function prepareRun(card: SessionCard, mode: SessionMode, campaign?: CampaignRun
     tasksCompleted: loadout.cardSummary.tasksCompleted,
     stability: loadout.stability,
   };
-  const composed = observer.briefingRoast(meta);
-  ui.setBriefingRoast(composed, 'composed');
+  // authored campaign briefings take the roast slot: the story speaks first
+  const authored = campaign?.entry.briefing?.filter((l) => typeof l === 'string' && l.trim()).slice(0, 3);
+  const composed = authored && authored.length > 0 ? authored : observer.briefingRoast(meta);
+  ui.setBriefingRoast(composed, authored && authored.length > 0 ? 'llm' : 'composed');
   const thisRun = run;
   let spoken = false;
   const speakIfCurrent = (lines: string[]) => {

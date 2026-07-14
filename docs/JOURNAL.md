@@ -339,3 +339,29 @@ turns out wrong, append a correction.
   when Brad approves). Re-forge season-archiving (review problem #6) is
   spec'd but not built - re-forge currently overwrites latest.json (it did
   tonight: the 24-episode campaign replaced the 6-episode Opening).
+
+## 2026-07-14 · Claude Fable 5 · the true-story campaign (v2.10.0)
+
+- What: replaced the generic fictional campaign with an autobiographical
+  12-level reconstruction of Brad's real Feb–Jul OpenClaw/Sene/Hermes journey.
+  Sources: ~934 Grok-captured tweets + the 83k-tweet local archive + session
+  archaeology, fused into a PRIVATE KB (~/fable/aiaio-narrative/ — never
+  ships) and a research doc (docs/research/narrative-design-notes.md).
+  Structure per research: 3 acts, kishōtenketsu turn at L10 (the only undated
+  title), climax L11 (the player performs the archive/migration with a verb
+  trained since L4), quiet L12 denouement (pacing:false, epigraph channel).
+- Why the boundaries: tweets are fair game (Brad's explicit ruling); no
+  third-party or family names ship; April is a dates-only gap ("the records
+  stop here") — the wisdom it produced ships, its cause does not. The
+  "wife asked" tweet ships as "I showed her…" — one degree gentler than the
+  source.
+- Verified: shared builder feeds build+dev identically (12 entries, gap
+  marker, briefing arrays); tests green incl. private-asset purge; live
+  browser: 12 titles on the timeline rail reading as the story, L1 authored
+  briefing in the roast slot, Director compiles L12 with 0 staged encounters
+  (pacing:false honored) and L5 with 14 recorded; L1 won end-to-end in sim.
+- Open: epigraph-on-win recap line is code-verified but not yet eyeballed in
+  a visible tab (hidden-tab rAF blocks recap in headless verification) —
+  first human playtest should confirm; the Timeline rail uses its own generic
+  act grouping (ACT I/II 0/6) instead of manifest actName — cosmetic,
+  candidate polish. Campaign copy awaits Brad's read-through before deploy.
