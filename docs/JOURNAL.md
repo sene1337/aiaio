@@ -313,3 +313,29 @@ turns out wrong, append a correction.
   and richer error-wave staging remain per spec. The burnout persona ships
   default-off. Brad's real 6-episode Opening is generated locally
   (gitignored) and waiting behind MY CAMPAIGN.
+
+## 2026-07-14 · Claude Fable 5 · THE TIMELINE + forward recap (v2.10.0)
+
+- What: replaced the v2.8.0 workspace front door (Brad: "worse somehow...
+  massive wall of text") with the timeline level-select map, after fresh
+  research (menu/level-select/results screens were never in the original
+  audit) and an adversarial game-designer subagent review of the mockups.
+  All three review blockers built: cold-start states, semantic era zoom for
+  the 884-session archive, and the loss recap. Veil moved to pre-history;
+  shared outcome ledger across tracks; attempt scars; stat-bound observer
+  quips on the map and in the recap's last word.
+- Why: research rule broken by v2.8.0 - level selects are maps, not lists;
+  menus want one dominant action and a proud identity; every run must
+  visibly move something forward. New invariant adopted: any Observer line
+  claiming something about the player's history must bind to a recorded
+  stat.
+- Verified: live browser - four tracks render and switch, era zoom in/out,
+  keyboard traversal + focus, CONTINUE -> briefing, full loss flow to the
+  recap (screenshot matches mockup), cards drop -> CUSTOM, /library
+  add-to-track. Found + fixed a boot-killing stale DOM reference (removed
+  recap button) that blanked the match screen. Win-variant recap verified
+  by code path only; campaign-win NEXT button needs one human playtest.
+- Open: main merged locally, deploy still deferred (git push origin main
+  when Brad approves). Re-forge season-archiving (review problem #6) is
+  spec'd but not built - re-forge currently overwrites latest.json (it did
+  tonight: the 24-episode campaign replaced the 6-episode Opening).
