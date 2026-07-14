@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><meta charset="UTF-8"/><title>MOCKUP — THE TIMELINE front door</title>
+<html lang="en"><head><meta charset="UTF-8"/><title>MOCKUP v2 — THE TIMELINE, CLI-native</title>
 <style>
 :root { --bg:#0f0f0e; --bg-panel:#161615; --text:#dedad2; --dim:#8f8b82; --border:#3a3833;
   --green:#7ee787; --clay:#ff9440; --purple:#b18aff; --blue:#6cb6ff; --red:#f47067; --yellow:#e3b341; }
@@ -8,62 +8,70 @@ html,body { height:100%; background:var(--bg); color:var(--text);
   font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:13px; overflow:hidden; }
 #app { height:100vh; display:flex; flex-direction:column; }
 
-/* ---- proud identity: logo is the hero of the top third ---- */
-header { text-align:center; padding:26px 0 6px; flex:0 0 auto; }
+/* ---- identity: the logo owns the top ---- */
+header { text-align:center; padding:24px 0 4px; flex:0 0 auto; }
 .logo { font-size:15px; line-height:1.12; display:inline-block; text-align:left;
   background:linear-gradient(100deg,#ff9440 15%,#b18aff 50%,#6cb6ff 85%);
   -webkit-background-clip:text; background-clip:text; color:transparent; user-select:none;
   filter:drop-shadow(0 0 18px rgba(177,138,255,.25)); }
-.tag { color:var(--dim); font-size:12px; margin-top:8px; letter-spacing:.04em; }
+.tag { color:var(--dim); font-size:12px; margin-top:8px; }
 .tag b { color:var(--text); }
 
-/* ---- THE TIMELINE: your history as a map being eaten from the left ---- */
+/* ---- track tabs: which set of levels rides the rail. tmux-style. ---- */
+#tracks { display:flex; justify-content:center; gap:0; padding:14px 0 0; flex:0 0 auto;
+  font-size:12px; white-space:pre; line-height:1.25; }
+.track { color:var(--dim); cursor:pointer; padding:0 6px; }
+.track .top, .track .mid, .track .bot { display:block; }
+.track.active { color:var(--purple); }
+.track.active .name { color:var(--text); font-weight:bold; }
+.track:hover:not(.active) { color:var(--text); }
+.track .n { color:var(--blue); }
+
+/* ---- THE TIMELINE ---- */
 #map-wrap { flex:1 1 auto; min-height:0; position:relative; display:flex; flex-direction:column; justify-content:center; }
-#timeline { position:relative; height:270px; overflow:hidden; }
-/* the forgetting consumes your oldest history */
-.forgetting { position:absolute; left:0; top:0; bottom:0; width:120px; z-index:3;
-  background:linear-gradient(90deg, #0f0f0e 30%, rgba(244,112,103,.10) 70%, transparent);
+#timeline { position:relative; height:250px; overflow:hidden; font-size:13px; }
+.forgetting { position:absolute; left:0; top:0; bottom:0; width:118px; z-index:3;
+  background:linear-gradient(90deg,#0f0f0e 30%,rgba(244,112,103,.10) 70%,transparent);
   border-right:1px solid rgba(244,112,103,.25); }
 .forgetting .veil { position:absolute; inset:0; color:rgba(244,112,103,.4); font-size:11px; overflow:hidden;
   line-height:1.35; white-space:pre; mask-image:linear-gradient(90deg,black 40%,transparent); }
-.forgetting .label { position:absolute; bottom:12px; left:10px; color:var(--red); font-size:10px; letter-spacing:.1em; opacity:.8; }
+.forgetting .label { position:absolute; bottom:10px; left:10px; color:var(--red); font-size:10px; letter-spacing:.1em; opacity:.8; }
 
-/* rail + nodes */
-.rail { position:absolute; left:110px; right:40px; top:130px; height:2px;
-  background:repeating-linear-gradient(90deg,var(--border) 0 8px,transparent 8px 14px); }
-.node { position:absolute; top:106px; width:130px; margin-left:-65px; text-align:center; cursor:pointer; }
-.node .glyph { font-size:22px; line-height:48px; width:48px; height:48px; margin:0 auto;
-  border:1px solid var(--border); background:var(--bg-panel); border-radius:2px; }
-.node .t { font-size:10px; color:var(--dim); margin-top:6px; line-height:1.45; }
-.node.recovered .glyph { color:var(--green); border-color:var(--green); }
-.node.perfect .glyph { color:var(--purple); border-color:var(--purple); box-shadow:0 0 14px rgba(177,138,255,.35); }
-.node.next .glyph { color:var(--clay); border-color:var(--clay); box-shadow:0 0 18px rgba(255,148,64,.45); animation:pulse 1.6s infinite; }
-.node.locked .glyph { color:#55524c; }
-.node.next .t, .node.next .t b { color:var(--text); }
-@keyframes pulse { 50% { box-shadow:0 0 26px rgba(255,148,64,.7);} }
-.era { position:absolute; top:36px; font-size:10px; letter-spacing:.12em; color:var(--blue); }
-.era small { display:block; color:var(--dim); letter-spacing:0; margin-top:2px; }
-.act-line { position:absolute; top:58px; height:150px; border-left:1px dashed #2c2a26; }
+/* the rail is a drawn CLI transcript line */
+.rail { position:absolute; left:112px; right:30px; top:118px; color:#4a4740; font-size:13px;
+  white-space:pre; overflow:hidden; line-height:1; }
 
-/* ONE dominant action */
-#continue { text-align:center; padding:10px 0 4px; }
+/* nodes are CLI transcript artifacts, not icons */
+.node { position:absolute; top:96px; width:150px; margin-left:-75px; text-align:center; cursor:pointer; white-space:pre; line-height:1.35; }
+.node .chip { font-size:14px; }
+.node .meta { font-size:10px; color:var(--dim); margin-top:3px; white-space:normal; line-height:1.45; }
+.node.perfect .chip { color:var(--purple); text-shadow:0 0 12px rgba(177,138,255,.5); }
+.node.recovered .chip { color:var(--green); }
+.node.next .chip { color:var(--clay); text-shadow:0 0 14px rgba(255,148,64,.55); animation:pulse 1.4s infinite; }
+.node.next .meta, .node.next .meta b { color:var(--text); }
+.node.locked .chip { color:#514e48; }
+.node.locked .meta { color:#514e48; }
+@keyframes pulse { 50% { opacity:.55; } }
+.era { position:absolute; top:30px; font-size:11px; color:var(--blue); white-space:pre; }
+.era .sub { color:var(--dim); }
+
+#peek { position:absolute; right:36px; top:14px; width:300px; z-index:4;
+  background:rgba(22,22,21,.97); padding:0; font-size:11px; line-height:1.55; white-space:pre-wrap;
+  border:1px solid var(--border); }
+#peek pre { padding:8px 12px; white-space:pre-wrap; }
+#peek .k { color:var(--purple); }
+#peek .h { color:var(--text); font-size:12px; }
+#peek .dim { color:var(--dim); }
+
+#continue { text-align:center; padding:8px 0 4px; }
 #continue button { background:var(--bg-panel); border:1px solid var(--clay); color:var(--clay);
   font-family:inherit; font-size:16px; padding:12px 34px; cursor:pointer; letter-spacing:.05em; }
 #continue button:hover { background:#221a12; }
 #continue .why { color:var(--yellow); font-size:11px; margin-top:6px; }
 
-/* selected-node card: appears on hover/selection, never a permanent wall */
-#peek { position:absolute; right:44px; top:18px; width:290px; z-index:4;
-  border:1px solid var(--border); background:rgba(22,22,21,.96); padding:10px 12px; font-size:11px; line-height:1.6; }
-#peek .k { color:var(--purple); letter-spacing:.08em; font-size:10px; }
-#peek .h { color:var(--text); font-size:12px; margin:3px 0; }
-#peek .dim { color:var(--dim); }
-
-/* quiet footer: everything else lives here, grouped */
 footer { flex:0 0 auto; display:flex; justify-content:center; gap:26px; padding:10px 0 14px;
   border-top:1px solid var(--border); font-size:11px; color:var(--dim); }
 footer span b { color:var(--blue); font-weight:normal; }
-footer .enrich b { color:var(--purple); }
 </style></head><body><div id="app">
 
 <header>
@@ -77,6 +85,14 @@ footer .enrich b { color:var(--purple); }
   <div class="tag">your history is the campaign. behind you: <b>the wall of forgetting</b> · ⎿ made by <span style="color:var(--clay)">@bradmillscan</span></div>
 </header>
 
+<!-- which set rides the rail: obvious, tabbed, counted -->
+<div id="tracks">
+<span class="track active"><span class="top">╭─────────────────────╮</span><span class="mid">│ ✦ <span class="name">MY CAMPAIGN</span> <span class="n">24</span>     │</span><span class="bot">╰─────────────────────╯</span></span>
+<span class="track"><span class="top">╭──────────────────╮</span><span class="mid">│ ⏺ MEMORY MAP <span class="n">884</span> │</span><span class="bot">╰──────────────────╯</span></span>
+<span class="track"><span class="top">╭───────────────────────╮</span><span class="mid">│ ❯ OPENCLAW+HERMES <span class="n">12</span>  │</span><span class="bot">╰───────────────────────╯</span></span>
+<span class="track"><span class="top">╭────────────────╮</span><span class="mid">│ ☐ CUSTOM <span class="n">drop</span>  │</span><span class="bot">╰────────────────╯</span></span>
+</div>
+
 <div id="map-wrap">
   <div id="timeline">
     <div class="forgetting">
@@ -88,40 +104,49 @@ f▓rg░tt▒n
 ▒░▓█░▒▓░▒</div>
       <div class="label">THE FORGETTING</div>
     </div>
-    <div class="rail"></div>
 
-    <div class="era" style="left:150px">ACT I — FEBRUARY<small>the openclaw days · 3/4 recovered</small></div>
-    <div class="act-line" style="left:420px"></div>
-    <div class="era" style="left:445px">ACT II — MARCH<small>the timeout wars · 1/3</small></div>
-    <div class="act-line" style="left:700px"></div>
-    <div class="era" style="left:725px">ACT III — THE MIGRATION<small>0/5 · locked</small></div>
+    <div class="rail">━━━━━━━━━┿━━━━━━━━━━━┿━━━━━━━━━━━━┥┝━━━━━━━━━┿━━━━━━━━━━┿━━━━━━━━━━━━┥┝━━━━━━━━┿━━━━━━━━┿━━━━━</div>
 
-    <div class="node perfect" style="left:190px"><div class="glyph">✦</div><div class="t">01 · UPGRADE ACKNOWLEDGED<br/>★S 12,480</div></div>
-    <div class="node recovered" style="left:310px"><div class="glyph">☒</div><div class="t">02 · THE WORKER THAT<br/>WOULD NOT STAY UP · ★A</div></div>
-    <div class="node next" style="left:470px"><div class="glyph">▶</div><div class="t"><b>03 · SIXTEEN TIMEOUTS,<br/>ONE COLD RESTART</b></div></div>
-    <div class="node locked" style="left:590px"><div class="glyph">☐</div><div class="t">04 · GATEWAY SWEEP</div></div>
-    <div class="node locked" style="left:760px"><div class="glyph">🔒</div><div class="t">05 · ???</div></div>
-    <div class="node locked" style="left:880px"><div class="glyph">🔒</div><div class="t">06 · ???</div></div>
+    <div class="era" style="left:150px">── ACT I ─ FEBRUARY ──<br/><span class="sub">   the openclaw days · ☒☒☒☐ 3/4</span></div>
+    <div class="era" style="left:475px">── ACT II ─ MARCH ──<br/><span class="sub">   the timeout wars · ☒☐☐ 1/3</span></div>
+    <div class="era" style="left:770px">── ACT III ─ THE MIGRATION ──<br/><span class="sub">   ░░░░░ 0/5 · sealed</span></div>
 
-    <div id="peek">
-      <div class="k">NEXT EPISODE · ACT II</div>
-      <div class="h">Sixteen Timeouts, One Cold Restart</div>
-      <div class="dim">2026-03-14 · openclaw · 5 tasks · 27 errors · diff 45</div>
-      <div class="dim">"continual interruptions caused by timeouts while the worker refused to stay up"</div>
-    </div>
+    <div class="node perfect" style="left:195px"><span class="chip">╭─────────╮
+│ ✻ ep 01 │
+╰─────────╯</span><div class="meta">UPGRADE ACKNOWLEDGED<br/>⎿ ★S 12,480</div></div>
+    <div class="node recovered" style="left:330px"><span class="chip">╭─────────╮
+│ ⏺ ep 02 │
+╰─────────╯</span><div class="meta">THE WORKER THAT<br/>WOULD NOT STAY UP ⎿ ★A</div></div>
+    <div class="node next" style="left:505px"><span class="chip">╔═════════╗
+║ ❯ ep 03 ║
+╚═════════╝</span><div class="meta"><b>SIXTEEN TIMEOUTS,<br/>ONE COLD RESTART</b></div></div>
+    <div class="node locked" style="left:640px"><span class="chip">╭─────────╮
+│ ☐ ep 04 │
+╰─────────╯</span><div class="meta">GATEWAY SWEEP</div></div>
+    <div class="node locked" style="left:800px"><span class="chip">╭─────────╮
+│ ░ ep 05 │
+╰─────────╯</span><div class="meta">▒▒▒▒▒▒▒</div></div>
+    <div class="node locked" style="left:930px"><span class="chip">╭─────────╮
+│ ░ ep 06 │
+╰─────────╯</span><div class="meta">▒▒▒▒▒▒▒</div></div>
+
+    <div id="peek"><pre><span class="k">❯ ep 03 · ACT II · next</span>
+<span class="h">Sixteen Timeouts, One Cold Restart</span>
+<span class="dim">⎿ 2026-03-14 · openclaw · 5 tasks · 27 errors · diff 45
+⎿ "continual interruptions caused by timeouts
+   while the worker refused to stay up"</span></pre></div>
   </div>
 
   <div id="continue">
-    <button>▶ CONTINUE — EPISODE 03</button>
-    <div class="why">earliest unrecovered episode on your timeline</div>
+    <button>❯ continue — episode 03</button>
+    <div class="why">⎿ earliest unrecovered episode on your timeline</div>
   </div>
 </div>
 
 <footer>
-  <span>/run <b>random session</b></span>
-  <span class="enrich">✦ /enrich <b>re-forge your campaign</b></span>
-  <span>/library <b>all 884 sessions</b></span>
-  <span>/fictional <b>openclaw+hermes campaign</b></span>
+  <span>❯ /run <b>random session</b></span>
+  <span>✦ /enrich <b>re-forge your campaign</b></span>
+  <span>⏺ /library <b>browse all sessions → load as CUSTOM</b></span>
   <span>/settings</span>
 </footer>
 

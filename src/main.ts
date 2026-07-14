@@ -19,7 +19,7 @@ import {
 } from './levels';
 import { CampaignEntry, CampaignManifest, sourceDigest, validateManifest } from './campaign';
 import { doneUnits, progressFrac, totalUnits } from './tasks';
-import { buildMemoryMap, focusedChapter, MemoryChapter } from './history';
+import { Timeline } from './timeline';
 import { episodeHeadline } from './episode-summary.js';
 
 type ScreenId = 'menu' | 'briefing' | 'match' | 'recap';
@@ -89,29 +89,21 @@ function setCard(card: SessionCard, sourceName: string): void {
 }
 
 function wireCardSlot(): void {
-  const drop = $('drop-0');
   const fileInput = $('file-0') as HTMLInputElement;
   const readFile = (file: File) => {
-    file.text()
-      .then((text) => setCard(parseSessionCard(text), file.name))
-      .catch((err) => {
-        const status = $('card-status-0');
-        status.classList.remove('loaded');
-        status.textContent = `✕ could not read card: ${err instanceof Error ? err.message : String(err)}`;
-      });
+    file.text().then((text) => {
+      const card = parseSessionCard(text);
+      addToCustom({ session_id: String(card.session_id ?? file.name), headline: episodeHeadline(card), inline: text });
+      timeline?.setTrack('custom');
+    }).catch(() => { $('tl-continue-why').textContent = `could not read ${file.name}`; });
   };
-  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('dragover'); });
-  drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
-  drop.addEventListener('drop', (e) => {
+  // the whole menu is the drop zone: dropped cards land on the CUSTOM track
+  window.addEventListener('dragover', (e) => e.preventDefault());
+  window.addEventListener('drop', (e) => {
     e.preventDefault();
-    drop.classList.remove('dragover');
     const file = e.dataTransfer?.files?.[0];
     if (file) readFile(file);
   });
-  drop.addEventListener('click', (e) => {
-    if ((e.target as HTMLElement).id !== 'pick-0') fileInput.click();
-  });
-  $('pick-0').addEventListener('click', (e) => { e.stopPropagation(); fileInput.click(); });
   fileInput.addEventListener('change', () => {
     const file = fileInput.files?.[0];
     if (file) readFile(file);
@@ -134,186 +126,125 @@ async function loadPersonaPack(): Promise<void> {
   } catch { /* no pack, no problem */ }
 }
 
-/** Gallery of cards produced by `npm run scan` (public/cards/index.json). */
-async function loadGallery(): Promise<void> {
-  const box = $('gallery');
+// ---------------------------------------------------------------------------
+// THE TIMELINE front door + the /library overlay
+// ---------------------------------------------------------------------------
+
+type CustomItem = { file?: string; session_id: string; headline?: string; inline?: string };
+
+function customTrack(): CustomItem[] {
+  try { return JSON.parse(localStorage.getItem('aiaio-custom-track') ?? '[]') as CustomItem[]; } catch { return []; }
+}
+function saveCustomTrack(items: CustomItem[]): void {
+  try { localStorage.setItem('aiaio-custom-track', JSON.stringify(items.slice(0, 40))); } catch { /* storage full */ }
+}
+function addToCustom(item: CustomItem): void {
+  const items = customTrack();
+  if (!items.some((x) => x.session_id === item.session_id)) { items.push(item); saveCustomTrack(items); }
+  timeline?.refresh();
+}
+
+/** observer map quips: every claim binds to a real recorded stat */
+function observerMapQuip(p: import('./levels').LevelProgress | null): string | null {
+  if (!p || p.plays === 0) return null;
+  const fails = Math.max(0, p.plays - (p.recovered ? 1 : 0));
+  if (p.perfect) return `perfect recall on file. i keep re-reading it.`;
+  if (p.recovered && fails > 0) return `recovered on attempt ${p.plays}. the first ${fails} are also on file.`;
+  if (p.recovered) return `recovered first try. statistically suspicious.`;
+  if (fails >= 3) return `${fails} attempts. the wall knows your name here.`;
+  return `attempt ${p.plays} did not hold. it noticed.`;
+}
+
+let timeline: Timeline | null = null;
+let timelineEntries: LevelEntry[] = [];
+
+async function loadTimeline(): Promise<void> {
+  let entries: LevelEntry[] = [];
   try {
     const res = await fetch('./cards/index.json');
-    if (!res.ok) throw new Error('none');
-    const index: Array<{ file: string; session_id: string; errors: number; enemies?: number; tasks: number; stability: number | null }> = await res.json();
-    if (!Array.isArray(index) || index.length === 0) throw new Error('empty');
-    const entries = index as LevelEntry[];
-    gallerySessionCount = entries.filter((entry) => entry.harness !== 'fictional').length;
-    const PER_FOLDER = 24;
-    const openTiers = new Set<number>();
-    let view: 'journey' | 'library' = 'journey';
-    let libraryFilter = '';
-
-    const entryGoal = (entry: LevelEntry): string => typeof entry.goal === 'string' && entry.goal
-      ? entry.goal : 'session goal not indexed yet';
-    const entryHeadline = (entry: LevelEntry): string => typeof entry.headline === 'string' && entry.headline
-      ? entry.headline : episodeHeadline(entry);
-    const entryMeta = (entry: LevelEntry): string => {
-      const p = getProgress(entry.session_id);
-      const diff = difficulty(entry);
-      const dateAndHarness = [entry.when, entry.harness].filter(Boolean).join(' · ');
-      const rank = p ? ` · ★${p.rank}` : '';
-      return `${dateAndHarness ? dateAndHarness + ' · ' : ''}${entry.tasks} task${entry.tasks === 1 ? '' : 's'} · ${entry.errors} errors · diff ${diff}${rank}`;
-    };
-    const entryGlyph = (entry: LevelEntry): string => {
-      const p = getProgress(entry.session_id);
-      return isPerfect(p) ? '✦' : isCleared(p) ? '☒' : isSurvived(p) ? '◉' : '☐';
-    };
-    const loadEntry = async (entry: LevelEntry): Promise<void> => {
-      try {
-        const cardRes = await fetch(`./cards/${entry.file}`);
-        setCard(parseSessionCard(await cardRes.text()), entry.file);
-      } catch {
-        $('card-status-0').textContent = `✕ could not load ${entry.file}`;
-      }
-    };
-    const makeEntryButton = (entry: LevelEntry, extra = ''): HTMLButtonElement => {
-      const btn = document.createElement('button');
-      btn.className = 'cmd level';
-      btn.title = [entryHeadline(entry), entry.goal, entryMeta(entry)].filter(Boolean).join('\n');
-      btn.innerHTML = `<span class="caret">❯</span><span class="cmd-name">${entryGlyph(entry)} ${escapeHtml(entryHeadline(entry))}</span>` +
-        `<span class="cmd-desc">${escapeHtml(entryMeta(entry))}${extra}</span>`;
-      btn.addEventListener('click', () => { void loadEntry(entry); });
-      return btn;
-    };
-
-    // Indexes created before v2.6.0 lack goals. Hydrate only the bounded
-    // opening map from same-origin card files; new scans carry this inline.
-    const map = buildMemoryMap(entries, getProgress);
-    const mapEntries = new Set<LevelEntry>();
-    map.recommendation && mapEntries.add(map.recommendation.entry);
-    for (const era of map.eras.slice(0, 4)) {
-      for (const entry of focusedChapter(era, getProgress).entries) mapEntries.add(entry);
+    if (res.ok) {
+      const index = await res.json();
+      if (Array.isArray(index) && index.length > 0) entries = index as LevelEntry[];
     }
-    await Promise.all([...mapEntries].filter((entry) => !entry.goal || !entry.headline).map(async (entry) => {
-      try {
-        const card = parseSessionCard(await (await fetch(`./cards/${entry.file}`)).text());
-        entry.goal ??= card.goal ?? card.tasks?.[0]?.name;
-        entry.headline ??= episodeHeadline(card);
-      } catch { /* retained index entry may no longer have a local file */ }
+  } catch { /* no scanned sessions yet — the memory track explains */ }
+  timelineEntries = entries;
+  gallerySessionCount = entries.filter((entry) => entry.harness !== 'fictional').length;
+  const personal = await fetchCampaign('./cards/campaigns/latest.json').catch(() => null);
+  const fictional = await fetchCampaign('./cards/campaigns/openclaw-hermes.json').catch(() => null);
+  // veil label: the forgetting covers PRE-HISTORY only (never intact sessions)
+  const dates = entries.map((e) => e.when).filter(Boolean).sort();
+  $('tl-records-begin').textContent = dates[0] ? `records begin ${dates[0]}` : 'no records yet';
+  $('enrich-footer-desc').textContent = personal ? 're-forge your campaign' : 'forge your campaign';
+
+  const playEntryByFile = async (file: string, inline?: string) => {
+    try {
+      const text = inline ?? await (await fetch(`./cards/${file}`)).text();
+      setCard(parseSessionCard(text), file);
+      prepareRun(loadedCard!, 'real');
+    } catch { $('tl-continue-why').textContent = `could not load ${file}`; }
+  };
+
+  const cfg = {
+    entries, personal, fictional,
+    customFiles: () => customTrack().map((c) => ({ file: c.file ?? '', session_id: c.session_id, headline: c.headline })),
+    playCampaign: (manifest: CampaignManifest, entry: CampaignEntry) => { void startCampaign(manifest, entry); },
+    playEntry: (entry: LevelEntry) => { void playEntryByFile(entry.file); },
+    playCustom: (file: string) => {
+      const item = customTrack().find((c) => c.file === file || (!file && c.inline));
+      void playEntryByFile(file, item?.inline);
+    },
+    openEnrich: () => { void openEnrichChooser(); },
+    isCampaignUnlocked: (manifest: CampaignManifest, order: number) =>
+      isCampaignOrderUnlocked(getCampaignProgress(manifest), order),
+    observerQuip: observerMapQuip,
+  };
+  if (timeline) timeline.refresh(cfg);
+  else { timeline = new Timeline(cfg); timeline.render(); }
+  refreshVault = () => { void loadTimeline(); };
+}
+
+/** the /library overlay: the whole archive, searchable; + adds to CUSTOM */
+function openLibrary(): void {
+  const body = $('library-body');
+  let filter = '';
+  const render = (): void => {
+    const q = filter.trim().toLowerCase();
+    const real = timelineEntries.filter((e) => e.harness !== 'fictional');
+    const rows = real.filter((e) => {
+      const headline = e.headline || e.goal || '';
+      return !q || `${headline} ${e.session_id} ${e.harness ?? ''} ${e.when ?? ''}`.toLowerCase().includes(q);
+    }).slice(0, 60);
+    body.innerHTML = `
+      <input id="library-filter" placeholder="filter ${real.length} sessions by goal, harness, or date…" value="${escapeHtml(filter)}" />
+      <div class="library-rows">${rows.map((e, i) => {
+        const p = getProgress(e.session_id);
+        const glyph = isPerfect(p) ? '✻' : isCleared(p) ? '⏺' : p && p.plays > 0 ? '◐' : '☐';
+        const inTrack = customTrack().some((c) => c.session_id === e.session_id);
+        return `<div class="library-row">
+          <button class="linkish lib-play" data-i="${i}">${glyph} ${escapeHtml(String(e.headline || e.goal || e.session_id).slice(0, 56))}</button>
+          <span class="dim">${escapeHtml([e.when, e.harness].filter(Boolean).join(' · '))} · ${e.errors} errors · diff ${difficulty(e)}${p?.rank ? ` · ★${p.rank}` : ''}</span>
+          <button class="linkish lib-add" data-i="${i}" ${inTrack ? 'disabled' : ''}>${inTrack ? '✓ on track' : '+ track'}</button>
+        </div>`;
+      }).join('')}${rows.length === 0 ? '<div class="hint">nothing matches. every record is still here; loosen the filter.</div>' : ''}</div>
+      ${real.length > 60 && rows.length === 60 ? `<div class="hint">showing 60 of ${real.length}. filter to narrow.</div>` : ''}`;
+    const input = $('library-filter') as HTMLInputElement;
+    input.addEventListener('input', () => { filter = input.value; render(); const el = $('library-filter') as HTMLInputElement; el.focus(); el.setSelectionRange(filter.length, filter.length); });
+    body.querySelectorAll('.lib-play').forEach((el) => el.addEventListener('click', () => {
+      const e = rows[Number((el as HTMLElement).dataset.i)];
+      $('modal-library').classList.add('hidden');
+      void (async () => {
+        try { setCard(parseSessionCard(await (await fetch(`./cards/${e.file}`)).text()), e.file); prepareRun(loadedCard!, 'real'); }
+        catch { /* row vanished between scans */ }
+      })();
     }));
-
-    const renderTabs = (): void => {
-      const tabs = document.createElement('div');
-      tabs.className = 'gallery-tabs';
-      for (const tab of ['journey', 'library'] as const) {
-        const btn = document.createElement('button');
-        btn.className = `linkish gallery-tab${view === tab ? ' active' : ''}`;
-        btn.textContent = tab === 'journey' ? 'MEMORY MAP' : 'LIBRARY';
-        btn.addEventListener('click', () => { view = tab; render(); });
-        tabs.appendChild(btn);
-      }
-      box.appendChild(tabs);
-    };
-
-    const renderJourneyChapter = (chapter: MemoryChapter): void => {
-      const section = document.createElement('section');
-      section.className = 'memory-chapter';
-      section.innerHTML = `<div class="memory-chapter-head"><span>CHAPTER ${chapter.index}</span><span class="dim">${escapeHtml(chapter.label)} · ${chapter.entries.length} recorded session${chapter.entries.length === 1 ? '' : 's'}</span></div>`;
-      for (const entry of chapter.entries) section.appendChild(makeEntryButton(entry));
-      box.appendChild(section);
-    };
-
-    const renderJourney = (): void => {
-      const recoveredTotal = entries.filter((entry) => isCleared(getProgress(entry.session_id))).length;
-      const head = document.createElement('div');
-      head.className = 'memory-map-head';
-      head.innerHTML = `<div>THE MEMORY MAP</div><div class="dim">${entries.length} recorded sessions · ${recoveredTotal} recovered · chronological and local</div>`;
-      box.appendChild(head);
-      if (map.recommendation) {
-        const current = document.createElement('section');
-        current.className = 'journey-current';
-        current.innerHTML = `<div class="journey-kicker">▶ CONTINUE JOURNEY</div><div class="journey-reason">${escapeHtml(map.recommendation.reason)}</div>`;
-        current.appendChild(makeEntryButton(map.recommendation.entry));
-        box.appendChild(current);
-      }
-      for (const era of map.eras.slice(0, 4)) {
-        const eraEntries = era.chapters.flatMap((chapter) => chapter.entries);
-        const eraHead = document.createElement('div');
-        eraHead.className = 'memory-era-head';
-        eraHead.innerHTML = `<span>ERA ${era.index}</span><span class="dim">${escapeHtml(era.label)} · ${eraEntries.length} recorded session${eraEntries.length === 1 ? '' : 's'}</span>`;
-        box.appendChild(eraHead);
-        renderJourneyChapter(focusedChapter(era, getProgress));
-      }
-      if (map.eras.length > 4) {
-        const more = document.createElement('div');
-        more.className = 'hint';
-        more.textContent = `${map.eras.length - 4} earlier/later eras remain in the Library.`;
-        box.appendChild(more);
-      }
-    };
-
-    const renderLibrary = (): void => {
-      const q = libraryFilter.trim().toLowerCase();
-      const buckets: LevelEntry[][] = TIERS.map(() => []);
-      for (const entry of entries) {
-        if (q && !`${entryGoal(entry)} ${entry.session_id} ${entry.harness ?? ''} ${entry.when ?? ''}`.toLowerCase().includes(q)) continue;
-        buckets[tierOf(difficulty(entry)).index].push(entry);
-      }
-      buckets.forEach((bucket) => bucket.sort((a, b) => {
-        const aRecovered = isCleared(getProgress(a.session_id)) ? 0 : 1;
-        const bRecovered = isCleared(getProgress(b.session_id)) ? 0 : 1;
-        return aRecovered - bRecovered || (a.mtime ?? 0) - (b.mtime ?? 0);
-      }));
-
-      const head = document.createElement('div');
-      head.className = 'hint';
-      head.style.textAlign = 'left';
-      head.textContent = `LIBRARY · ${entries.length} sessions · every record is playable (type to filter):`;
-      box.appendChild(head);
-      const input = document.createElement('input');
-      input.id = 'gallery-filter';
-      input.setAttribute('aria-label', 'Filter sessions by goal, harness, or date');
-      input.placeholder = 'filter by goal, harness (openclaw/hermes/claude), or date…';
-      input.value = libraryFilter;
-      input.addEventListener('input', () => { libraryFilter = input.value; render(); });
-      box.appendChild(input);
-
-      if (openTiers.size === 0) openTiers.add(0);
-      for (const tier of TIERS) {
-        const bucket = buckets[tier.index];
-        if (bucket.length === 0 && !q) continue;
-        const isOpen = openTiers.has(tier.index) || !!q;
-        const folder = document.createElement('button');
-        folder.className = 'cmd folder';
-        folder.innerHTML = `<span class="caret">${isOpen ? '▾' : '▸'}</span><span class="cmd-name">${escapeHtml(tier.name)}/</span>` +
-          `<span class="cmd-desc">${bucket.length} sessions · ${bucket.filter((entry) => isCleared(getProgress(entry.session_id))).length} recovered</span>`;
-        folder.addEventListener('click', () => {
-          if (openTiers.has(tier.index)) openTiers.delete(tier.index); else openTiers.add(tier.index);
-          render();
-        });
-        box.appendChild(folder);
-        if (!isOpen) continue;
-        for (const entry of bucket.slice(0, PER_FOLDER)) box.appendChild(makeEntryButton(entry));
-        if (bucket.length > PER_FOLDER) {
-          const more = document.createElement('div');
-          more.className = 'hint';
-          more.style.textAlign = 'left';
-          more.textContent = `  …${bucket.length - PER_FOLDER} more in this tier. filter to find them`;
-          box.appendChild(more);
-        }
-      }
-      if (q) {
-        const refocus = document.getElementById('gallery-filter') as HTMLInputElement;
-        refocus.focus(); refocus.setSelectionRange(libraryFilter.length, libraryFilter.length);
-      }
-    };
-
-    const render = (): void => {
-      box.innerHTML = '';
-      renderTabs();
-      if (view === 'journey') renderJourney(); else renderLibrary();
-    };
-    refreshVault = () => render();
-    render();
-  } catch {
-    box.innerHTML = '<div class="hint" style="text-align:left">no scanned sessions. run <b>npm run scan</b> to auto-build cards from your OpenClaw / Claude Code / Hermes sessions, or drop a card above. vault still empty? <b>npm run doctor</b> explains why, or hand the whole thing to your agent (AGENTS.md is the playbook).</div>';
-  }
+    body.querySelectorAll('.lib-add').forEach((el) => el.addEventListener('click', () => {
+      const e = rows[Number((el as HTMLElement).dataset.i)];
+      addToCustom({ file: e.file, session_id: e.session_id, headline: String(e.headline || e.goal || '') });
+      render();
+    }));
+  };
+  render();
+  $('modal-library').classList.remove('hidden');
 }
 
 // ---------------------------------------------------------------------------
@@ -855,7 +786,7 @@ function main(): void {
   if (logoEl) startLogoLoop(logoEl as HTMLElement);
   wireCardSlot();
   wireKeyboard();
-  loadGallery();
+  void loadTimeline();
   loadPersonaPack();
 
   $('btn-run').addEventListener('click', () => {
@@ -867,15 +798,8 @@ function main(): void {
   const ENRICH_UI_READY = true; // Stage B honest flow (spec §4) shipped
   if (!ENRICH_UI_READY) $('btn-enrich').classList.add('hidden');
   $('btn-enrich').addEventListener('click', () => { void openEnrichChooser(); });
-  // a ready personal campaign stays one click away (spec §4.4)
-  $('btn-my-campaign').addEventListener('click', () => {
-    void fetchCampaign('./cards/campaigns/latest.json').then(showPremiere)
-      .catch(() => { $('desc-my-campaign').textContent = 'campaign file unavailable — enrich again'; });
-  });
-  void fetchCampaign('./cards/campaigns/latest.json').then((manifest) => {
-    $('desc-my-campaign').textContent = `${manifest.entries.length} enriched episodes · ${manifest.kind}`;
-    $('btn-my-campaign').classList.remove('hidden');
-  }).catch(() => { /* no personal campaign yet — the button stays hidden */ });
+  $('btn-library').addEventListener('click', () => openLibrary());
+  $('btn-close-library').addEventListener('click', () => $('modal-library').classList.add('hidden'));
   $('btn-enrich-opening').addEventListener('click', () => { void openEnrichConsent('opening'); });
   $('btn-enrich-campaign').addEventListener('click', () => { void openEnrichConsent('campaign'); });
   $('btn-enrich-back').addEventListener('click', () => { void openEnrichChooser(); });
@@ -886,13 +810,6 @@ function main(): void {
     void fetch('/__enrich/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
   });
   $('btn-enrich-cancel').addEventListener('click', () => $('modal-enrich').classList.add('hidden'));
-  $('btn-openclaw').addEventListener('click', () => {
-    void fetchCampaign('./cards/campaigns/openclaw-hermes.json').then(showPremiere).catch((error) => {
-      $('enrich-title').textContent = 'PUBLIC CAMPAIGN';
-      $('enrich-status').textContent = error instanceof Error ? error.message : String(error);
-      $('modal-enrich').classList.remove('hidden');
-    });
-  });
   $('btn-premiere-close').addEventListener('click', () => $('modal-premiere').classList.add('hidden'));
 
   $('btn-start-match').addEventListener('click', () => {
