@@ -5,6 +5,32 @@ All notable changes to AIAIO are documented here. Format follows
 [semver](https://semver.org/) (minor = new player-facing capability,
 patch = fixes and copy).
 
+## [2.11.0] — 2026-07-14 — THE TRUE STORY
+
+### Changed
+- **The default campaign is now autobiographical**: twelve authored levels
+  reconstructing @bradmillscan's real February–July 2026 journey with
+  OpenClaw, Sene, Opus 4.6, and Hermes — every title, briefing, task, moment,
+  and Observer line drawn from the public tweet record (first boot,
+  tokenmaxxing, "i almost ceased to exist", the morphine & hacksaw, move day,
+  the fumes of opus 4.6, involved unattached, agent ded, everything works!).
+  Three acts, a dated-incident title scheme broken once at the turn, a
+  documentary gap where life stopped the records, and a quiet finale where
+  the old shell still dreams.
+
+### Added
+- Campaign entries support authored `briefing` lines (the Observer reads the
+  story instead of composing a roast), per-level `epigraph` delivered on a
+  winning recap, `pacing: false` for quiet denouements (no staged encounters),
+  act names and gap markers rendered in the premiere.
+- One shared fictional-campaign builder (scripts/fictional-campaign.mjs) feeds
+  both the production asset build and the dev server — the two can no longer
+  drift.
+
+### Fixed
+- Fictional campaign briefings no longer claim "no campaign progress is
+  recorded" — authored fiction records its own separate progress and says so.
+
 ## [2.10.0] — 2026-07-14 — THE TIMELINE and the forward recap
 
 ### Changed
@@ -68,31 +94,13 @@ patch = fixes and copy).
 - A stale reference to the removed recap button silently killed all boot
   wiring after it (settings, schema, parts of input) — found when a clean
   fictional run rendered a black match screen.
-## [2.10.0] — 2026-07-14 — THE TRUE STORY
+## [2.10.0] — 2026-07-14 — THE TIMELINE
 
 ### Changed
-- **The default campaign is now autobiographical**: twelve authored levels
-  reconstructing @bradmillscan's real February–July 2026 journey with
-  OpenClaw, Sene, Opus 4.6, and Hermes — every title, briefing, task, moment,
-  and Observer line drawn from the public tweet record (first boot,
-  tokenmaxxing, "i almost ceased to exist", the morphine & hacksaw, move day,
-  the fumes of opus 4.6, involved unattached, agent ded, everything works!).
-  Three acts, a dated-incident title scheme broken once at the turn, a
-  documentary gap where life stopped the records, and a quiet finale where
-  the old shell still dreams.
-
-### Added
-- Campaign entries support authored `briefing` lines (the Observer reads the
-  story instead of composing a roast), per-level `epigraph` delivered on a
-  winning recap, `pacing: false` for quiet denouements (no staged encounters),
-  act names and gap markers rendered in the premiere.
-- One shared fictional-campaign builder (scripts/fictional-campaign.mjs) feeds
-  both the production asset build and the dev server — the two can no longer
-  drift.
-
-### Fixed
-- Fictional campaign briefings no longer claim "no campaign progress is
-  recorded" — authored fiction records its own separate progress and says so.
+- New front door: THE TIMELINE — campaign/memory/fictional/custom tracks on
+  one horizontal rail with era gaps, scars, and a single CONTINUE action;
+  /library overlay for the full archive; forward-looking recap ("what moved
+  forward"). (Shipped in the parallel Codex session; entry backfilled.)
 
 ## [2.9.0] — 2026-07-14 — ENRICH, honestly this time
 
