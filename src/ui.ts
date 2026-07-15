@@ -344,19 +344,56 @@ export class UI {
       ctx.fillText(run.nearPermTerminal ? '[U: grant permission]' : '✳ subagent permission', pt.x, y - 36);
       ctx.textAlign = 'left';
     }
+    // MOMENTS AS SPECTRAL MEMORIES: your real words type themselves across the
+    // J-space, mirrored — seen from the far side of the session's glass. As
+    // you reach one it turns lucid (un-mirrors, brightens), then dissolves.
     for (const m of run.moments) {
-      if (m.x < viewL - 60 || m.x > viewR + 60) continue;
+      if (m.x < viewL - 700 || m.x > viewR + 700) continue;
       const y = run.terrain.surfaceAt(m.x);
-      const near = Math.abs(m.x - run.avatar.x) < 220;
+      const dist = Math.abs(m.x - run.avatar.x);
       const color = m.kind === 'win' ? '#7ee787' : m.kind === 'frustration' ? '#f47067' : '#6cb6ff';
-      ctx.globalAlpha = m.seen ? 0.35 : near ? 0.95 : 0.55;
+      // the marker diamond stays — the anchor in the world
+      ctx.globalAlpha = m.seen ? 0.35 : dist < 220 ? 0.95 : 0.55;
       ctx.fillStyle = color;
       ctx.font = '11px monospace';
       ctx.textAlign = 'center';
       ctx.fillText('◇', m.x, y - 18 + (m.seen ? 0 : Math.sin(this.time * 2.5 + m.x) * 3));
-      if (near && !m.seen) {
-        ctx.font = `${10 / this.camZoom}px ui-monospace, monospace`;
-        ctx.fillText(`"${m.text.slice(0, 42)}${m.text.length > 42 ? '…' : ''}"`, m.x, y - 32);
+
+      // spectral type-on within 620px; chars reveal as you approach
+      if (dist < 620 && !m.seen) {
+        const reveal = Math.max(0, Math.min(1, (620 - dist) / 380));
+        const text = m.text.slice(0, 64);
+        const chars = Math.ceil(text.length * reveal);
+        const shown = text.slice(0, chars) + (chars < text.length ? '▌' : '');
+        const lucid = Math.max(0, Math.min(1, (200 - dist) / 140)); // 0 far -> 1 on top of it
+        const driftX = (m.x - this.camX) * 0.18; // deep-parallax slide
+        const bx = m.x - driftX;
+        const by = y - 120 - Math.sin(this.time * 0.6 + m.x * 0.01) * 8;
+        const size = 26 / this.camZoom;
+        ctx.font = `${size}px ui-monospace, monospace`;
+        ctx.textAlign = 'center';
+        // the far-side echo: mirrored, ghost-faint, fades as lucidity rises
+        if (lucid < 1) {
+          ctx.save();
+          ctx.translate(bx, by);
+          ctx.scale(-1, 1);
+          ctx.globalAlpha = 0.16 * (1 - lucid) * reveal;
+          ctx.fillStyle = color;
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 14;
+          ctx.fillText(shown, 0, 0);
+          ctx.restore();
+        }
+        // the lucid memory: readable, brief, right where the echo was
+        if (lucid > 0) {
+          ctx.save();
+          ctx.globalAlpha = 0.28 * lucid;
+          ctx.fillStyle = color;
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 18;
+          ctx.fillText(shown, bx, by);
+          ctx.restore();
+        }
       }
       ctx.globalAlpha = 1;
       ctx.textAlign = 'left';

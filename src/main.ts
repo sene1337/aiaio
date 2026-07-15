@@ -206,6 +206,7 @@ async function loadTimeline(): Promise<void> {
     openEnrich: () => { void openEnrichChooser(); },
     isCampaignUnlocked: (manifest: CampaignManifest, order: number) =>
       isCampaignOrderUnlocked(getCampaignProgress(manifest), order),
+    campaignProgress: (manifest: CampaignManifest) => getCampaignProgress(manifest),
     observerQuip: observerMapQuip,
   };
   if (timeline) timeline.refresh(cfg);

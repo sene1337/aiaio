@@ -45,6 +45,7 @@ export interface TimelineConfig {
   playCustom: (file: string) => void;
   openEnrich: () => void;
   isCampaignUnlocked: (manifest: CampaignManifest, order: number) => boolean;
+  campaignProgress: (manifest: CampaignManifest) => { clearedOrders: number[]; bestScores: Record<string, number> };
   observerQuip: (p: LevelProgress | null) => string | null;
 }
 
@@ -108,6 +109,8 @@ export class Timeline {
   private focus = 0;
   private expandedEra: number | null = null;
   private flat: TimelineNode[] = [];
+  private guy: HTMLElement | null = null;
+  private suppressGuyTransition = false;
 
   constructor(private cfg: TimelineConfig) {
     // cold start: a fresh player lands on the authored fictional campaign;
@@ -133,18 +136,24 @@ export class Timeline {
 
   // ---- track builders -------------------------------------------------
 
-  private campaignEpisodeNode(manifest: CampaignManifest, entry: CampaignEntry): TimelineNode {
+  private campaignEpisodeNode(manifest: CampaignManifest, entry: CampaignEntry, cleared: Set<number>, bestScores: Record<string, number>): TimelineNode {
     const p = getProgress(entry.sourceSessionId);
+    const campaignCleared = cleared.has(entry.order);
     const unlocked = this.cfg.isCampaignUnlocked(manifest, entry.order);
-    const st = stateOf(p);
-    const locked = !unlocked && !isCleared(p);
+    // fictional runs never write the real-history ledger (by design) — their
+    // chips read from the campaign's own progress namespace
+    const st = campaignCleared && !isCleared(p)
+      ? { glyph: '⏺', cls: 'recovered' }
+      : stateOf(p);
+    const best = bestScores[String(entry.order)];
+    const locked = !unlocked && !isCleared(p) && !campaignCleared;
     const quip = this.cfg.observerQuip(p);
     return {
       key: `${manifest.id}:${entry.order}`,
       glyph: locked ? '░' : st.glyph,
       chipClass: locked ? 'locked' : st.cls,
       title: locked && manifest.kind !== 'fictional' ? '▒▒▒▒▒▒▒' : (entry.title ?? `EPISODE ${entry.order}`),
-      sub: p?.rank ? `⎿ ★${p.rank} ${p.bestScore.toLocaleString()}` : undefined,
+      sub: p?.rank ? `⎿ ★${p.rank} ${p.bestScore.toLocaleString()}` : best ? `⎿ best ${best.toLocaleString()}` : undefined,
       scars: scarsOf(p),
       peek: locked
         ? [`░ ep ${String(entry.order).padStart(2, '0')} · sealed`, '⎿ recover the previous episode to open it', '⎿ the raw session stays browsable in /library']
@@ -152,7 +161,8 @@ export class Timeline {
           `❯ ep ${String(entry.order).padStart(2, '0')}${manifest.kind === 'fictional' ? ' · authored fiction' : ''}`,
           entry.title ?? `EPISODE ${entry.order}`,
           ...(entry.taskLabel ? [`⎿ ${entry.taskLabel}`] : []),
-          ...(p ? [`⎿ attempts ${p.plays} · best ★${p.rank} ${p.bestScore.toLocaleString()}`] : ['⎿ unplayed']),
+          ...(p ? [`⎿ attempts ${p.plays} · best ★${p.rank} ${p.bestScore.toLocaleString()}`]
+            : campaignCleared ? [`⎿ recovered · best ${(best ?? 0).toLocaleString()}`] : ['⎿ unplayed']),
           ...(quip ? [`⎿ observer: ${quip}`] : []),
         ],
       open: locked ? undefined : () => this.cfg.playCampaign(manifest, entry),
@@ -178,12 +188,14 @@ export class Timeline {
       };
     }
     // acts: chronological thirds of the manifest (bounded, curated order)
+    const campaignProgress = this.cfg.campaignProgress(manifest);
+    const cleared = new Set(campaignProgress.clearedOrders);
     const per = Math.ceil(manifest.entries.length / Math.min(3, Math.max(1, Math.round(manifest.entries.length / 8))));
     const acts: TimelineAct[] = [];
     for (let i = 0; i < manifest.entries.length; i += per) {
       const slice = manifest.entries.slice(i, i + per);
-      const nodes = slice.map((e) => this.campaignEpisodeNode(manifest, e));
-      const recovered = slice.filter((e) => isCleared(getProgress(e.sourceSessionId))).length;
+      const nodes = slice.map((e) => this.campaignEpisodeNode(manifest, e, cleared, campaignProgress.bestScores));
+      const recovered = slice.filter((e) => cleared.has(e.order) || isCleared(getProgress(e.sourceSessionId))).length;
       const dates = slice.map((e) => this.dateOfEntry(e)).filter(Boolean) as string[];
       acts.push({
         label: `── ACT ${['I', 'II', 'III', 'IV'][acts.length] ?? acts.length + 1} ${dates[0] ? `· ${dates[0].slice(0, 7)}` : ''} ──`,
@@ -329,7 +341,31 @@ export class Timeline {
     this.renderContinue(view);
     this.flat = view.acts.flatMap((a) => a.nodes);
     this.focus = Math.min(this.focus, Math.max(0, this.flat.length - 1));
-    this.applyFocus();
+
+    // SUPER MARIO RULE: your guy stands on the map. After a win, he WALKS
+    // from the node he just conquered to the next one — crossing a level
+    // should feel like crossing the map.
+    const frontier = this.flat.findIndex((n) => n.isNext);
+    const conquered = this.flat.filter((n) => n.chipClass === 'recovered' || n.chipClass === 'perfect').length;
+    const memKey = `aiaio-map-conquered-${this.track}`;
+    const prev = Number(localStorage.getItem(memKey) ?? -1);
+    localStorage.setItem(memKey, String(conquered));
+    if (prev >= 0 && conquered > prev && frontier > 0) {
+      // start him on the node he just cleared, then walk to the frontier
+      this.focus = Math.max(0, frontier - 1);
+      this.suppressGuyTransition = true;
+      this.applyFocus();
+      window.setTimeout(() => {
+        this.suppressGuyTransition = false;
+        this.focus = frontier;
+        this.applyFocus();
+      }, 650);
+    } else {
+      if (frontier >= 0 && this.focus === 0) this.focus = frontier;
+      this.suppressGuyTransition = true;
+      this.applyFocus();
+      this.suppressGuyTransition = false;
+    }
   }
 
   private renderTabs(): void {
@@ -363,8 +399,9 @@ export class Timeline {
     root.innerHTML = view.acts.map((act) => `
       <div class="tl-act">
         <div class="tl-act-head">${escapeHtml(act.label)}<br/><span class="dim">${escapeHtml(act.sub)}</span></div>
-        <div class="tl-act-nodes">${act.nodes.map((n) => {
+        <div class="tl-act-nodes">${act.nodes.map((n, ni) => {
           const i = idx++;
+          void ni;
           const num = n.chipClass === 'era' || n.chipClass === 'invite' ? '' : String(i + 1).padStart(2, '0');
           const inner = `${n.glyph} ${num || n.title.slice(0, 14).toLowerCase()}`;
           const bar = '─'.repeat(inner.length + 2);
@@ -384,6 +421,22 @@ export class Timeline {
       el.addEventListener('click', () => { this.focus = i; this.applyFocus(); this.flat[i]?.open?.(); });
       el.addEventListener('mouseenter', () => { this.focus = i; this.applyFocus(); });
     });
+    // conquered ground: the rail fills in solid behind recovered nodes
+    {
+      const nodes = [...root.querySelectorAll('.tl-node')] as HTMLElement[];
+      const links = [...root.querySelectorAll('.tl-link')] as HTMLElement[];
+      links.forEach((link, li) => {
+        const left = nodes[li];
+        if (left && (left.classList.contains('recovered') || left.classList.contains('perfect'))) {
+          link.classList.add('walked');
+        }
+      });
+    }
+    // your guy on the map (one element, repositioned via applyFocus)
+    this.guy = document.createElement('div');
+    this.guy.id = 'tl-guy';
+    this.guy.textContent = '▟>​_▙';
+    root.appendChild(this.guy);
   }
 
   private renderContinue(view: TrackView): void {
@@ -408,8 +461,22 @@ export class Timeline {
   private applyFocus(): void {
     const nodes = document.querySelectorAll('.tl-node');
     nodes.forEach((el) => el.classList.toggle('focused', Number((el as HTMLElement).dataset.i) === this.focus));
-    const el = document.querySelector(`.tl-node[data-i="${this.focus}"]`);
+    const el = document.querySelector(`.tl-node[data-i="${this.focus}"]`) as HTMLElement | null;
     el?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    if (this.guy && el) {
+      const rail = document.getElementById('tl-rail')!;
+      const railBox = rail.getBoundingClientRect();
+      const box = el.getBoundingClientRect();
+      const chip = el.querySelector('.chip') as HTMLElement | null;
+      const chipBox = (chip ?? el).getBoundingClientRect();
+      this.guy.style.transition = this.suppressGuyTransition ? 'none' : 'left 600ms cubic-bezier(.45,0,.55,1)';
+      this.guy.style.left = `${box.left - railBox.left + box.width / 2 - 16}px`;
+      this.guy.style.top = `${chipBox.top - railBox.top - 16}px`;
+      this.guy.classList.toggle('walking', !this.suppressGuyTransition);
+      if (!this.suppressGuyTransition) {
+        window.setTimeout(() => this.guy?.classList.remove('walking'), 650);
+      }
+    }
     const n = this.flat[this.focus];
     const peek = $('tl-peek');
     if (!n) { peek.classList.add('hidden'); return; }

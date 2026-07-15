@@ -5,6 +5,26 @@ All notable changes to AIAIO are documented here. Format follows
 [semver](https://semver.org/) (minor = new player-facing capability,
 patch = fixes and copy).
 
+## [2.12.0] — 2026-07-14 — THE MAP REMEMBERS YOUR FEET
+
+### Added
+- **Your guy lives on the map (Super Mario World rule).** The little terminal
+  sprite stands on the timeline rail, walks node to node with your arrow keys,
+  and Enter walks him into an episode. Win a level and, back on the map, he
+  WALKS from the conquered node to the next one while the rail fills in green
+  behind him — crossing a level feels like crossing the territory.
+- **Moments are spectral memories now.** Your real words no longer sit as
+  small marker text: as you approach one, it types itself across the J-space
+  in large terminal glyphs, MIRRORED — seen from the far side of the session's
+  glass — then turns lucid (un-mirrors, brightens) as you reach it and
+  dissolves behind you. Kind-colored, deep-parallax, with a typing cursor.
+
+### Fixed
+- Fictional-campaign chips on the timeline now read from the campaign's own
+  progress namespace: recovered episodes show ⏺ green with their best score
+  (fictional runs never touch the real-history ledger, so the map previously
+  showed your wins as unplayed).
+
 ## [2.11.1] — 2026-07-14
 
 ### Changed

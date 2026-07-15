@@ -78,7 +78,7 @@ html, body {
 }
 #tl-veil .veil-label .dim { font-size: 11px; font-weight: normal; color: #d99a94; }
 #tl-rail-scroll { flex: 1; min-width: 0; overflow-x: auto; overflow-y: hidden; padding: 12px 320px 12px 118px; }
-#tl-rail { display: flex; align-items: center; gap: 0; min-height: 190px; width: max-content; }
+#tl-rail { display: flex; align-items: center; gap: 0; min-height: 190px; width: max-content; position: relative; }
 .tl-act { display: flex; flex-direction: column; gap: 8px; }
 .tl-act-head { color: var(--blue); font-size: 11px; white-space: pre; line-height: 1.5; padding-left: 8px; }
 .tl-act-nodes { display: flex; align-items: flex-start; }
@@ -107,6 +107,14 @@ html, body {
 .tl-node.next .meta { color: var(--text); }
 @keyframes tl-pulse { 50% { opacity: .55; } }
 .tl-node.focused .chip { color: var(--text); text-shadow: 0 0 10px rgba(222,218,210,.4); }
+.tl-link.walked { color: var(--green); text-shadow: 0 0 8px rgba(126,231,135,.4); }
+#tl-guy {
+  position: absolute; top: 30px; width: 32px; text-align: center;
+  color: var(--green); font-size: 12px; line-height: 1; pointer-events: none;
+  text-shadow: 0 0 10px rgba(126,231,135,.55); z-index: 5;
+}
+#tl-guy.walking { animation: tl-guy-bob .16s infinite alternate; }
+@keyframes tl-guy-bob { from { transform: translateY(0); } to { transform: translateY(-4px); } }
 .tl-node.focused .meta { color: var(--text); }
 #tl-peek {
   position: absolute; right: 20px; top: 8px; width: 300px; z-index: 4;
