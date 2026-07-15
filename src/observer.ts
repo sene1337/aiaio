@@ -341,7 +341,10 @@ export class Observer {
       const synth = window.speechSynthesis;
       if (this.subVoice === undefined) {
         const voices = synth.getVoices();
-        this.subVoice = voices.find((v) => v.lang.startsWith('en') && /Flo|Fred|Junior|Ralph|Kathy|Samantha/i.test(v.name) && v.name !== this.voice?.name)
+        // Flo is the canonical subagent (pitched 1.3 she reads as a small
+        // panicked process); the novelty pool is the understudy bench.
+        this.subVoice = voices.find((v) => v.lang.startsWith('en') && /Flo/i.test(v.name) && v.name !== this.voice?.name)
+          ?? voices.find((v) => v.lang.startsWith('en') && /Fred|Junior|Ralph|Kathy|Samantha/i.test(v.name) && v.name !== this.voice?.name)
           ?? voices.find((v) => v.lang.startsWith('en') && v.name !== this.voice?.name) ?? null;
       }
       const u = new SpeechSynthesisUtterance(pronounce(line));

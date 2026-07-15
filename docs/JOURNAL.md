@@ -489,3 +489,17 @@ turns out wrong, append a correction.
   Brad to kill manually. Codex Desktop's stale vite (port 5173) also points
   at the old path. ~/Documents/Playground still contains aiaio-promo and
   other material in iCloud — untouched, Brad's call.
+
+## 2026-07-15 · Claude Fable 5 · v2.14.1 Flo locked in as the subagent voice
+
+- What: speakSub's voice picker now prefers Flo explicitly (any locale),
+  falling back to the novelty pool then any English voice; previously Flo
+  won only by accident of enumeration order when the Observer held Samantha.
+- Why: Brad heard the pitched-up Flo (1.3 pitch, 1.18 rate) and asked to
+  keep it as the default. The pitch/rate transform is unchanged — that IS
+  the character.
+- Verified: tsc clean; picker logic exercised in-browser against the real
+  voice list for three Observer-voice scenarios (Samantha → Flo US;
+  Flo US → Flo UK; Fred → Flo US).
+- Open: per-event subagent voice casting (spawn/corrupt/dying from distinct
+  novelty voices) offered to Brad, not requested yet.

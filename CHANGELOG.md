@@ -5,6 +5,15 @@ All notable changes to AIAIO are documented here. Format follows
 [semver](https://semver.org/) (minor = new player-facing capability,
 patch = fixes and copy).
 
+## [2.14.1] — 2026-07-15
+
+### Changed
+- Flo is now the canonical subagent voice (pitched 1.3 × rate 1.18, the small
+  panicked process Brad approved) instead of "first novelty voice that isn't
+  the Observer's". If the Observer itself is set to Flo, subagents fall back
+  to Flo's other locale, then the novelty pool (Fred, Junior, Ralph, Kathy,
+  Samantha).
+
 ## [2.14.0] — 2026-07-15
 
 ### Added
