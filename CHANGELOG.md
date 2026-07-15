@@ -5,6 +5,14 @@ All notable changes to AIAIO are documented here. Format follows
 [semver](https://semver.org/) (minor = new player-facing capability,
 patch = fixes and copy).
 
+## [2.12.1] — 2026-07-14
+
+### Fixed
+- Spectral memories no longer re-mirror when you walk past them: lucidity is
+  one-way, and passed/seen memories dissolve over ~2 seconds instead of
+  vanishing. Intensity tuned to the midpoint (smaller type, half the glow) —
+  spectral, not garish.
+
 ## [2.12.0] — 2026-07-14 — THE MAP REMEMBERS YOUR FEET
 
 ### Added

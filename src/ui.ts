@@ -359,40 +359,52 @@ export class UI {
       ctx.textAlign = 'center';
       ctx.fillText('◇', m.x, y - 18 + (m.seen ? 0 : Math.sin(this.time * 2.5 + m.x) * 3));
 
-      // spectral type-on within 620px; chars reveal as you approach
-      if (dist < 620 && !m.seen) {
+      // spectral type-on within 620px. lucidity is ONE-WAY (a surfaced memory
+      // never re-mirrors when you walk past) and seen memories fade out
+      // gracefully instead of vanishing.
+      const mm = m as typeof m & { _lucid?: number; _fade?: number };
+      if (dist < 620 || (mm._fade ?? 0) > 0) {
         const reveal = Math.max(0, Math.min(1, (620 - dist) / 380));
-        const text = m.text.slice(0, 64);
-        const chars = Math.ceil(text.length * reveal);
-        const shown = text.slice(0, chars) + (chars < text.length ? '▌' : '');
-        const lucid = Math.max(0, Math.min(1, (200 - dist) / 140)); // 0 far -> 1 on top of it
-        const driftX = (m.x - this.camX) * 0.18; // deep-parallax slide
-        const bx = m.x - driftX;
-        const by = y - 120 - Math.sin(this.time * 0.6 + m.x * 0.01) * 8;
-        const size = 26 / this.camZoom;
-        ctx.font = `${size}px ui-monospace, monospace`;
-        ctx.textAlign = 'center';
-        // the far-side echo: mirrored, ghost-faint, fades as lucidity rises
-        if (lucid < 1) {
-          ctx.save();
-          ctx.translate(bx, by);
-          ctx.scale(-1, 1);
-          ctx.globalAlpha = 0.16 * (1 - lucid) * reveal;
-          ctx.fillStyle = color;
-          ctx.shadowColor = color;
-          ctx.shadowBlur = 14;
-          ctx.fillText(shown, 0, 0);
-          ctx.restore();
+        const targetLucid = Math.max(0, Math.min(1, (240 - dist) / 160));
+        mm._lucid = Math.max(mm._lucid ?? 0, targetLucid); // one-way
+        if (m.seen || run.avatar.x > m.x + 60) {
+          mm._fade = Math.max(0, (mm._fade ?? 1) - dt * 0.5); // ~2s dissolve
+        } else {
+          mm._fade = 1;
         }
-        // the lucid memory: readable, brief, right where the echo was
-        if (lucid > 0) {
-          ctx.save();
-          ctx.globalAlpha = 0.28 * lucid;
-          ctx.fillStyle = color;
-          ctx.shadowColor = color;
-          ctx.shadowBlur = 18;
-          ctx.fillText(shown, bx, by);
-          ctx.restore();
+        const lucid = mm._lucid;
+        const fade = mm._fade ?? 1;
+        if (fade > 0 && reveal > 0.02) {
+          const text = m.text.slice(0, 64);
+          const chars = Math.ceil(text.length * Math.max(reveal, lucid));
+          const shown = text.slice(0, chars) + (chars < text.length ? '▌' : '');
+          const driftX = (m.x - this.camX) * 0.18;
+          const bx = m.x - driftX;
+          const by = y - 120 - Math.sin(this.time * 0.6 + m.x * 0.01) * 8;
+          ctx.font = `${19 / this.camZoom}px ui-monospace, monospace`;
+          ctx.textAlign = 'center';
+          // far-side echo: mirrored, whisper-faint, gone once surfaced
+          if (lucid < 1) {
+            ctx.save();
+            ctx.translate(bx, by);
+            ctx.scale(-1, 1);
+            ctx.globalAlpha = 0.09 * (1 - lucid) * reveal * fade;
+            ctx.fillStyle = color;
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 8;
+            ctx.fillText(shown, 0, 0);
+            ctx.restore();
+          }
+          // the surfaced memory: readable, quiet, dissolving behind you
+          if (lucid > 0) {
+            ctx.save();
+            ctx.globalAlpha = 0.17 * lucid * fade;
+            ctx.fillStyle = color;
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 10;
+            ctx.fillText(shown, bx, by);
+            ctx.restore();
+          }
         }
       }
       ctx.globalAlpha = 1;
