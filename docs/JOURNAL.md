@@ -385,3 +385,27 @@ turns out wrong, append a correction.
   defensible; revisit after community feedback). Cosmetic: rail act labels
   vs manifest actName; epigraph-on-win wants one human confirmation. Remix
   (Stage D), pre-share review UI, and Task Dives remain the ranked backlog.
+
+## 2026-07-14 · Claude Fable 5 · the map remembers your feet (v2.12.0)
+
+- What: per Brad's two ideas, sharpened and built. (1) Mario World rule: the
+  terminal sprite lives on the timeline rail, arrows walk him, Enter enters,
+  and a win plays a conquered-node-to-frontier walk with the rail greening
+  behind him (per-track conquered counter in localStorage detects fresh
+  wins). (2) Moments render as spectral memories: large type-on across the
+  J-space, mirrored at distance (the far side of the session's glass), lucid
+  on approach, dissolving after. Marker diamonds stay as anchors.
+- Why the taste calls: focus cursor == avatar (map movement mirrors level
+  movement, one grammar); mirrored-at-distance/readable-up-close (pure
+  mirrored text reads as noise, the un-mirror IS the memory surfacing).
+- Fixed en route: fictional-campaign chips read the campaign progress
+  namespace, not the real-history ledger fictional runs never write —
+  Brad's two perfect clears finally show on the map.
+- Verified: live browser (walk animation coordinates, recovered chips +
+  walked rail from simulated progress, mirrored memory screenshot in ep 01);
+  tsc + tests green. NOTE: three concurrent background builds deadlocked
+  earlier — one build at a time.
+- Open: deploy of v2.12.0 awaits Brad trying the walk + memories in Safari
+  (his real progress lives there). Guy sprite is text (▟>_▙); a 2-frame
+  sprite could match the in-game avatar closer. Memory type-on could whisper
+  a faint keypress tick on the ui bus — deferred, might be noise.
