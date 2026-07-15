@@ -5,6 +5,27 @@ All notable changes to AIAIO are documented here. Format follows
 [semver](https://semver.org/) (minor = new player-facing capability,
 patch = fixes and copy).
 
+## [2.14.0] — 2026-07-15
+
+### Added
+- Reconstructed reasoning: EVERY level now has a J-space thought stream, not
+  just the 9 whose logs carry visible thinking. `src/monologue.ts` synthesizes
+  what the model was likely thinking at each timeline point from the card's
+  recorded material — task names (the player's real asks), error categories
+  with words mined from their real sample lines, the goal, recoveries, and
+  the session's real numbers as intermediary calculations. Fixed per-category
+  murmur pools (timeout: "hung?", "no response"; hallucination: "is that
+  real", "which file"; regression: "it worked before", "diff it"; …) in the
+  same license as Observer lines: authored flavor, factual anchors. Thoughts
+  seed slightly BEFORE their anchor, so the murmur forecasts what's coming —
+  a reader of the J-space sees the timeout nest before reaching it.
+  Deterministic (seeded per session), zero LLM, zero network. Verbatim mined
+  thinking always takes precedence; synthesis only fills gaps it leaves.
+- Honest provenance in the briefing: "fragments of the model's own thinking"
+  only when verbatim; otherwise "reconstructed reasoning … read from this
+  session's record". Timestamp/id debris and redaction markers filtered from
+  mined words.
+
 ## [2.13.0] — 2026-07-15
 
 ### Added

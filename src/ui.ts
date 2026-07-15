@@ -7,6 +7,7 @@ import { contextFrac } from './context';
 import { garble } from './context';
 import { Rng } from './rng';
 import { AgentLoadout, SessionCard } from './session';
+import { thoughtStream } from './monologue';
 import { WEAPONS } from './weapons';
 import { ENEMY_DEFS, categoryToEnemy, EnemyKind, allocateSpawns } from './enemies';
 
@@ -150,7 +151,9 @@ export class UI {
     if (key === this.thoughtsKey) return;
     this.thoughtsKey = key;
     this.thoughts = [];
-    const src = run.card.thoughts ?? [];
+    // verbatim mined thinking where the log carried it; reconstructed
+    // reasoning (bound to the card's recorded anchors) fills the gaps
+    const src = thoughtStream(run.card).thoughts;
     if (src.length === 0) return;
     const rng = new Rng(key + ':jthoughts');
     const PRE = ['what if ', 'still: ', 'why ', 'note: ', 're: ', 'unless… '];
@@ -1283,7 +1286,9 @@ export class UI {
       <h3>the level: session ${escapeHtml(s.sessionId)}${s.fromCard ? '' : ' <span class="dim">(generated)</span>'}</h3>
       ${card.goal ? `<div class="stat-line" style="color:var(--yellow)">the mission, in your own words: "${escapeHtml(String(card.goal).slice(0, 120))}"</div>` : ''}
       ${(card.moments?.length ?? 0) > 0 ? `<div class="stat-line dim">◇ ${card.moments!.length} real moments from the session stand along the timeline</div>` : ''}
-      ${(card.thoughts?.length ?? 0) > 0 ? `<div class="stat-line dim">∴ ${card.thoughts!.length} fragments of the model's own thinking drift in the J-space</div>` : ''}
+      ${(card.thoughts?.length ?? 0) > 0
+        ? `<div class="stat-line dim">∴ ${card.thoughts!.length} fragments of the model's own thinking drift in the J-space</div>`
+        : `<div class="stat-line dim">∴ reconstructed reasoning drifts in the J-space, read from this session's record</div>`}
       <div class="stat-line dim">${s.fromCard ? `history: ${escapeHtml(s.topErrorCategory)} ×${s.topErrorCount}, ${s.compactionEvents} compactions, ${s.restarts} restarts, token peak ${s.tokenPeak}` : 'random session. drop a SessionCard to run your real one'}</div>
       <div class="stat-line">timeline length scales with message_count · your errors spawn as creatures at points along it · behind you: the wall of forgetting</div>
       <h4>ENEMY ROSTER (from the real error log)</h4><ul>${roster}</ul>

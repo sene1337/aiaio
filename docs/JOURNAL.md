@@ -447,3 +447,45 @@ turns out wrong, append a correction.
   scans (651 files) not rescanned; a `npm run scan -- --all` refresh would
   extend coverage to the full archive. Committed to main + tagged v2.13.0;
   deploy awaits Brad.
+
+## 2026-07-15 · Claude Fable 5 · v2.14.0 reconstructed reasoning + repo moved out of iCloud
+
+- What: (1) src/monologue.ts — synthesizeThoughts(card) reconstructs a
+  thought stream for cards without verbatim thinking: goal words at session
+  start, task-name words just before each station, per-error-category murmur
+  pools + words mined from real sample lines just before each error position,
+  real stats as number-thoughts, recovery relief late. thoughtStream(card)
+  merges: verbatim first, synthesis only >0.08 away from any real thought.
+  ui.buildThoughtField consumes it; briefing wording separates "model's own
+  thinking" (verbatim) from "reconstructed reasoning" (synthesized). Noise
+  filters: timestamp-shaped tokens, REDACTED markers. (2) REPO MOVED from
+  ~/Documents/Playground/aiaio to ~/Playground/aiaio — ~/Documents is
+  iCloud-synced ("Desktop & Documents Folders"); iCloud conflict handling had
+  created duplicate " 2"/" 3" ref files inside .git (removed after verifying
+  all pointed at commits in main) and was syncing gitignored personal data to
+  the cloud. Old copy parked at ~/Documents/Playground/
+  aiaio-OLD-moved-to-home-Playground with an AIAIO-HAS-MOVED.md breadcrumb;
+  ~/.claude/launch.json paths updated. Builds dropped from minutes to ~0.4s
+  out of iCloud.
+- Why: Brad: the thought stream "needs to be in all levels". Chose
+  reconstruction from recorded anchors over LLM enrichment (covers only
+  campaigns) and over live run-state commentary (duplicates the Observer;
+  loses the session-chronology fiction). Same license as Observer lines:
+  authored wording, factual anchors, never invented events. Anticipatory
+  placement doubles as a soft threat-forecast mechanic per the J-lens
+  "near-future words" finding.
+- Verified: tsc + build clean in the NEW location. March 2026 card (zero
+  verbatim thinking, 3 tasks + 3 error classes with positions) → briefing
+  shows the reconstructed wording; field builds 57 words; screenshot shows
+  timeout murmur ("hung?", "no response") drifting ahead of the actual
+  timeout-blob field. No REDACTED/timestamp tokens after filters. rsync copy
+  verified by file counts (cards 1545, qa-logs 13, session-dumps 753) and
+  git status/tag parity before parking the old copy.
+- Open: synthetic drag-drop events stopped registering in the Browser pane
+  after the server restart (worked twice earlier same day) — worked around by
+  writing aiaio-custom-track localStorage directly; not a product bug (real
+  drops come from the OS). A hung ffmpeg from July 11 promo work
+  (PID 23159, avfoundation -t 2) still holds a handle on the OLD repo copy —
+  Brad to kill manually. Codex Desktop's stale vite (port 5173) also points
+  at the old path. ~/Documents/Playground still contains aiaio-promo and
+  other material in iCloud — untouched, Brad's call.
