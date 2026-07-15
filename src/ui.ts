@@ -26,6 +26,9 @@ function kebab(name: string): string {
   return name.toLowerCase().replace(/ /g, '-');
 }
 
+/** emotional leaks in the thought stream get the warm treatment */
+const THOUGHT_EMO_RE = /^(panic|fake|stuck|wrong|broken|lost|fail|failed|failing|error|errors|worried|afraid|hope|confused|confusing|impossible|dying|dead|crash|crashed|risky|danger|dangerous|worse|worst|weird|strange|suspicious|doubt|careful)$/i;
+
 export interface ForwardRecap {
   rows: { glyph: string; cls: string; text: string }[];
   observerWord: string | null;
@@ -86,6 +89,11 @@ export class UI {
   // J-space: the LLM's latent space as layered ASCII weather behind the level
   private flow: Array<{ x: number; y: number; life: number }> = [];
   private sparks: Array<{ x: number; y: number; ttl: number; maxTtl: number; hue: number }> = [];
+  // the thought stream: fragments mined from the session's real thinking
+  // blocks, placed on the territory where they happened (plus a deterministic
+  // absurdity layer). Rebuilt when the run's card changes.
+  private thoughts: Array<{ wx: number; y01: number; word: string; emo: boolean }> = [];
+  private thoughtsKey: string | null = null;
   private captionSerial = 0;
 
   constructor() {
@@ -132,6 +140,38 @@ export class UI {
    * pressure rises toward compaction, the whole space gets agitated: denser,
    * faster, redder. The mind you're inside gets visibly anxious.
    */
+  /**
+   * Places the card's mined thinking fragments on the territory. Deterministic
+   * per session (seeded Rng), with a dry absurdity layer on ~1 in 5 fragments
+   * — the mutations decorate real mined words, they never invent content.
+   */
+  private buildThoughtField(run: Run): void {
+    const key = String(run.card.session_id ?? 'anon');
+    if (key === this.thoughtsKey) return;
+    this.thoughtsKey = key;
+    this.thoughts = [];
+    const src = run.card.thoughts ?? [];
+    if (src.length === 0) return;
+    const rng = new Rng(key + ':jthoughts');
+    const PRE = ['what if ', 'still: ', 'why ', 'note: ', 're: ', 'unless… '];
+    const SUF = ['…probably', '…again', '…somehow', ', allegedly', ' (cached)', ' (unverified)', '?'];
+    for (const th of src) {
+      const at = typeof th.at === 'number' ? th.at : rng.range(0.05, 0.95);
+      for (const raw of th.w ?? []) {
+        let word = raw;
+        const roll = rng.next();
+        if (roll < 0.1) word = rng.pick(PRE) + word;
+        else if (roll < 0.2) word = word + rng.pick(SUF);
+        this.thoughts.push({
+          wx: at * run.terrain.width + rng.range(-140, 140),
+          y01: rng.range(0.1, 0.66),
+          word,
+          emo: THOUGHT_EMO_RE.test(raw),
+        });
+      }
+    }
+  }
+
   private drawJSpace(ctx: CanvasRenderingContext2D, run: Run, W: number, H: number, dt: number): void {
     const t = this.time;
     const agitation = Math.min(1.4, run.ctx.used / (run.ctx.budget * run.ctx.threshold));
@@ -174,6 +214,32 @@ export class UI {
       const a = Math.min(0.28, p.life * 0.11);
       ctx.fillStyle = redShift > 0.5 ? `rgba(255,148,64,${a})` : `rgba(108,182,255,${a})`;
       ctx.fillText('∼', p.x, p.y);
+    }
+
+    // L2.5 — the thought stream: what the model was actually thinking at this
+    // point in the session, surfacing where it happened on the territory.
+    // Flashlight visibility (per the J-lens research): a word is legible only
+    // near your attention; ahead of you reads cool (not yet said), behind you
+    // reads violet (already spent), emotional leaks run warm.
+    this.buildThoughtField(run);
+    if (this.thoughts.length > 0) {
+      ctx.textAlign = 'center';
+      for (const th of this.thoughts) {
+        const sx = (th.wx - this.camX) * 0.45 + W * 0.5;
+        if (sx < -80 || sx > W + 80) continue;
+        const sy = th.y01 * H + Math.sin(t * 0.35 + th.wx * 0.013) * 10;
+        const d = Math.abs(th.wx - run.avatar.x);
+        const glow = Math.max(0, 1 - d / 560);
+        const a = Math.min(0.34, 0.045 + glow * 0.16 + agitation * 0.02);
+        ctx.font = `${glow > 0.4 ? 13 : 11}px ui-monospace, monospace`;
+        ctx.fillStyle = th.emo
+          ? `rgba(244,112,103,${Math.min(0.4, a * 1.3)})`
+          : th.wx > run.avatar.x
+            ? `rgba(140,190,255,${a})`
+            : `rgba(177,138,255,${a * 0.8})`;
+        ctx.fillText(th.word, sx, sy);
+      }
+      ctx.textAlign = 'left';
     }
 
     // L3 — sampling sparks (near): a token being chosen, then committed
@@ -1217,6 +1283,7 @@ export class UI {
       <h3>the level: session ${escapeHtml(s.sessionId)}${s.fromCard ? '' : ' <span class="dim">(generated)</span>'}</h3>
       ${card.goal ? `<div class="stat-line" style="color:var(--yellow)">the mission, in your own words: "${escapeHtml(String(card.goal).slice(0, 120))}"</div>` : ''}
       ${(card.moments?.length ?? 0) > 0 ? `<div class="stat-line dim">◇ ${card.moments!.length} real moments from the session stand along the timeline</div>` : ''}
+      ${(card.thoughts?.length ?? 0) > 0 ? `<div class="stat-line dim">∴ ${card.thoughts!.length} fragments of the model's own thinking drift in the J-space</div>` : ''}
       <div class="stat-line dim">${s.fromCard ? `history: ${escapeHtml(s.topErrorCategory)} ×${s.topErrorCount}, ${s.compactionEvents} compactions, ${s.restarts} restarts, token peak ${s.tokenPeak}` : 'random session. drop a SessionCard to run your real one'}</div>
       <div class="stat-line">timeline length scales with message_count · your errors spawn as creatures at points along it · behind you: the wall of forgetting</div>
       <h4>ENEMY ROSTER (from the real error log)</h4><ul>${roster}</ul>

@@ -152,6 +152,43 @@ function isSubstantiveAsk(text) {
 const WIN_RE = /\b(fixed|works now|working now|deployed|shipped|all (tests? )?pass|done!|✅|perfect|nailed it)\b/i;
 const FRUSTRATION_RE = /\b(still broken|still fail|again\?|why is|not working|wtf|ugh|no[,.]? that)\b/i;
 
+// ---------------------------------------------------------------------------
+// thought mining — salient fragments from the model's own thinking/reasoning
+// blocks, for the J-space thought layer. Not prose: the words the model was
+// circling at that point in the session — code terms, intermediary numbers,
+// emotionally loaded tokens.
+// ---------------------------------------------------------------------------
+
+const THOUGHT_STOP = new Set(('the a an and or but of to in on for with that this these those from is are was were be been being it its as at by not no nor if then than so we i you they he she them our your my me him her will would could should shall can may might must just about there here what which when where how who why do does did done have has had having more most some any all each only very really also even still likely need needs want wants going lets let use used using make makes making before after first last next now then well actually maybe probably things thing something').split(' '));
+const THOUGHT_EMOTION_RE = /^(panic|fake|stuck|wrong|broken|lost|fail|failed|failing|error|errors|worried|afraid|hope|confused|confusing|impossible|dying|dead|crash|crashed|risky|danger|dangerous|worse|worst|weird|strange|suspicious|doubt|careful)$/i;
+
+function mineThought(text) {
+  const words = [];
+  const seen = new Set();
+  const push = (w) => {
+    w = String(w).trim().replace(/^[^A-Za-z0-9]+|[.,;:!?"'”“)\]]+$/g, '');
+    if (w.length < 3 || w.length > 26 || words.length >= 4) return;
+    const key = w.toLowerCase();
+    if (seen.has(key) || THOUGHT_STOP.has(key)) return;
+    if (/https?:|@|\\|\//.test(w)) return;
+    seen.add(key);
+    words.push(redact(w).slice(0, 26));
+  };
+  // code terms the model was holding — strongest signal
+  for (const m of text.matchAll(/`([^`\n]{3,26})`/g)) push(m[1]);
+  // one intermediary number: the 21s and 42s of the calculation in flight
+  const num = text.match(/\b\d{2,5}\b/);
+  if (num) push(num[0]);
+  const plain = text.split(/[^A-Za-z'-]+/).filter((w) => w.length >= 5 && !THOUGHT_STOP.has(w.toLowerCase()));
+  // emotional leaks jump the queue
+  for (const w of plain) { if (THOUGHT_EMOTION_RE.test(w)) push(w); }
+  // then plain salient words sampled across the thought
+  for (const idx of [0, Math.floor(plain.length / 2), plain.length - 1]) {
+    if (plain[idx] !== undefined) push(plain[idx]);
+  }
+  return words;
+}
+
 export function extract(files) {
   const agg = {
     messages: 0,
@@ -170,6 +207,7 @@ export function extract(files) {
     // semantic layer: what the session was actually about
     asks: [],            // { at, text } — substantive user messages, in order
     moments: [],         // { at, kind, text } — wins/frustrations/notable lines
+    thoughts: [],        // { at, words } — mined thinking-stream fragments
     totalLines: 0,
   };
 
@@ -254,6 +292,18 @@ export function extract(files) {
             agg.moments.push({ at, kind: 'frustration', text: redact(text.slice(0, 120)) });
           }
         }
+        // the thinking stream: what the model was puzzling over at this point
+        // in the timeline (claude code: type "thinking"; openclaw: same shape)
+        const blocks = obj.message?.content;
+        if (Array.isArray(blocks) && agg.thoughts.length < 240) {
+          for (const b of blocks) {
+            if (!b || typeof b !== 'object' || (b.type !== 'thinking' && b.type !== 'reasoning')) continue;
+            const think = String(b.thinking ?? b.text ?? '');
+            if (think.length < 60) continue;
+            const words = mineThought(think);
+            if (words.length) agg.thoughts.push({ at, words });
+          }
+        }
       }
 
       // text-level classification catches signals in both plain logs and JSON
@@ -323,6 +373,12 @@ export function buildCard(inputName, files, agg) {
     .map((m) => ({ at: +m.at.toFixed(3), kind: m.kind, text: m.text }));
   const goal = agg.asks[0]?.text?.slice(0, 140);
 
+  // the thought stream, thinned to 48 spread across the timeline
+  const thoughts = agg.thoughts
+    .filter((t, i, arr) => i === 0 || t.at - arr[i - 1].at > 0.004)
+    .slice(0, 48)
+    .map((t) => ({ at: +t.at.toFixed(3), w: t.words }));
+
   return {
     session_id: `${basename(inputName).replace(/\.[^.]+$/, '')}-${contentHash}`,
     ...(agg.firstTs !== null && agg.lastTs !== null && agg.lastTs > agg.firstTs
@@ -335,6 +391,7 @@ export function buildCard(inputName, files, agg) {
     ...(tasks.length > 0 ? { tasks } : {}),
     ...(errors.length > 0 ? { errors } : {}),
     ...(moments.length > 0 ? { moments } : {}),
+    ...(thoughts.length > 0 ? { thoughts } : {}),
     regressions: agg.regressions,
     restarts: agg.restarts,
     recoveries: agg.recoveries,

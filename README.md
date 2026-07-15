@@ -154,6 +154,12 @@ When a card carries them (the extractor mines all of this automatically):
 - **Compaction garbles your own words.** The banner corrupts real lines from the
   session instead of canned filler, and the recap tells you where in the real
   session your run ended.
+- **∴ the thought stream.** When a log carries visible thinking/reasoning
+  blocks, salient fragments of them (code terms, intermediary numbers,
+  emotional leaks) drift in the J-space background at the timeline position
+  where the model was thinking them — legible only near your attention,
+  cool-blue ahead of you, violet behind, with a dry deterministic absurdity
+  layer on roughly one fragment in five.
 
 All of it is heuristic, deterministic, and on-machine, with no LLM involved.
 Redaction applies to every snippet, but a card still contains fragments of your

@@ -29,6 +29,12 @@ export interface SessionCardMoment {
   text?: string;
 }
 
+/** one thinking-stream sample: salient words the model was holding at `at` */
+export interface SessionCardThought {
+  at?: number;
+  w?: string[]; // mined fragments, already redacted by the extractor
+}
+
 export interface SessionCard {
   session_id?: string;
   duration_ms?: number;
@@ -41,6 +47,8 @@ export interface SessionCard {
   /** first substantive user ask — what the session was FOR */
   goal?: string;
   moments?: SessionCardMoment[];
+  /** the model's own reasoning stream, sampled along the timeline */
+  thoughts?: SessionCardThought[];
   /** provenance (stamped by the scanner): which agent harness + date */
   harness?: string;
   when?: string;
@@ -66,6 +74,8 @@ export const SESSION_CARD_SCHEMA = `{
                              //   ↳ "at" = where occurrences happened (enemy spawns)
   "moments": [{ "at": 0.5, "kind": "win", "text": "" }],
                              //   ↳ real session lines standing in the world (◇ markers)
+  "thoughts": [{ "at": 0.3, "w": ["flashlight", "42"] }],
+                             //   ↳ thinking-stream fragments (J-space murmur)
   "regressions": 0,          // -> Regression Cluster ammo bonus
   "restarts": 0,             // -> update frequency
   "recoveries": 0,           // -> Recovery Shield ammo
@@ -364,6 +374,14 @@ export function parseSessionCard(text: string): SessionCard {
       at: typeof m?.at === 'number' && m.at >= 0 && m.at <= 1 ? m.at : undefined,
       kind: str(m?.kind), text: str(m?.text),
     })).filter((m: SessionCardMoment) => m.text);
+  }
+  if (Array.isArray(raw.thoughts)) {
+    card.thoughts = raw.thoughts.slice(0, 64).map((t: any) => ({
+      at: typeof t?.at === 'number' && t.at >= 0 && t.at <= 1 ? t.at : undefined,
+      w: Array.isArray(t?.w)
+        ? t.w.filter((x: any) => typeof x === 'string' && x.length > 0).slice(0, 5).map((x: string) => x.slice(0, 26))
+        : undefined,
+    })).filter((t: SessionCardThought) => (t.w?.length ?? 0) > 0);
   }
   return card;
 }

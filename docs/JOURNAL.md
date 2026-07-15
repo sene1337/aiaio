@@ -409,3 +409,41 @@ turns out wrong, append a correction.
   (his real progress lives there). Guy sprite is text (▟>_▙); a 2-frame
   sprite could match the in-game avatar closer. Memory type-on could whisper
   a faint keypress tick on the ui bus — deferred, might be noise.
+
+## 2026-07-15 · Claude Fable 5 · v2.13.0 J-space thought stream
+
+- What: session logs' thinking/reasoning blocks now feed the J-space
+  background. `mineThought()` in extract-sessioncard.mjs pulls ≤4 salient
+  fragments per block (backticked code terms first, one 2-5 digit number,
+  emotional leaks jump the queue, then content words sampled start/mid/end),
+  redacted, capped at 48 `thoughts: [{at, w}]` per card. session.ts parses +
+  clamps. ui.ts builds a per-session deterministic field (Rng seeded
+  `sessionId:jthoughts`, at → terrain x ±140, y band 0.10-0.66) and renders
+  it as layer L2.5 in drawJSpace: parallax 0.45, flashlight alpha
+  (0.045 base + 0.16 within 560px of the avatar), ahead = cool blue /
+  behind = violet / emotion = warm, +agitation. Absurdity layer: ~20% of
+  fragments get a dry prefix/suffix mutation from fixed pools — decorates
+  real words, never invents. Briefing gains a "∴ N fragments…" stat line.
+- Why: Brad's ask, grounded in the MIT Tech Review J-lens article (Anthropic,
+  2026-07-09): J-space holds words the model will say in the NEAR future
+  ("flashlight rather than an overhead lamp"), intermediary calculations, and
+  emotional leaks. Each design choice maps to a finding: flashlight radius,
+  anticipatory blue for not-yet-said words, mined numbers, warm emotion tint.
+  Feasibility-gated first per never-guess: probed real logs before designing —
+  Claude Code AND OpenClaw jsonl both carry non-empty thinking blocks (same
+  `message.content[].type: "thinking"` shape), but only newer sessions; 9 of
+  892 rescanned cards carry thoughts today. Graceful degradation: no thoughts,
+  no layer, nothing else changes.
+- Verified: tsc clean, vite build clean (180.14 kB). Extractor tested on two
+  real logs (this session: 3 thoughts, tail-clustered; an OpenClaw session:
+  22 spread 0.087-0.9+ with `ssh -T`, `git remote set-url`, 260, "risky",
+  "blocked"). npm run scan → 892 cards, 9 with thoughts. In-browser: dropped
+  the richest card (48 thoughts → 161 placed words), drove the run 600 steps,
+  screenshot shows the murmur working — "what if terminal", "note: favicon",
+  "still: writing", "unless… plans" — legible near avatar, whisper elsewhere.
+- Open: fictional TRUE STORY cards carry no thoughts (could be authored later
+  as presentation copy — same overlay rules as briefings). Coverage grows as
+  new sessions accumulate visible thinking. Old cards from previous --all
+  scans (651 files) not rescanned; a `npm run scan -- --all` refresh would
+  extend coverage to the full archive. Committed to main + tagged v2.13.0;
+  deploy awaits Brad.

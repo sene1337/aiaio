@@ -5,6 +5,24 @@ All notable changes to AIAIO are documented here. Format follows
 [semver](https://semver.org/) (minor = new player-facing capability,
 patch = fixes and copy).
 
+## [2.13.0] — 2026-07-15
+
+### Added
+- The J-space thought stream: sessions whose logs carry visible
+  thinking/reasoning blocks now murmur them in the background. The extractor
+  mines salient fragments per block (backticked code terms, one intermediary
+  number, emotional leaks, sampled content words — all redacted) with their
+  real timeline position, up to 48 per card (`thoughts: [{ at, w }]`). In-game
+  they drift at the territory position where the model was thinking them,
+  with flashlight visibility per the J-lens research: legible only near your
+  attention, cool-blue ahead of you (words not yet said), violet behind
+  (already spent), warm for emotional leaks, brightening slightly with
+  context agitation. A deterministic absurdity layer (seeded per session)
+  decorates ~1 in 5 fragments with dry mutations ("what if …", "…allegedly",
+  "… (unverified)") — it decorates real mined words, never invents content.
+- Briefing stat line discloses the stream: "∴ N fragments of the model's own
+  thinking drift in the J-space". Cards without thinking blocks are unchanged.
+
 ## [2.12.1] — 2026-07-14
 
 ### Fixed
