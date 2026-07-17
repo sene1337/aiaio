@@ -503,3 +503,21 @@ turns out wrong, append a correction.
   Flo US → Flo UK; Fred → Flo US).
 - Open: per-event subagent voice casting (spawn/corrupt/dying from distinct
   novelty voices) offered to Brad, not requested yet.
+
+## 2026-07-16 · Claude Fable 5 · README hero GIF from Brad's beta 2 promo video
+
+- What: added docs/aiaio-hero.gif (19s, 480x480, 12fps, 6.1MB) to the top of
+  README.md. Cut from the beta 2 promo video Brad posted on X: 2.5s briefing
+  lead-in, then six gameplay scenes with 0.2s fade-to-black transitions.
+  Docs-only, so no version bump per the hygiene-trio rule.
+- Why: Robert (@robault) suggested a hero GIF to Brad on X; Brad wasn't sure
+  how to make one. Built with ffmpeg trim/concat + palettegen/paletteuse
+  (stats_mode=diff, bayer dither, rectangle diff). Fades go through black,
+  not cross-dissolve, because black frames are nearly free in GIF encoding.
+  Placed in docs/ because promo/ is gitignored. Submitted as a PR from a fork
+  so Brad can preview and one-click merge instead of it landing directly.
+- Verified: frame count/dimensions via ffprobe, spot-checked cut points and
+  fade frames as stills. Relative image path renders on the fork's branch.
+- Open: a 7.5s/2.3MB variant (1.2s cuts, no fades) exists if load weight
+  ever matters; regenerating either is one ffmpeg command documented here
+  by way of the filtergraph description above.

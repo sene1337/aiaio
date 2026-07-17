@@ -2,6 +2,8 @@
 
 *Operation: Inner Space, except the world is your agent's actual session log.*
 
+![AIAIO gameplay: a session briefing, then runs across real session timelines while the wall of forgetting advances](docs/aiaio-hero.gif)
+
 **🎮 [Play the hosted demo](https://sene1337.github.io/aiaio/)** (**THE OPENCLAW
 + HERMES CAMPAIGN**, 12 explicitly fictional levels). The real game is your own history: clone this repo, run
 `npm run scan`, and every Claude Code, OpenClaw, or Hermes session on your
