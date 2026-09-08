@@ -25,14 +25,14 @@ class AudioMixer {
 
   setUserLevel(name: AudioBusName, v: number): void {
     this.userLevels[name] = Math.max(0, Math.min(1, v));
-    localStorage.setItem(`aiaio-vol-${name}`, String(this.userLevels[name]));
+    try { localStorage.setItem(`aiaio-vol-${name}`, String(this.userLevels[name])); } catch { /* storage full */ }
     const bus = this.buses[name];
     if (bus && this.ctx) bus.gain.setTargetAtTime(this.levels[name] * this.userLevels[name], this.ctx.currentTime, 0.03);
   }
 
   setMono(on: boolean): void {
     this.mono = on;
-    localStorage.setItem('aiaio-mono', on ? '1' : '0');
+    try { localStorage.setItem('aiaio-mono', on ? '1' : '0'); } catch { /* storage full */ }
     this.applyMono();
   }
 
@@ -96,7 +96,7 @@ class AudioMixer {
 
   setMuted(muted: boolean): void {
     this.muted = muted;
-    localStorage.setItem(LS_MUTE, muted ? '1' : '0');
+    try { localStorage.setItem(LS_MUTE, muted ? '1' : '0'); } catch { /* storage full */ }
     if (this.master && this.ctx) this.master.gain.setTargetAtTime(muted ? 0 : 1, this.ctx.currentTime, 0.015);
   }
 

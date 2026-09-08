@@ -190,7 +190,7 @@ html, body {
   width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
   font-family: inherit; font-size: 12px; padding: 6px 9px; margin: 8px 0;
 }
-#library-filter:focus { outline: none; border-color: var(--green); }
+#library-filter:focus { outline: 1px solid var(--green); outline-offset: -1px; border-color: var(--green); }
 .library-rows { max-height: 52vh; overflow-y: auto; }
 .library-row { display: flex; gap: 10px; align-items: baseline; padding: 3px 2px; font-size: 12px; }
 .library-row .lib-play { text-decoration: none; color: var(--text); flex: 0 1 auto; text-align: left; }
@@ -280,7 +280,7 @@ html, body {
   width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
   font-family: inherit; font-size: 12px; padding: 5px 8px; margin: 4px 0;
 }
-#gallery-filter:focus { outline: none; border-color: var(--green); }
+#gallery-filter:focus { outline: 1px solid var(--green); outline-offset: -1px; border-color: var(--green); }
 .card-status.loaded { color: var(--green); }
 
 /* command-palette rows instead of buttons */
@@ -299,6 +299,7 @@ html, body {
 }
 @media (prefers-reduced-motion: reduce) {
   .glitchable, .banner.compaction, #crt-overlay { animation: none !important; }
+  .tl-node.next .chip, #tl-guy.walking { animation: none !important; }
   .prompt-box .cursor { animation: none; opacity: 1; }
 }
 .cmd:hover .caret, .cmd:focus-visible .caret { color: var(--clay); }

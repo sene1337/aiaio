@@ -14,6 +14,10 @@ const outDir = join(dist, 'cards');
 // production build cannot accidentally ship private scanned cards.
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
+// Same net for public/packs: an Observer persona pack is written from the
+// user's own history, and a hosted build ships no pack at all. Delete whatever
+// Vite copied rather than trusting .gitignore alone.
+rmSync(join(dist, 'packs'), { recursive: true, force: true });
 
 import('./fictional-campaign.mjs').then(({ buildFictionalAssets }) => {
 const { cards, manifest } = buildFictionalAssets();

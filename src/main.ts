@@ -67,6 +67,56 @@ function showScreen(id: ScreenId): void {
 }
 
 // ---------------------------------------------------------------------------
+// modals: the overlay is only visual, so focus has to be moved in, kept in,
+// and handed back (WCAG 2.4.3 / 4.1.2). Every .modal open/close goes through
+// these two, including the Escape path in wireKeyboard.
+// ---------------------------------------------------------------------------
+
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+/** which control opened each modal, so Escape/close can hand focus back */
+const modalOpener = new WeakMap<HTMLElement, HTMLElement>();
+
+function focusablesIn(modal: HTMLElement): HTMLElement[] {
+  return [...modal.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)]
+    .filter((el) => el.offsetParent !== null || el === document.activeElement);
+}
+
+function openModal(el: HTMLElement): void {
+  if (!el.classList.contains('hidden')) return; // already open: keep the first opener
+  const opener = document.activeElement;
+  if (opener instanceof HTMLElement && opener !== document.body) modalOpener.set(el, opener);
+  el.classList.remove('hidden');
+  focusablesIn(el)[0]?.focus();
+}
+
+function closeModal(el: HTMLElement): void {
+  const wasOpen = !el.classList.contains('hidden');
+  el.classList.add('hidden');
+  if (!wasOpen) return;
+  const opener = modalOpener.get(el);
+  modalOpener.delete(el);
+  if (opener && document.contains(opener)) opener.focus();
+}
+
+/** Tab/Shift+Tab cycle inside the topmost open modal instead of escaping it */
+function wireModalFocusTrap(): void {
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab') return;
+    const open = document.querySelectorAll<HTMLElement>('.modal:not(.hidden)');
+    const modal = open[open.length - 1];
+    if (!modal) return;
+    const items = focusablesIn(modal);
+    if (items.length === 0) { e.preventDefault(); return; }
+    const first = items[0], last = items[items.length - 1];
+    const active = document.activeElement as HTMLElement | null;
+    if (!active || !modal.contains(active)) { e.preventDefault(); first.focus(); return; }
+    if (e.shiftKey && active === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+  });
+}
+
+// ---------------------------------------------------------------------------
 // card loading: drag-drop, file picker, and the scanned-session gallery
 // ---------------------------------------------------------------------------
 
@@ -245,7 +295,7 @@ function openLibrary(): void {
     input.addEventListener('input', () => { filter = input.value; render(); const el = $('library-filter') as HTMLInputElement; el.focus(); el.setSelectionRange(filter.length, filter.length); });
     body.querySelectorAll('.lib-play').forEach((el) => el.addEventListener('click', () => {
       const e = rows[Number((el as HTMLElement).dataset.i)];
-      $('modal-library').classList.add('hidden');
+      closeModal($('modal-library'));
       void (async () => {
         try { setCard(parseSessionCard(await (await fetch(`./cards/${e.file}`)).text()), e.file); prepareRun(loadedCard!, 'real'); }
         catch { /* row vanished between scans */ }
@@ -258,7 +308,7 @@ function openLibrary(): void {
     }));
   };
   render();
-  $('modal-library').classList.remove('hidden');
+  openModal($('modal-library'));
 }
 
 // ---------------------------------------------------------------------------
@@ -282,7 +332,7 @@ function showPremiere(manifest: CampaignManifest): void {
   $('premiere-title').textContent = manifest.kind === 'fictional' ? 'THE OPENCLAW + HERMES CAMPAIGN' : `${manifest.kind === 'opening' ? 'MY OPENING' : 'MY CAMPAIGN'}`;
   $('premiere-copy').textContent = `${mode} · ${manifest.entries.length} levels · ${manifest.writerStatus === 'custom' ? 'authored presentation ready' : 'baseline presentation ready'}`;
   $('premiere-first').textContent = `01 · ${first.title ?? first.sourceSessionId}`;
-  $('btn-premiere-begin').onclick = () => { modal.classList.add('hidden'); void startCampaign(manifest, first); };
+  $('btn-premiere-begin').onclick = () => { closeModal(modal); void startCampaign(manifest, first); };
   const sub = (manifest as unknown as { subtitle?: string; disclosure?: string });
   if (manifest.kind === 'fictional' && sub.subtitle) {
     $('premiere-copy').textContent = `${sub.subtitle} · ${manifest.entries.length} levels`;
@@ -313,17 +363,17 @@ function showPremiere(manifest: CampaignManifest): void {
     button.className = `cmd${unlocked ? '' : ' disabled'}`;
     button.disabled = !unlocked;
     button.innerHTML = `<span class="caret">${unlocked ? '❯' : '·'}</span><span class="cmd-name">${String(entry.order).padStart(2, '0')} · ${escapeHtml(entry.title ?? entry.sourceSessionId)}</span><span class="cmd-desc">${unlocked ? 'play level' : 'clear the previous level to unlock'}</span>`;
-    if (unlocked) button.addEventListener('click', () => { modal.classList.add('hidden'); void startCampaign(manifest, entry); });
+    if (unlocked) button.addEventListener('click', () => { closeModal(modal); void startCampaign(manifest, entry); });
     levels.appendChild(button);
   }
-  modal.classList.remove('hidden');
+  openModal(modal);
 }
 
 async function startCampaign(manifest: CampaignManifest, entry: CampaignEntry): Promise<void> {
   const progress = getCampaignProgress(manifest);
   if (!isCampaignOrderUnlocked(progress, entry.order)) {
     $('enrich-status').textContent = `Level ${entry.order} unlocks after you clear level ${entry.order - 1}.`;
-    $('modal-enrich').classList.remove('hidden');
+    openModal($('modal-enrich'));
     return;
   }
   try {
@@ -341,7 +391,7 @@ async function startCampaign(manifest: CampaignManifest, entry: CampaignEntry): 
     prepareRun(card, mode, { manifest, entry });
   } catch (error) {
     $('enrich-status').textContent = error instanceof Error ? error.message : String(error);
-    $('modal-enrich').classList.remove('hidden');
+    openModal($('modal-enrich'));
   }
 }
 
@@ -384,13 +434,18 @@ export function renderEnrichTranscript(status: EnrichStatus, elapsedS: number): 
 }
 
 async function fetchEnrichStatus(): Promise<EnrichStatus> {
-  const response = await fetch('/__enrich/status', { cache: 'no-store' });
-  return await response.json() as EnrichStatus;
+  // /__enrich/* only exists on the vite dev server. Gate it exactly like /__qa
+  // and /__quip so a production build makes zero network calls and the whole
+  // path drops out of the bundle; every caller already handles the throw.
+  if (import.meta.env.DEV) {
+    const response = await fetch('/__enrich/status', { cache: 'no-store' });
+    return await response.json() as EnrichStatus;
+  }
+  throw new Error('enrich needs the local dev server');
 }
 
 async function openEnrichChooser(): Promise<void> {
   const modal = $('modal-enrich');
-  modal.classList.remove('hidden');
   $('enrich-copy').textContent = 'your agent turns your history into an authored campaign. raw SessionCards never change; originals stay playable.';
   $('enrich-status').textContent = '';
   // factual eligibility BEFORE the player commits (spec §4.1)
@@ -403,17 +458,20 @@ async function openEnrichChooser(): Promise<void> {
     $('enrich-status').textContent = 'personal enrichment runs in the local app only. the fictional campaign below is ready right now.';
   }
   enrichShow('choose');
+  openModal(modal);
   // resume: if a job is already running, attach to it instead (spec §4.3)
-  try {
-    const status = await fetchEnrichStatus();
-    if (status.jobLive || status.status === 'running' || status.status === 'writing') {
-      enrichProfile = status.profile === 'campaign' ? 'campaign' : 'opening';
-      enrichStartedAt = enrichStartedAt || Date.now();
-      enrichShow('progress');
-      startEnrichPolling();
-      $('enrich-status').textContent = 'attached to the running job.';
-    }
-  } catch { /* dev server absent; the DEV gate above already explains */ }
+  if (import.meta.env.DEV) {
+    try {
+      const status = await fetchEnrichStatus();
+      if (status.jobLive || status.status === 'running' || status.status === 'writing') {
+        enrichProfile = status.profile === 'campaign' ? 'campaign' : 'opening';
+        enrichStartedAt = enrichStartedAt || Date.now();
+        enrichShow('progress');
+        startEnrichPolling();
+        $('enrich-status').textContent = 'attached to the running job.';
+      }
+    } catch { /* dev server absent; the DEV gate above already explains */ }
+  }
 }
 
 async function openEnrichConsent(profile: 'opening' | 'campaign'): Promise<void> {
@@ -461,7 +519,7 @@ async function pollEnrichment(): Promise<void> {
     $('enrich-transcript').textContent = renderEnrichTranscript(status, elapsed) || (status.detail ?? 'working…');
     if (status.status === 'ready') {
       if (enrichmentPoll !== null) { window.clearInterval(enrichmentPoll); enrichmentPoll = null; }
-      $('modal-enrich').classList.add('hidden');
+      closeModal($('modal-enrich'));
       showPremiere(await fetchCampaign('./cards/campaigns/latest.json'));
     } else if (status.status === 'failed') {
       if (enrichmentPoll !== null) { window.clearInterval(enrichmentPoll); enrichmentPoll = null; }
@@ -744,7 +802,7 @@ function wireKeyboard(): void {
     if (e.key === 'Escape') {
       // Escape closes the topmost modal, everywhere
       const open = document.querySelectorAll('.modal:not(.hidden)');
-      if (open.length > 0) { open[open.length - 1].classList.add('hidden'); return; }
+      if (open.length > 0) { closeModal(open[open.length - 1] as HTMLElement); return; }
     }
     held.add(e.key);
     audio.ensure(); // first gesture unlocks the AudioContext
@@ -910,6 +968,7 @@ function main(): void {
   if (logoEl) startLogoLoop(logoEl as HTMLElement);
   wireCardSlot();
   wireKeyboard();
+  wireModalFocusTrap();
   void loadTimeline();
   loadPersonaPack();
 
@@ -923,7 +982,7 @@ function main(): void {
   if (!ENRICH_UI_READY) $('btn-enrich').classList.add('hidden');
   $('btn-enrich').addEventListener('click', () => { void openEnrichChooser(); });
   $('btn-library').addEventListener('click', () => openLibrary());
-  $('btn-close-library').addEventListener('click', () => $('modal-library').classList.add('hidden'));
+  $('btn-close-library').addEventListener('click', () => closeModal($('modal-library')));
   $('btn-enrich-opening').addEventListener('click', () => { void openEnrichConsent('opening'); });
   $('btn-enrich-campaign').addEventListener('click', () => { void openEnrichConsent('campaign'); });
   $('btn-enrich-back').addEventListener('click', () => { void openEnrichChooser(); });
@@ -933,8 +992,8 @@ function main(): void {
   $('btn-enrich-job-cancel').addEventListener('click', () => {
     void fetch('/__enrich/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
   });
-  $('btn-enrich-cancel').addEventListener('click', () => $('modal-enrich').classList.add('hidden'));
-  $('btn-premiere-close').addEventListener('click', () => $('modal-premiere').classList.add('hidden'));
+  $('btn-enrich-cancel').addEventListener('click', () => closeModal($('modal-enrich')));
+  $('btn-premiere-close').addEventListener('click', () => closeModal($('modal-premiere')));
 
   $('btn-start-match').addEventListener('click', () => {
     if (!run) return;
@@ -944,7 +1003,7 @@ function main(): void {
   $('btn-back-menu').addEventListener('click', () => { run = null; refreshVault?.(); showScreen('menu'); });
 
   $('schema-pre').textContent = SESSION_CARD_SCHEMA;
-  $('btn-schema').addEventListener('click', () => $('modal-schema').classList.remove('hidden'));
+  $('btn-schema').addEventListener('click', () => openModal($('modal-schema')));
 
   // /settings: the mix, captions, motion, and the rude subagent
   const wireSettings = () => {
@@ -962,8 +1021,8 @@ function main(): void {
       ($('set-reduced-fx') as HTMLInputElement).checked = ui ? ui.reducedFx : localStorage.getItem('aiaio-reduced-fx') === '1';
       ($('set-swears') as HTMLInputElement).checked = observer.swearsOn;
     };
-    $('btn-settings').addEventListener('click', () => { audioMixer.ensure(); sync(); modal.classList.remove('hidden'); });
-    $('btn-close-settings').addEventListener('click', () => modal.classList.add('hidden'));
+    $('btn-settings').addEventListener('click', () => { audioMixer.ensure(); sync(); openModal(modal); });
+    $('btn-close-settings').addEventListener('click', () => closeModal(modal));
     for (const b of buses) {
       $(`set-vol-${b}`).addEventListener('input', (e) => {
         const v = Number((e.target as HTMLInputElement).value) / 100;
@@ -973,21 +1032,23 @@ function main(): void {
       });
     }
     $('set-mono').addEventListener('change', (e) => audioMixer.setMono((e.target as HTMLInputElement).checked));
-    $('set-captions').addEventListener('change', (e) => localStorage.setItem('aiaio-captions', (e.target as HTMLInputElement).checked ? '1' : '0'));
+    $('set-captions').addEventListener('change', (e) => {
+      try { localStorage.setItem('aiaio-captions', (e.target as HTMLInputElement).checked ? '1' : '0'); } catch { /* storage full */ }
+    });
     $('set-reduced-fx').addEventListener('change', (e) => {
       const on = (e.target as HTMLInputElement).checked;
-      localStorage.setItem('aiaio-reduced-fx', on ? '1' : '0');
+      try { localStorage.setItem('aiaio-reduced-fx', on ? '1' : '0'); } catch { /* storage full */ }
       if (ui) ui.reducedFx = on;
     });
     $('set-swears').addEventListener('change', (e) => observer.setSwears((e.target as HTMLInputElement).checked));
   };
   wireSettings();
-  $('btn-close-schema').addEventListener('click', () => $('modal-schema').classList.add('hidden'));
+  $('btn-close-schema').addEventListener('click', () => closeModal($('modal-schema')));
   $('btn-copy-schema').addEventListener('click', () => {
     navigator.clipboard?.writeText(SESSION_CARD_SCHEMA).catch(() => { /* text is selectable */ });
   });
   $('modal-schema').addEventListener('click', (e) => {
-    if (e.target === $('modal-schema')) $('modal-schema').classList.add('hidden');
+    if (e.target === $('modal-schema')) closeModal($('modal-schema'));
   });
 
   // don't lose the tail of a play session when the tab closes

@@ -330,7 +330,7 @@ export class Observer {
 
   setSwears(on: boolean): void {
     this.swearsOn = on;
-    localStorage.setItem(LS_SWEARS, on ? '1' : '0');
+    try { localStorage.setItem(LS_SWEARS, on ? '1' : '0'); } catch { /* storage full */ }
   }
 
   /** a subagent speaks for itself: higher, faster, smaller. */
@@ -416,7 +416,7 @@ export class Observer {
 
   toggleVoice(): boolean {
     this.voiceOn = !this.voiceOn;
-    localStorage.setItem(LS_VOICE, this.voiceOn ? '1' : '0');
+    try { localStorage.setItem(LS_VOICE, this.voiceOn ? '1' : '0'); } catch { /* storage full */ }
     if (!this.voiceOn) this.cancelSpeech();
     return this.voiceOn;
   }
@@ -527,7 +527,7 @@ export class Observer {
     const currentName = localStorage.getItem('aiaio-voice-name') ?? this.voice?.name ?? '';
     const idx = voices.findIndex((v) => v.name === currentName);
     this.voice = voices[(idx + 1) % voices.length];
-    localStorage.setItem('aiaio-voice-name', this.voice.name);
+    try { localStorage.setItem('aiaio-voice-name', this.voice.name); } catch { /* storage full */ }
     // sample it immediately, interrupting anything in-flight
     this.cancelSpeech();
     const wasOn = this.voiceOn;
