@@ -4,6 +4,8 @@
 const LS_MUTE = 'aiaio-muted';
 
 export type AudioBusName = 'music' | 'sfx' | 'ui';
+/** buses the player can set a level for; 'voice' is speech synthesis, not a WebAudio bus */
+export type UserBusName = AudioBusName | 'voice';
 
 class AudioMixer {
   private ctx: AudioContext | null = null;
@@ -11,21 +13,23 @@ class AudioMixer {
   private buses: Partial<Record<AudioBusName, GainNode>> = {};
   private readonly levels: Record<AudioBusName, number> = { music: 0.11, sfx: 0.22, ui: 0.18 };
   /** player-set multipliers on top of the mix levels (settings screen) */
-  private userLevels: Record<AudioBusName, number> = {
+  private userLevels: Record<UserBusName, number> = {
     music: Number(localStorage.getItem('aiaio-vol-music') ?? 1),
     sfx: Number(localStorage.getItem('aiaio-vol-sfx') ?? 1),
     ui: Number(localStorage.getItem('aiaio-vol-ui') ?? 1),
+    voice: Number(localStorage.getItem('aiaio-vol-voice') ?? 1),
   };
   private mono = localStorage.getItem('aiaio-mono') === '1';
   muted = localStorage.getItem(LS_MUTE) === '1';
   private speechActive = false;
 
-  userLevel(name: AudioBusName): number { return this.userLevels[name]; }
+  userLevel(name: UserBusName): number { return this.userLevels[name]; }
   isMono(): boolean { return this.mono; }
 
-  setUserLevel(name: AudioBusName, v: number): void {
+  setUserLevel(name: UserBusName, v: number): void {
     this.userLevels[name] = Math.max(0, Math.min(1, v));
     localStorage.setItem(`aiaio-vol-${name}`, String(this.userLevels[name]));
+    if (name === 'voice') return; // the Observer reads this level per utterance
     const bus = this.buses[name];
     if (bus && this.ctx) bus.gain.setTargetAtTime(this.levels[name] * this.userLevels[name], this.ctx.currentTime, 0.03);
   }
