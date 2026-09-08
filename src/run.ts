@@ -200,6 +200,8 @@ export interface RunOver {
   headline: string;
   score: number;
   perfect: boolean;
+  /** on a loss: what actually dealt the killing blow, phrased for the recap */
+  cause?: string;
 }
 
 export interface RunInput {
@@ -270,6 +272,9 @@ export class Run {
   /** zapper "✳ thinking…" recovery timer (can't zap while > 0) */
   zapThink = 0;
   over: RunOver | null = null;
+  /** the last thing that actually took hp off the avatar: the death cause */
+  lastHitSource: string | null = null;
+  lastHitAmount = 0;
   dirty = 0;
   /** single event stream: main wires this to telemetry + audio + visual fx */
   emit: (type: string, data?: Record<string, unknown>) => void = () => { /* wired by main */ };
@@ -426,6 +431,8 @@ export class Run {
     if (d > 0) {
       this.avatar.hp = Math.max(0, this.avatar.hp - d);
       this.recentDamage.push({ t: this.time, dmg: d });
+      this.lastHitSource = source;
+      this.lastHitAmount = d;
       this.pushLog(`💢 took ${d} from ${source} (${Math.round(this.avatar.hp)} hp)`);
       this.emit('damage', { amount: d, source, headsDown: this.avatar.headsDown, hp: Math.round(this.avatar.hp), dir: fromX === undefined ? 0 : Math.sign(fromX - this.avatar.x) });
       if (this.avatar.hp <= 0) this.finish(false, 'killed');
@@ -487,7 +494,14 @@ export class Run {
       : perfect
         ? 'PERFECT CLEAR: every task done, process exited 0'
         : `SESSION SURVIVED: exit 0, but ${this.queue.tasks.length - tasksDone} task(s) left behind`;
-    this.over = { won, reason, headline, score, perfect };
+    // the recap says HOW the run ended; the cause says WHAT ended it
+    const cause = won ? undefined
+      : reason === 'wall'
+        ? `the wall of forgetting caught you at ${Math.round((this.avatar.x / this.terrain.width) * 100)}% of the session`
+        : this.lastHitSource
+          ? `${this.lastHitSource} landed the final blow`
+          : undefined;
+    this.over = { won, reason, headline, score, perfect, cause };
     this.emit(won ? 'win' : 'death', {
       reason, score, perfect, time: Math.round(this.time), x: Math.round(this.avatar.x),
       tasksDone, tasksTotal: this.queue.tasks.length, kills: this.kills, compactions: this.ctx.compactions,

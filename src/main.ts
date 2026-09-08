@@ -486,6 +486,9 @@ function buildForward(r: Run): import('./ui').ForwardRecap {
   const reach = Math.round((r.avatar.x / r.terrain.width) * 100);
   const done = r.queue.tasks.filter((t) => t.done).length;
 
+  // first row on a loss: what dealt the killing blow. no more anonymous deaths.
+  if (!won && r.over?.cause) rows.push({ glyph: '☠', cls: 'cause', text: r.over.cause });
+
   let nextEntry: CampaignEntry | null = null;
   if (activeCampaign) {
     const { manifest, entry } = activeCampaign;
