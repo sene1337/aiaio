@@ -1179,7 +1179,17 @@ export class UI {
         <span class="wmeta">${ammo} · ${cost}</span>
         <div class="tooltip">${escapeHtml(slot.def.flavor)}<span class="tsrc">from log: ${escapeHtml(slot.sourceLine)}</span></div>
       `;
+      // a slot IS a control: put it in Tab order and name it for assistive
+      // tech without touching the look. The 1-9 / [ ] shortcuts still stand.
+      div.setAttribute('role', 'button');
+      div.tabIndex = 0;
       div.addEventListener('click', () => run.selectWeapon(i));
+      div.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        e.stopPropagation(); // a focused slot must not also fire the weapon
+        run.selectWeapon(i);
+      });
       bar.appendChild(div);
     });
   }

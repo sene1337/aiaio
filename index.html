@@ -90,9 +90,9 @@
     </section>
 
     <!-- ============ LIBRARY (overlay: full archive, add-to-custom) ============ -->
-    <div id="modal-library" class="modal hidden">
+    <div id="modal-library" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-library-title">
       <div class="modal-box" style="max-width:760px">
-        <h3>⏺ /library <span class="dim" style="font-weight:normal">every record is playable · + adds to your CUSTOM track</span> <button class="linkish" id="btn-close-library">close ✕</button></h3>
+        <h3 id="modal-library-title">⏺ /library <span class="dim" style="font-weight:normal">every record is playable · + adds to your CUSTOM track</span> <button class="linkish" id="btn-close-library">close ✕</button></h3>
         <div id="library-body"></div>
       </div>
     </div>
@@ -130,17 +130,17 @@
 
 
     <!-- ============ SCHEMA MODAL ============ -->
-    <div id="modal-schema" class="modal hidden">
+    <div id="modal-schema" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-schema-title">
       <div class="modal-box">
-        <h3>SessionCard format <button class="linkish" id="btn-copy-schema">copy</button> <button class="linkish" id="btn-close-schema">close ✕</button></h3>
+        <h3 id="modal-schema-title">SessionCard format <button class="linkish" id="btn-copy-schema">copy</button> <button class="linkish" id="btn-close-schema">close ✕</button></h3>
         <pre id="schema-pre"></pre>
       </div>
     </div>
 
     <!-- ============ SETTINGS ============ -->
-    <div id="modal-settings" class="modal hidden">
+    <div id="modal-settings" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-settings-title">
       <div class="modal-box" style="max-width:560px">
-        <h3>/settings <button class="linkish" id="btn-close-settings">close ✕</button></h3>
+        <h3 id="modal-settings-title">/settings <button class="linkish" id="btn-close-settings">close ✕</button></h3>
         <div class="settings-grid">
           <label class="set-row">music <input type="range" id="set-vol-music" min="0" max="100" /><span class="set-val" id="val-vol-music"></span></label>
           <label class="set-row">effects <input type="range" id="set-vol-sfx" min="0" max="100" /><span class="set-val" id="val-vol-sfx"></span></label>
@@ -156,7 +156,7 @@
     </div>
 
     <!-- ============ ENRICHMENT (spec: docs/specs/enrich-campaign.md §4) ============ -->
-    <div id="modal-enrich" class="modal hidden">
+    <div id="modal-enrich" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="enrich-title">
       <div class="modal-box" style="max-width:640px">
         <h3 id="enrich-title">✦ ENRICH YOUR HISTORY</h3>
         <p id="enrich-copy" class="hint"></p>
@@ -191,7 +191,7 @@
       </div>
     </div>
 
-    <div id="modal-premiere" class="modal hidden">
+    <div id="modal-premiere" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="premiere-title">
       <div class="modal-box" style="max-width:620px">
         <h3 id="premiere-title">CAMPAIGN PREMIERE</h3>
         <p id="premiere-copy" class="hint"></p>

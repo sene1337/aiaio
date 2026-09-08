@@ -125,7 +125,7 @@ export class Timeline {
     this.track = t;
     this.expandedEra = null;
     this.focus = 0;
-    localStorage.setItem('aiaio-track', t);
+    try { localStorage.setItem('aiaio-track', t); } catch { /* storage full */ }
     this.render();
   }
 
@@ -349,7 +349,7 @@ export class Timeline {
     const conquered = this.flat.filter((n) => n.chipClass === 'recovered' || n.chipClass === 'perfect').length;
     const memKey = `aiaio-map-conquered-${this.track}`;
     const prev = Number(localStorage.getItem(memKey) ?? -1);
-    localStorage.setItem(memKey, String(conquered));
+    try { localStorage.setItem(memKey, String(conquered)); } catch { /* storage full */ }
     if (prev >= 0 && conquered > prev && frontier > 0) {
       // start him on the node he just cleared, then walk to the frontier
       this.focus = Math.max(0, frontier - 1);
