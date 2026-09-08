@@ -49,7 +49,9 @@ export class UI {
   private ctx: CanvasRenderingContext2D;
   private camX = 0; private camY = 0; private camZoom = 1;
   /** settings: suppress shake, glitch bands, and full-screen flashes */
-  reducedFx = localStorage.getItem('aiaio-reduced-fx') === '1';
+  // the OS preference is the default until the player decides in /settings
+  reducedFx = localStorage.getItem('aiaio-reduced-fx') === '1'
+    || (localStorage.getItem('aiaio-reduced-fx') === null && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true);
 
   /**
    * XAG-102 double outline: a dark halo plus a faint bright rim makes a glyph
@@ -226,6 +228,9 @@ export class UI {
     // reads violet (already spent), emotional leaks run warm.
     this.buildThoughtField(run);
     if (this.thoughts.length > 0) {
+      // the murmur yields while a fight is close: threats outrank weather
+      const combat = run.enemies.some((e) => !e.dead && (e.telegraphing || Math.abs(e.x - run.avatar.x) < 170));
+      const cap = combat ? 0.19 : 0.34;
       ctx.textAlign = 'center';
       for (const th of this.thoughts) {
         const sx = (th.wx - this.camX) * 0.45 + W * 0.5;
@@ -233,7 +238,7 @@ export class UI {
         const sy = th.y01 * H + Math.sin(t * 0.35 + th.wx * 0.013) * 10;
         const d = Math.abs(th.wx - run.avatar.x);
         const glow = Math.max(0, 1 - d / 560);
-        const a = Math.min(0.34, 0.045 + glow * 0.16 + agitation * 0.02);
+        const a = Math.min(cap, 0.045 + glow * 0.16 + agitation * 0.02);
         ctx.font = `${glow > 0.4 ? 13 : 11}px ui-monospace, monospace`;
         ctx.fillStyle = th.emo
           ? `rgba(244,112,103,${Math.min(0.4, a * 1.3)})`
@@ -276,7 +281,9 @@ export class UI {
         }
         break;
       }
-      case 'damage': this.hitFlashTtl = 0.3; this.hitFlashDir = Number(data.dir) || 0; this.shakeMag = Math.min(14, this.shakeMag + 3); break;
+      // rapid hits stack toward a cap instead of pinning the haze at full: being
+      // mobbed is exactly when the screen must stay readable
+      case 'damage': this.hitFlashTtl = Math.min(0.3, this.hitFlashTtl + 0.18); this.hitFlashDir = Number(data.dir) || 0; this.shakeMag = Math.min(14, this.shakeMag + 3); break;
       case 'compaction': this.glitchTtl = 1.0; this.shakeMag = Math.min(16, this.shakeMag + 9); break;
       case 'task_eaten': this.glitchTtl = Math.max(this.glitchTtl, 0.5); break;
       case 'subagent_corrupted': this.glitchTtl = Math.max(this.glitchTtl, 0.35); break;
@@ -368,7 +375,7 @@ export class UI {
     this.muzzleTtl = Math.max(0, this.muzzleTtl - dt);
 
     ctx.save();
-    if (this.reducedFx) { this.shakeMag = 0; this.glitchTtl = 0; this.whiteFlashTtl = 0; }
+    if (this.reducedFx) { this.shakeMag = 0; this.glitchTtl = 0; this.whiteFlashTtl = 0; this.hitFlashTtl = 0; }
     if (this.shakeMag > 0.2) {
       // whole-pixel shake: same violence, no anti-aliased smear
       ctx.translate(Math.round(this.fxRng.range(-this.shakeMag, this.shakeMag)), Math.round(this.fxRng.range(-this.shakeMag, this.shakeMag)));
@@ -484,7 +491,9 @@ export class UI {
     for (const e of run.enemies) {
       if (e.dead || e.x < viewL - 60 || e.x > viewR + 60) continue;
       const relevant = Math.abs(e.x - run.avatar.x) < 230 || e.telegraphing || e.stunnedUntil > run.time;
-      this.drawEnemy(ctx, e, e.stunnedUntil > run.time, relevant);
+      // no name tags on top of the player: the avatar wins the salience ladder
+      const onAvatar = Math.abs(e.x - run.avatar.x) < 64 && Math.abs(e.y - run.avatar.y) < 70;
+      this.drawEnemy(ctx, e, e.stunnedUntil > run.time, relevant, relevant && !onAvatar);
     }
 
     // the agent + its subagents
@@ -704,14 +713,14 @@ export class UI {
       const a = this.hitFlashTtl / 0.3;
       const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.75);
       vg.addColorStop(0, 'rgba(244,112,103,0)');
-      vg.addColorStop(1, `rgba(244,112,103,${0.28 * a})`);
+      vg.addColorStop(1, `rgba(244,112,103,${0.16 * a})`);
       ctx.fillStyle = vg;
       ctx.fillRect(0, 0, W, H);
       // directional cue: the struck side burns brighter (you know where it
       // came from even mid-chaos — XAG redundant cues)
       if (this.hitFlashDir !== 0) {
         const side = ctx.createLinearGradient(this.hitFlashDir > 0 ? W : 0, 0, W / 2, 0);
-        side.addColorStop(0, `rgba(244,112,103,${0.4 * a})`);
+        side.addColorStop(0, `rgba(244,112,103,${0.26 * a})`);
         side.addColorStop(1, 'rgba(244,112,103,0)');
         ctx.fillStyle = side;
         ctx.fillRect(0, 0, W, H);
@@ -850,7 +859,7 @@ export class UI {
     ctx.textAlign = 'left';
   }
 
-  private drawEnemy(ctx: CanvasRenderingContext2D, e: import('./enemies').Enemy, stunned = false, relevant = false): void {
+  private drawEnemy(ctx: CanvasRenderingContext2D, e: import('./enemies').Enemy, stunned = false, relevant = false, labelled = relevant): void {
     ctx.save();
     ctx.translate(e.x, e.y);
     let phase = e.def.kind === 'hallucination_ghost' ? 0.45 + 0.4 * Math.abs(Math.sin(e.stateTimer * 1.8)) : 1;
@@ -914,7 +923,7 @@ export class UI {
       ctx.fillStyle = e.def.color;
       ctx.fillRect(-size, -size - 6, size * 2 * frac, 3);
     }
-    if (relevant) {
+    if (labelled) {
       ctx.font = `${10 / this.camZoom}px ui-monospace, monospace`;
       ctx.globalAlpha = phase * 0.82;
       ctx.fillText(e.def.name + (e.mini ? '·mini' : ''), 0, -size - 12);
@@ -956,8 +965,20 @@ export class UI {
       ctx.stroke();
     }
 
+    // salience: a soft halo and a dark rim so the agent never vanishes into a
+    // mob, a label, or the terrain line (top of the ladder, always)
+    if (!dead) {
+      const halo = ctx.createRadialGradient(0, -16, 8, 0, -16, 46);
+      halo.addColorStop(0, 'rgba(126,231,135,0.20)');
+      halo.addColorStop(1, 'rgba(126,231,135,0)');
+      ctx.fillStyle = halo;
+      ctx.fillRect(-48, -64, 96, 96);
+    }
     // terminal window body
     ctx.fillStyle = dead ? '#222' : '#0c120e';
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+    ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.roundRect(-17, -28, 34, 24, 2); ctx.stroke();
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.roundRect(-17, -28, 34, 24, 2); ctx.fill(); ctx.stroke();
@@ -1266,6 +1287,12 @@ export class UI {
       ${loadout.stability < 45 ? '<div class="handicap-note">⚑ HANDICAP: low stability grants a starting shield + damage bonus. struggling agents get armor.</div>' : ''}
       <h4>TASK QUEUE (stations along the timeline. work them before the wall does)</h4><ul>${tasks}</ul>
       <h4>LOADOUT (+ ∞ print-debug zapper)</h4><ul>${weapons}</ul>
+      <h4>CONTROLS</h4>
+      <div class="briefing-keys">
+        <span><span class="sb-key">←→</span> move</span><span><span class="sb-key">↑</span> jump</span><span><span class="sb-key">space</span> fire</span>
+        <span><span class="sb-key">w</span> hold at a station to do the work</span><span><span class="sb-key">c</span> /compact</span><span><span class="sb-key">s</span> subagent</span>
+        <span><span class="sb-key">u</span> install update</span><span><span class="sb-key">1-9</span> weapons</span><span><span class="sb-key">m</span> mute</span><span><span class="sb-key">v</span> voice</span>
+      </div>
     `;
     cols.appendChild(agentCol);
 

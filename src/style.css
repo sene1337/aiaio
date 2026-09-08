@@ -44,7 +44,7 @@ html, body {
 /* ---- THE TIMELINE front door: identity on top, one rail, one action ---- */
 #tl-header { text-align:center; padding: 20px 0 2px; flex: 0 0 auto; }
 .tl-logo {
-  font-size: 14px; line-height: 1.12; display: inline-block; text-align: left;
+  font-size: clamp(14px, 1.45vw, 23px); line-height: 1.12; display: inline-block; text-align: left;
   background: linear-gradient(100deg, #ff9440 15%, #b18aff 50%, #6cb6ff 85%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
   filter: drop-shadow(0 0 18px rgba(177, 138, 255, .22));
@@ -107,6 +107,8 @@ html, body {
 .tl-node.next .meta { color: var(--text); }
 @keyframes tl-pulse { 50% { opacity: .55; } }
 .tl-node.focused .chip { color: var(--text); text-shadow: 0 0 10px rgba(222,218,210,.4); }
+.tl-node:focus-visible { outline: 1px solid var(--yellow); outline-offset: 3px; }
+.tl-node:focus-visible .chip { color: var(--text); text-shadow: 0 0 10px rgba(222,218,210,.4); }
 .tl-link.walked { color: var(--green); text-shadow: 0 0 8px rgba(126,231,135,.4); }
 #tl-guy {
   position: absolute; top: 30px; width: 32px; text-align: center;
@@ -130,6 +132,15 @@ html, body {
 }
 #tl-continue:hover { background: #221a12; }
 #tl-continue-why { color: var(--yellow); font-size: 11px; margin-top: 5px; min-height: 15px; }
+/* first-run controls strip and the briefing's CONTROLS block share one key style */
+#tl-howto, .briefing-keys {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px;
+  color: var(--dim); font-size: 12px; line-height: 1.6;
+}
+#tl-howto { margin: 10px auto 0; max-width: 900px; }
+.briefing-keys { justify-content: flex-start; gap: 2px 14px; font-size: 11px; }
+#tl-howto .sb-key, .briefing-keys .sb-key { color: var(--yellow); }
+#tl-howto .howto-tail { flex-basis: 100%; color: var(--dim); }
 #tl-footer {
   flex: 0 0 auto; display: flex; justify-content: center; gap: 24px; align-items: baseline;
   padding: 9px 0 13px; border-top: 1px solid var(--border); font-size: 11px;

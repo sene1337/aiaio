@@ -254,6 +254,8 @@ export class Run {
   subsEatenByWall = 0;
   /** the Task tool must be GRANTED before S works (a permission terminal early in the level) */
   subagentsUnlocked = false;
+  /** the first denied S press gets a banner, later ones only a log line */
+  private subDeniedOnce = false;
   permTerminal: { x: number; y: number; claimed: boolean } | null = null;
   nearPermTerminal = false;
   nearStation: Station | null = null;
@@ -559,6 +561,7 @@ export class Run {
       const gained = Math.round((8 + recent * 0.8) * slot.statRoll);
       a.shield += gained;
       this.pushLog(`🛡 recovery shield +${gained}${recent > 0 ? ` (converted ${recent} recent damage)` : ''}`);
+      this.emit('shield_gain', { gained });
       return;
     }
     if (slot.def.behavior === 'task_attack') {
@@ -747,6 +750,12 @@ export class Run {
     if (this.over) return;
     if (!this.subagentsUnlocked && !cached) {
       this.pushLog('⛔ permission denied: Task tool not granted. find the [y/n] terminal');
+      // the first refusal gets a banner: a new player pressing S deserves more
+      // than a line in the transcript feed
+      if (!this.subDeniedOnce) {
+        this.subDeniedOnce = true;
+        this.pushBanner({ kind: 'info', ttl: 3, title: '⛔ TASK TOOL NOT GRANTED', lines: ['find the [y/n] permission terminal on the timeline', 'subagents unlock there'] });
+      }
       return;
     }
     const alive = this.subagents.length;

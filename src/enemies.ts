@@ -25,12 +25,12 @@ export interface EnemyDef {
 
 export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
   timeout_blob: {
-    kind: 'timeout_blob', name: 'timeout-blob', glyph: '⏱', hp: 34, touchDamage: 8,
+    kind: 'timeout_blob', name: 'timeout-blob', glyph: '◷', hp: 34, touchDamage: 8,
     color: '#e3b341', friendly: false,
     flavor: 'tanky, slow, lobs shots that detonate late, exactly when you stopped worrying',
   },
   hallucination_ghost: {
-    kind: 'hallucination_ghost', name: 'hallucination-ghost', glyph: '👻', hp: 16, touchDamage: 12,
+    kind: 'hallucination_ghost', name: 'hallucination-ghost', glyph: '⌇', hp: 16, touchDamage: 12,
     color: '#c792ea', friendly: false,
     flavor: 'phases in and out, teleports, is absolutely sure it exists',
   },
@@ -40,27 +40,27 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
     flavor: 'kill it and two smaller ones appear. passed on main, though',
   },
   restart_crawler: {
-    kind: 'restart_crawler', name: 'restart-crawler', glyph: '🔁', hp: 18, touchDamage: 8,
+    kind: 'restart_crawler', name: 'restart-crawler', glyph: '↻', hp: 18, touchDamage: 8,
     color: '#6cb6ff', friendly: false,
     flavor: 'exit 137 → relaunch. dies once for free',
   },
   false_positive_sniper: {
-    kind: 'false_positive_sniper', name: 'false-positive-sniper', glyph: '⚡', hp: 14, touchDamage: 6,
+    kind: 'false_positive_sniper', name: 'false-positive-sniper', glyph: '↯', hp: 14, touchDamage: 6,
     color: '#f47067', friendly: false,
     flavor: 'telegraphs a laser with 100% confidence and ~70% accuracy',
   },
   tool_turret: {
-    kind: 'tool_turret', name: 'tool-turret', glyph: '🔧', hp: 26, touchDamage: 6,
+    kind: 'tool_turret', name: 'tool-turret', glyph: '⚙', hp: 26, touchDamage: 6,
     color: '#ff9440', friendly: false,
     flavor: 'fires interrupt bolts. get hit while working and you lose task progress',
   },
   overflow_emitter: {
-    kind: 'overflow_emitter', name: 'overflow-emitter', glyph: '📈', hp: 30, touchDamage: 10,
+    kind: 'overflow_emitter', name: 'overflow-emitter', glyph: '⟰', hp: 30, touchDamage: 10,
     color: '#f47067', friendly: false,
     flavor: 'PRIORITY TARGET: while alive nearby, the wall of forgetting advances 60% faster',
   },
   recovery_sprite: {
-    kind: 'recovery_sprite', name: 'recovery-sprite', glyph: '➕', hp: 1, touchDamage: 0,
+    kind: 'recovery_sprite', name: 'recovery-sprite', glyph: '✚', hp: 1, touchDamage: 0,
     color: '#7ee787', friendly: true,
     flavor: 'friendly. retry 2/3 succeeded. touch it for hp/shield',
   },

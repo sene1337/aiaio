@@ -185,6 +185,9 @@ async function loadTimeline(): Promise<void> {
   const dates = entries.map((e) => e.when).filter(Boolean).sort();
   $('tl-records-begin').textContent = dates[0] ? `records begin ${dates[0]}` : 'no records yet';
   $('enrich-footer-desc').textContent = personal ? 're-forge your campaign' : 'forge your campaign';
+  // the controls strip is for the player with no record yet; it retires once
+  // the first run is on the ledger
+  $('tl-howto').classList.toggle('hidden', !!localStorage.getItem('aiaio-progress'));
 
   const playEntryByFile = async (file: string, inline?: string) => {
     try {
@@ -681,6 +684,7 @@ function routeAudio(type: string, data: Record<string, unknown>): void {
     case 'subagent_died': audio.subagentDied(pan); break;
     case 'perm_granted': audio.permissionGranted(); break;
     case 'shield_absorb': audio.shieldAbsorb(); break;
+    case 'shield_gain': audio.shieldAbsorb(); break;
     case 'near_miss': audio.nearMiss(pan); break;
     case 'voluntary_compact': audio.update(true); break;
     case 'crate_choice': audio.select(); break;
@@ -737,6 +741,11 @@ function wireKeyboard(): void {
   window.addEventListener('keydown', (e) => {
     // typing in an input (gallery filter) must never trigger game shortcuts
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    if (e.key === 'Escape') {
+      // Escape closes the topmost modal, everywhere
+      const open = document.querySelectorAll('.modal:not(.hidden)');
+      if (open.length > 0) { open[open.length - 1].classList.add('hidden'); return; }
+    }
     held.add(e.key);
     audio.ensure(); // first gesture unlocks the AudioContext
     music.ensure();
@@ -950,7 +959,7 @@ function main(): void {
       }
       ($('set-mono') as HTMLInputElement).checked = audioMixer.isMono();
       ($('set-captions') as HTMLInputElement).checked = localStorage.getItem('aiaio-captions') !== '0';
-      ($('set-reduced-fx') as HTMLInputElement).checked = localStorage.getItem('aiaio-reduced-fx') === '1';
+      ($('set-reduced-fx') as HTMLInputElement).checked = ui ? ui.reducedFx : localStorage.getItem('aiaio-reduced-fx') === '1';
       ($('set-swears') as HTMLInputElement).checked = observer.swearsOn;
     };
     $('btn-settings').addEventListener('click', () => { audioMixer.ensure(); sync(); modal.classList.remove('hidden'); });

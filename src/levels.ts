@@ -95,10 +95,15 @@ export function campaignOutcome(
   };
 }
 
+/**
+ * The letter must mean something: S full recovery, A recovered, B survived
+ * AND did real work, C survived doing nothing (or died past halfway through
+ * the work), D the rest. Running to the exit untouched is not a B.
+ */
 export function computeRank(outcome: CampaignOutcome, workFrac: number): Rank {
   if (outcome.perfect) return 'S';
   if (outcome.recovered) return 'A';
-  if (outcome.survived) return 'B';
+  if (outcome.survived) return workFrac > 0 ? 'B' : 'C';
   if (workFrac >= 0.5) return 'C';
   return 'D';
 }
@@ -149,7 +154,11 @@ export function getProgress(sessionId: string): LevelProgress | null {
 
 const RANK_ORDER: Rank[] = ['D', 'C', 'B', 'A', 'S'];
 
-/** v2.4 stored only ranks. A/S prove meaningful work; B was exit-only. */
+/**
+ * v2.4 stored only ranks. A/S prove meaningful work; B was exit-only then.
+ * Records written since carry the booleans, so this inference only serves
+ * the old rows (an exit-only C written today still stores survived: true).
+ */
 function hadLegacyRecovery(p: LevelProgress): boolean {
   return p.recovered ?? (p.rank === 'S' || p.rank === 'A');
 }
