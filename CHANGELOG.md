@@ -5,6 +5,56 @@ All notable changes to AIAIO are documented here. Format follows
 [semver](https://semver.org/) (minor = new player-facing capability,
 patch = fixes and copy).
 
+## [2.15.0] — 2026-09-08
+
+Quality pass driven by three fresh-eyes audits (docs/audits/2026-09-08-*):
+player experience, code correctness, and ship-readiness.
+
+### Changed
+- Readability under action: the avatar gets a soft halo and a dark rim, enemy
+  name tags never draw on top of the player, the thought stream yields alpha
+  while a fight is close, and the damage haze stacks toward a cap at about
+  60% of its old strength instead of pinning the screen red when mobbed.
+- Honest ranks: running to the exit with zero work is now a C. B requires
+  survival plus real work. S and A are unchanged.
+- Onboarding: the title screen shows a controls strip until the first run is
+  on record; every briefing carries a CONTROLS block; the first denied
+  subagent spawn gets a banner instead of a transcript line.
+- The title logo finally scales with the viewport (a generic rule had pinned
+  it at 11px).
+- Terminal identity: enemy and weapon glyphs are monochrome text glyphs
+  instead of color emoji (◷ timeout, ⌇ hallucination, ↻ restart, ↯ false
+  positive, ⚙ turret, ⟰ overflow, ✚ recovery; nuke ✹, shield ◈, barrage ⋙).
+- Death clarity: a lost run's recap names the killing blow (☠ row), for
+  combat and for the wall.
+- Settings: a voice slider for the Observer, independent of effects; "reduce
+  shake & flashes" also suppresses the hit vignette and defaults to the OS
+  reduced-motion preference.
+- Accessibility: all five modals are real dialogs (role, aria-modal, labelled,
+  focus moved in, trapped, and restored); Escape closes the topmost modal even
+  from inside a filter box; timeline chips show a focus ring; weapon slots are
+  keyboard-operable; the two filter inputs have a visible focus outline; two
+  more animations respect reduced motion.
+- Recovery shield gain has its own sound.
+
+### Fixed
+- Involuntary compaction could be disabled for the rest of a run when an
+  update nerf dropped the threshold below current usage; the threshold check
+  is now level-triggered and settles the moment the threshold moves.
+- Shift pressed mid-hold could leave a phantom held key; held keys are
+  case-folded on both keydown and keyup.
+- Elapsed time and the /compact cooldown froze while idle; the HUD now ticks
+  each second.
+- Every localStorage read in module singletons is guarded, so browsers with
+  storage disabled no longer blank-screen at load; every write is guarded too.
+- Subagent speech no longer piles up in the speech queue.
+- Terrain surface lookups are O(1) via a per-column height table (verified
+  bit-identical across 316,932 reads); dead enemies and their side tables are
+  pruned; the dev telemetry flush uses keepalive.
+- Production builds no longer call the dev-only enrich status endpoint, and
+  the demo build strips public/packs the same way it strips real cards (with
+  a test).
+
 ## [2.14.1] — 2026-07-15
 
 ### Changed

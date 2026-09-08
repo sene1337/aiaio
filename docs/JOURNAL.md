@@ -503,3 +503,44 @@ turns out wrong, append a correction.
   Flo US → Flo UK; Fred → Flo US).
 - Open: per-event subagent voice casting (spawn/corrupt/dying from distinct
   novelty voices) offered to Brad, not requested yet.
+
+## 2026-09-08 · Claude Fable 5.1 · v2.15.0 AAA quality pass (audits + fixes)
+
+- What: Brad asked for an autonomous "make it AAA" pass. Method: three
+  read-only audits first (experience, correctness, pre-release; reports in
+  docs/audits/2026-09-08-*), plus my own screen-by-screen walkthrough and a
+  telemetry read (qa-logs: 58 wins / 147 deaths over 205 recorded runs, 134
+  killed vs 13 wall; ranks D 121, S 24, B 18). Then one polish batch by hand
+  and four Opus build lanes in git worktrees (voice slider, death cause,
+  hardening, correctness), merged into claude/aaa-polish and fast-forwarded
+  to main. Full list in CHANGELOG 2.15.0.
+- Why (design calls that constrain future work): the salience ladder is now
+  enforced in code (avatar halo, no labels over the player, murmur yields in
+  combat, haze cap). Rank letters must mean something: exit-only is C, B
+  needs real work; tests/levels.test.ts encodes this. Glyphs are monochrome
+  text presentation only; color emoji broke the terminal fiction on canvas.
+  Modals are real dialogs from now on (openModal/closeModal in main.ts):
+  route new modals through them.
+- Verified: tsc, vite build, npm test (5/5 + the three regression scripts)
+  after every merge. In-pane: title (first-run strip, logo at 25.6px at
+  1600 wide), briefing CONTROLS block, mob frame with halo and monochrome
+  glyphs, damage haze decay, compaction banner, Escape-closes-modal, voice
+  slider present. Builders verified their own lanes with headless Chrome +
+  DevTools protocol (recap ☠ row for killed and wall; slider persistence and
+  utterance volume 0.255 at 30%; modal focus trap and restore; compaction
+  re-arms after a threshold nerf; HUD ticks while idle; terrain table
+  bit-identical). Render cost measured in-pane: ~1.2 ms/frame draw,
+  ~0.04 ms/frame sim.
+- Open / for Brad: (1) The wall rarely matters: 13 of 205 recorded runs died
+  to it, and a cautious walk clears a 2484px level with the wall 2500px
+  behind. Action-driven wall is Brad-validated, so untouched; options are a
+  slow baseline creep, a per-level "runway" cap, or leaving it. (2) music
+  never stops across screens (music.stop is dead code) — left as a design
+  question. (3) Dead code list in the correctness audit (6 symbols, incl.
+  the diverged terrainParamsFromCard) not removed. (4) allocateSpawns
+  duplication trap still present. (5) Enrich-modal cancel may leak its poll
+  interval (suspected). (6) Escape inside the library filter now closes the
+  modal (fixed). (7) renderBanners can show stale text on a same-frame
+  expire+push. (8) Prior audit's spawn-clustering finding not re-verified.
+  Worktrees under ../worktrees/aiaio-* removed after merge. Deploy awaits
+  Brad; nothing pushed.
