@@ -4,6 +4,8 @@
 // the browser's built-in speechSynthesis (zero network, zero assets).
 // V toggles the voice; lines always land in the transcript as ☏ entries.
 
+import { safeGet } from './levels';
+
 const LS_VOICE = 'aiaio-voice';
 const GLOBAL_GAP_S = 11;     // minimum seconds between remarks
 const URGENT_GAP_S = 5;      // …unless something truly deserving happens
@@ -305,7 +307,7 @@ const ROAST_STING: Pool = [
 ];
 
 export class Observer {
-  voiceOn = localStorage.getItem(LS_VOICE) !== '0';
+  voiceOn = safeGet(LS_VOICE) !== '0';
   private sink: (line: string) => void = () => { /* wired by main */ };
   private captionSink: (speaker: 'observer' | 'bad news', text: string, active: boolean) => void = () => {};
   private speechStateSink: (active: boolean) => void = () => {};
@@ -325,7 +327,9 @@ export class Observer {
   /** within-run memory for callbacks: the Observer remembers THIS run */
   private runMemory = { nuked: false, corrupted: false, subDeaths: 0, tasksDone: 0, callbacksUsed: new Set<string>() };
   private subVoice: SpeechSynthesisVoice | null | undefined = undefined;
-  swearsOn = localStorage.getItem(LS_SWEARS) === '1';
+  /** per-subagent speech throttle: one spoken line per label per second */
+  private lastSubSpokeAt = new Map<string, number>();
+  swearsOn = safeGet(LS_SWEARS) === '1';
   private burnoutLabel: string | null = null;
 
   setSwears(on: boolean): void {
@@ -339,6 +343,12 @@ export class Observer {
     if (!this.voiceOn || !('speechSynthesis' in window)) return;
     try {
       const synth = window.speechSynthesis;
+      // the transcript line above always lands; the VOICE is what gets rationed.
+      // a chaotic fight enqueues subagent lines faster than TTS drains them, and
+      // a backlog means commentary about a fight that ended a minute ago.
+      if (synth.pending) return;
+      if (this.time - (this.lastSubSpokeAt.get(label) ?? -999) < 1) return;
+      this.lastSubSpokeAt.set(label, this.time);
       if (this.subVoice === undefined) {
         const voices = synth.getVoices();
         // Flo is the canonical subagent (pitched 1.3 she reads as a small
@@ -426,6 +436,7 @@ export class Observer {
     this.time = 0;
     this.lastSpokeAt = -999;
     this.lastByEvent.clear();
+    this.lastSubSpokeAt.clear();
     this.lastProgressAt = 0;
     this.wallWarned = false;
     this.nukeCount = 0;
@@ -524,7 +535,7 @@ export class Observer {
     if (!('speechSynthesis' in window)) return 'no speech synthesis available';
     const voices = window.speechSynthesis.getVoices().filter((v) => v.lang.startsWith('en'));
     if (voices.length === 0) return 'no voices loaded yet. try again in a second';
-    const currentName = localStorage.getItem('aiaio-voice-name') ?? this.voice?.name ?? '';
+    const currentName = safeGet('aiaio-voice-name') ?? this.voice?.name ?? '';
     const idx = voices.findIndex((v) => v.name === currentName);
     this.voice = voices[(idx + 1) % voices.length];
     localStorage.setItem('aiaio-voice-name', this.voice.name);
@@ -734,7 +745,7 @@ export class Observer {
       if (synth.speaking) return; // never talk over yourself; the text is in the transcript
       if (!this.voice) {
         const voices = synth.getVoices();
-        const savedName = localStorage.getItem('aiaio-voice-name');
+        const savedName = safeGet('aiaio-voice-name');
         const hint = this.packVoiceHint;
         this.voice = (savedName ? voices.find((v) => v.name === savedName) : undefined)
           // a manually chosen voice always wins; the pack's hint fills the default

@@ -10,6 +10,7 @@ import { AgentLoadout, SessionCard } from './session';
 import { thoughtStream } from './monologue';
 import { WEAPONS } from './weapons';
 import { ENEMY_DEFS, categoryToEnemy, EnemyKind, allocateSpawns } from './enemies';
+import { safeGet } from './levels';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -50,8 +51,8 @@ export class UI {
   private camX = 0; private camY = 0; private camZoom = 1;
   /** settings: suppress shake, glitch bands, and full-screen flashes */
   // the OS preference is the default until the player decides in /settings
-  reducedFx = localStorage.getItem('aiaio-reduced-fx') === '1'
-    || (localStorage.getItem('aiaio-reduced-fx') === null && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true);
+  reducedFx = safeGet('aiaio-reduced-fx') === '1'
+    || (safeGet('aiaio-reduced-fx') === null && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true);
 
   /**
    * XAG-102 double outline: a dark halo plus a faint bright rim makes a glyph
@@ -75,6 +76,7 @@ export class UI {
   private trackedRun: Run | null = null;
   private dpr = 1;
   private lastDirty = -1;
+  private lastHudTick = -1;
   private lastBannerCount = -1;
   private lastPrompt = '';
   private garbleRng = new Rng('ui-garble');
@@ -106,7 +108,7 @@ export class UI {
 
   setCaption(speaker: 'observer' | 'bad news', text: string, active: boolean): void {
     const box = $('observer-caption');
-    if (localStorage.getItem('aiaio-captions') === '0') { box.classList.add('hidden'); return; }
+    if (safeGet('aiaio-captions') === '0') { box.classList.add('hidden'); return; }
     if (!active) {
       if (box.dataset.caption === text) box.classList.add('hidden');
       return;
@@ -728,8 +730,14 @@ export class UI {
     }
 
     // DOM refresh
-    if (run.dirty !== this.lastDirty) {
+    // "T+Xs" and the /compact countdown advance every frame but bump nothing on
+    // `dirty`, so an idle player watched them freeze. Both are drawn in whole
+    // seconds, so a once-a-second tick keeps them honest and still leaves the
+    // dirty-flag memoization doing the heavy lifting.
+    const hudTick = Math.floor(run.time) * 100 + Math.ceil(run.compactCd);
+    if (run.dirty !== this.lastDirty || hudTick !== this.lastHudTick) {
       this.lastDirty = run.dirty;
+      this.lastHudTick = hudTick;
       this.renderHud(run);
     }
     if (run.banners.length !== this.lastBannerCount) {

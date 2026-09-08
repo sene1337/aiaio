@@ -11,6 +11,7 @@ import { WEAPONS, WeaponDef, WeaponId } from './weapons';
 import { TaskQueue, makeTaskQueue, work as workTask, amnesia, allDone, doneUnits } from './tasks';
 import {
   ContextMeter, makeContextMeter, spend, drainAfterCompaction, contextFrac, compactionSummary,
+  overThreshold,
 } from './context';
 import { rollUpdate, UpdateTarget } from './updates';
 import { AgentLoadout, SessionCard } from './session';
@@ -280,6 +281,8 @@ export class Run {
   private wallWarned = false;
   private moveAccum = 0;
   private observerInterventions = new Map<Enemy, string>();
+  /** set when an enemy dies, so stepEnemies knows a prune pass is worth doing */
+  private deadPending = false;
 
   constructor(setup: RunSetup) {
     this.loadout = setup.loadout;
@@ -431,6 +434,16 @@ export class Run {
       if (this.avatar.hp <= 0) this.finish(false, 'killed');
     }
     this.dirty++;
+  }
+
+  /**
+   * Move the compaction threshold, then settle the consequence immediately: a
+   * nerf that drops the line under an already-loaded meter should compact now,
+   * not on whatever the next token spend happens to be.
+   */
+  private setThreshold(next: number): void {
+    this.ctx.threshold = next;
+    if (overThreshold(this.ctx)) this.compact();
   }
 
   private compact(): void {
@@ -644,7 +657,7 @@ export class Run {
       a.model++;
       const extra = 3200;
       this.ctx.budget += extra;
-      this.ctx.threshold = Math.min(0.92, this.ctx.threshold + 0.05);
+      this.setThreshold(Math.min(0.92, this.ctx.threshold + 0.05));
       a.shield += 25;
       this.pushBanner({
         kind: 'update', ttl: 6.5,
@@ -699,7 +712,9 @@ export class Run {
         };
         const result = rollUpdate(target, this.rng.fork('crate' + crate.x), this.loadout.updateRiskSkew);
         a.aimJitter = target.aimJitter; a.damageMult = target.damageMult; a.tokenCostMult = target.tokenCostMult;
-        this.ctx.threshold = target.compactionThreshold; a.shield = target.shield;
+        a.shield = target.shield;
+        // last: an aggressive-summarizer nerf can tip the meter over on the spot
+        this.setThreshold(target.compactionThreshold);
         if (target.unlockWeapon && !this.weapons.some((w) => w.def.id === target.unlockWeapon)) {
           this.weapons.push({
             def: WEAPONS[target.unlockWeapon], ammo: 3, statRoll: 1.1,
@@ -716,7 +731,7 @@ export class Run {
         this.spawnSubagent(true);
         break;
       case 'tune_context':
-        this.ctx.threshold = Math.min(0.92, this.ctx.threshold + 0.05);
+        this.setThreshold(Math.min(0.92, this.ctx.threshold + 0.05));
         this.pushLog(`⬆ context manager tuned: overflow now at ${Math.round(this.ctx.threshold * 100)}%`);
         break;
       case 'shield':
@@ -1086,6 +1101,7 @@ export class Run {
     e.hp -= dmg;
     if (e.hp <= 0) {
       e.dead = true;
+      this.deadPending = true;
       this.kills++;
       this.spawnParticles(e.x, e.y, by === 'sub' ? 10 : 20, e.def.color);
       // letter-scatter: the enemy's own name flies apart
@@ -1131,8 +1147,28 @@ export class Run {
     }
   }
 
+  /**
+   * Drop corpses. Kills, score and telemetry are all settled inside
+   * `damageEnemy` at the moment of death, and every consumer (rendering,
+   * targeting, splash, the autoplay QA harness) already skips `dead` entries —
+   * so nothing observes them afterwards, they only cost per-frame iteration.
+   * Splitter minis mean the array is otherwise grow-only. A downed
+   * restart-crawler still owes a resurrection, so it stays.
+   */
+  private pruneEnemies(): void {
+    this.deadPending = false;
+    const pending = (e: Enemy) => e.def.kind === 'restart_crawler' && !e.respawnUsed;
+    const live = this.enemies.filter((e) => !e.dead || pending(e));
+    if (live.length === this.enemies.length) return;
+    this.enemies = live;
+    const kept = new Set(live);
+    for (const e of this.touchCooldowns.keys()) if (!kept.has(e)) this.touchCooldowns.delete(e);
+    for (const e of this.observerInterventions.keys()) if (!kept.has(e)) this.observerInterventions.delete(e);
+  }
+
   private stepEnemies(dt: number): void {
     const a = this.avatar;
+    if (this.deadPending) this.pruneEnemies();
     for (const e of this.enemies) {
       // restart crawler resurrection
       if (e.dead && e.def.kind === 'restart_crawler' && !e.respawnUsed && e.stateTimer > 0) {

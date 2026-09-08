@@ -15,7 +15,7 @@ import { startLogoLoop } from './logo';
 import {
   LevelEntry, difficulty, tierOf, TIERS, getProgress, isCleared,
   isPerfect, isSurvived, campaignOutcome, computeRank, recordResult, CampaignOutcome,
-  getCampaignProgress, isCampaignOrderUnlocked, recordCampaignResult,
+  getCampaignProgress, isCampaignOrderUnlocked, recordCampaignResult, safeGet,
 } from './levels';
 import { CampaignEntry, CampaignManifest, sourceDigest, validateManifest } from './campaign';
 import { doneUnits, progressFrac, totalUnits } from './tasks';
@@ -187,7 +187,7 @@ async function loadTimeline(): Promise<void> {
   $('enrich-footer-desc').textContent = personal ? 're-forge your campaign' : 'forge your campaign';
   // the controls strip is for the player with no record yet; it retires once
   // the first run is on the ledger
-  $('tl-howto').classList.toggle('hidden', !!localStorage.getItem('aiaio-progress'));
+  $('tl-howto').classList.toggle('hidden', !!safeGet('aiaio-progress'));
 
   const playEntryByFile = async (file: string, inline?: string) => {
     try {
@@ -701,11 +701,21 @@ function routeAudio(type: string, data: Record<string, unknown>): void {
 
 const held = new Set<string>();
 
+/**
+ * `e.key` reports a letter in its CURRENT case, so tapping Shift mid-hold makes
+ * keyup report 'W' for a keydown that recorded 'w' — the delete misses and the
+ * key stays held forever. Fold single characters to lower case; the multi-char
+ * names (ArrowLeft, Escape…) are already modifier-independent.
+ */
+function heldKey(e: KeyboardEvent): string {
+  return e.key.length === 1 ? e.key.toLowerCase() : e.key;
+}
+
 function currentInput(): RunInput {
   return {
-    left: held.has('ArrowLeft') || held.has('a') || held.has('A'),
-    right: held.has('ArrowRight') || held.has('d') || held.has('D'),
-    work: held.has('w') || held.has('W'),
+    left: held.has('ArrowLeft') || held.has('a'),
+    right: held.has('ArrowRight') || held.has('d'),
+    work: held.has('w'),
     down: held.has('ArrowDown'),
   };
 }
@@ -746,7 +756,7 @@ function wireKeyboard(): void {
       const open = document.querySelectorAll('.modal:not(.hidden)');
       if (open.length > 0) { open[open.length - 1].classList.add('hidden'); return; }
     }
-    held.add(e.key);
+    held.add(heldKey(e));
     audio.ensure(); // first gesture unlocks the AudioContext
     music.ensure();
     if (e.key === 'm' || e.key === 'M') {
@@ -790,7 +800,7 @@ function wireKeyboard(): void {
     }
   });
   window.addEventListener('click', () => audio.ensure());
-  window.addEventListener('keyup', (e) => held.delete(e.key));
+  window.addEventListener('keyup', (e) => held.delete(heldKey(e)));
   window.addEventListener('blur', () => held.clear());
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') held.clear(); // no stuck keys (L-2)
@@ -958,8 +968,8 @@ function main(): void {
         $(`val-vol-${b}`).textContent = pct(audioMixer.userLevel(b));
       }
       ($('set-mono') as HTMLInputElement).checked = audioMixer.isMono();
-      ($('set-captions') as HTMLInputElement).checked = localStorage.getItem('aiaio-captions') !== '0';
-      ($('set-reduced-fx') as HTMLInputElement).checked = ui ? ui.reducedFx : localStorage.getItem('aiaio-reduced-fx') === '1';
+      ($('set-captions') as HTMLInputElement).checked = safeGet('aiaio-captions') !== '0';
+      ($('set-reduced-fx') as HTMLInputElement).checked = ui ? ui.reducedFx : safeGet('aiaio-reduced-fx') === '1';
       ($('set-swears') as HTMLInputElement).checked = observer.swearsOn;
     };
     $('btn-settings').addEventListener('click', () => { audioMixer.ensure(); sync(); modal.classList.remove('hidden'); });

@@ -24,11 +24,21 @@ export function overThreshold(m: ContextMeter): boolean {
   return m.used >= m.budget * m.threshold;
 }
 
-/** Spend tokens. Returns true if this spend crossed the compaction threshold. */
+/**
+ * Spend tokens. Returns true if the meter is over the compaction threshold
+ * afterwards.
+ *
+ * Level-triggered, deliberately. An edge trigger (fire only on the false→true
+ * crossing) missed the case where the THRESHOLD moves under a meter that is
+ * already loaded — the update gamble's "more aggressive summarizer" nerf drops
+ * it by 0.08 — after which no spend ever saw a crossing and involuntary
+ * compaction was dead for the rest of the run. Compaction drains the meter to
+ * 28-40% of budget and the threshold floor is 0.5, so this still fires exactly
+ * once per crossing, never in a loop.
+ */
 export function spend(m: ContextMeter, tokens: number): boolean {
-  const wasOver = overThreshold(m);
   m.used = Math.min(m.budget, m.used + Math.max(0, Math.round(tokens)));
-  return !wasOver && overThreshold(m);
+  return overThreshold(m);
 }
 
 /** Drain after compaction: meter drops back to ~30-40% of budget. */
