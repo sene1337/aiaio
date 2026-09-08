@@ -184,6 +184,7 @@ html, body {
 #recap-forward .row.unlock { color: var(--purple); }
 #recap-forward .row.new { color: var(--green); }
 #recap-forward .row.dim { color: var(--dim); }
+#recap-forward .row.cause { color: var(--red); }
 #recap-observer { width: 100%; max-width: 640px; border-left: 2px solid var(--purple); padding: 7px 14px; background: rgba(177,138,255,.05); font-size: 12px; line-height: 1.6; font-style: italic; }
 #recap-observer .who { color: var(--purple); font-style: normal; font-size: 10px; letter-spacing: .1em; margin-bottom: 2px; }
 #library-filter {
