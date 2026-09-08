@@ -801,12 +801,12 @@ const FEATURE_KEYS: Record<string, string> = {
 function wireKeyboard(): void {
   window.addEventListener('keydown', (e) => {
     // typing in an input (gallery filter) must never trigger game shortcuts
-    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
     if (e.key === 'Escape') {
-      // Escape closes the topmost modal, everywhere
+      // Escape closes the topmost modal, everywhere, even from inside its filter box
       const open = document.querySelectorAll('.modal:not(.hidden)');
       if (open.length > 0) { closeModal(open[open.length - 1] as HTMLElement); return; }
     }
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
     held.add(e.key);
     audio.ensure(); // first gesture unlocks the AudioContext
     music.ensure();
