@@ -906,6 +906,7 @@ function main(): void {
   (window as any).__observer = observer;
   observer.bindCaptionSink((speaker, text, active) => ui.setCaption(speaker, text, active));
   observer.bindSpeechState((active) => audio.setSpeechActive(active));
+  observer.volumeSource = () => audioMixer.userLevel('voice');
   const logoEl = document.querySelector('.ascii-logo');
   if (logoEl) startLogoLoop(logoEl as HTMLElement);
   wireCardSlot();
@@ -950,7 +951,7 @@ function main(): void {
   const wireSettings = () => {
     const modal = $('modal-settings');
     const pct = (v: number) => `${Math.round(v * 100)}%`;
-    const buses = ['music', 'sfx', 'ui'] as const;
+    const buses = ['music', 'sfx', 'ui', 'voice'] as const;
     const sync = () => {
       for (const b of buses) {
         const slider = $(`set-vol-${b}`) as HTMLInputElement;
@@ -969,7 +970,9 @@ function main(): void {
         const v = Number((e.target as HTMLInputElement).value) / 100;
         audioMixer.setUserLevel(b, v);
         $(`val-vol-${b}`).textContent = pct(v);
-        audio.select(); // audible preview on the bus you're adjusting
+        // audible preview on the bus you're adjusting; the voice row previews itself
+        if (b === 'voice' && observer.voiceOn) observer.speakRoast(['Level noted.']);
+        else audio.select();
       });
     }
     $('set-mono').addEventListener('change', (e) => audioMixer.setMono((e.target as HTMLInputElement).checked));

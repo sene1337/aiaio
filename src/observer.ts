@@ -327,6 +327,8 @@ export class Observer {
   private subVoice: SpeechSynthesisVoice | null | undefined = undefined;
   swearsOn = localStorage.getItem(LS_SWEARS) === '1';
   private burnoutLabel: string | null = null;
+  /** player's voice level (0..1), wired by main from the mixer; scales every utterance */
+  volumeSource: () => number = () => 1;
 
   setSwears(on: boolean): void {
     this.swearsOn = on;
@@ -351,7 +353,7 @@ export class Observer {
       if (this.subVoice) u.voice = this.subVoice;
       u.rate = dying ? 0.82 : 1.18;
       u.pitch = dying ? 0.9 : 1.3;
-      u.volume = 0.8;
+      u.volume = 0.8 * this.volumeSource();
       synth.speak(u); // queues behind any observer line
     } catch { /* text only */ }
   }
@@ -514,7 +516,7 @@ export class Observer {
     const synth = window.speechSynthesis;
     const u = new SpeechSynthesisUtterance(pronounce(text));
     if (this.voice) u.voice = this.voice;
-    u.rate = 1.04; u.pitch = 0.72; u.volume = 0.85;
+    u.rate = 1.04; u.pitch = 0.72; u.volume = 0.85 * this.volumeSource();
     this.wireSpeech(u, 'observer', text);
     synth.speak(u);
   }
@@ -721,7 +723,7 @@ export class Observer {
       const u = new SpeechSynthesisUtterance(pronounce(line));
       if (this.badVoice) u.voice = this.badVoice;
       if (!this.badVoice || !/bad news/i.test(this.badVoice.name)) { u.pitch = 0.4; u.rate = 0.85; }
-      u.volume = 0.9;
+      u.volume = 0.9 * this.volumeSource();
       this.wireSpeech(u, 'bad news', line, true);
       synth.speak(u); // queues after any observer line — the dirge waits its turn
     } catch { /* text judgment only */ }
@@ -747,7 +749,7 @@ export class Observer {
       if (this.voice) u.voice = this.voice;
       u.rate = 1.04;
       u.pitch = 0.72; // dry
-      u.volume = 0.85;
+      u.volume = 0.85 * this.volumeSource();
       this.wireSpeech(u, 'observer', text, true);
       synth.speak(u);
     } catch { /* no voice available — the transcript still judges you */ }
