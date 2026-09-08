@@ -1,6 +1,8 @@
 // Synthesized chip/glitch audio. SFX and music share one AudioContext and a
 // bus-based mix so peaks, speech ducking, and spatial cues behave coherently.
 
+import { safeGet } from './levels';
+
 const LS_MUTE = 'aiaio-muted';
 
 export type AudioBusName = 'music' | 'sfx' | 'ui';
@@ -14,13 +16,13 @@ class AudioMixer {
   private readonly levels: Record<AudioBusName, number> = { music: 0.11, sfx: 0.22, ui: 0.18 };
   /** player-set multipliers on top of the mix levels (settings screen) */
   private userLevels: Record<UserBusName, number> = {
-    music: Number(localStorage.getItem('aiaio-vol-music') ?? 1),
-    sfx: Number(localStorage.getItem('aiaio-vol-sfx') ?? 1),
-    ui: Number(localStorage.getItem('aiaio-vol-ui') ?? 1),
-    voice: Number(localStorage.getItem('aiaio-vol-voice') ?? 1),
+    music: Number(safeGet('aiaio-vol-music') ?? 1),
+    sfx: Number(safeGet('aiaio-vol-sfx') ?? 1),
+    ui: Number(safeGet('aiaio-vol-ui') ?? 1),
+    voice: Number(safeGet('aiaio-vol-voice') ?? 1),
   };
-  private mono = localStorage.getItem('aiaio-mono') === '1';
-  muted = localStorage.getItem(LS_MUTE) === '1';
+  private mono = safeGet('aiaio-mono') === '1';
+  muted = safeGet(LS_MUTE) === '1';
   private speechActive = false;
 
   userLevel(name: UserBusName): number { return this.userLevels[name]; }

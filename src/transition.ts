@@ -5,6 +5,7 @@
 // in-game wall waits. Respects reduced-fx (instant swap).
 
 import { audio } from './audio';
+import { safeGet } from './levels';
 
 const BODY = '▓▓▒▒░░█▒';
 const TEETH = '╬≠☓✕×≢∦';
@@ -14,7 +15,7 @@ let running = false;
 
 export function wallWipe(onCovered: () => void): void {
   if (running) { onCovered(); return; }
-  if (localStorage.getItem('aiaio-reduced-fx') === '1') { onCovered(); return; }
+  if (safeGet('aiaio-reduced-fx') === '1') { onCovered(); return; }
   running = true;
 
   // two layers: a solid front (the wall's mass) and the rune texture on top.

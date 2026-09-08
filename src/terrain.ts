@@ -12,12 +12,20 @@ export class Terrain {
   readonly canvas: OffscreenCanvas | HTMLCanvasElement;
   private ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
   private mask: Uint8Array; // 1 = solid
+  /**
+   * topmost solid y per column (== height for an empty column). surfaceAt() is
+   * called every frame for the avatar and for every grounded enemy, so the
+   * answer is precomputed here instead of rescanning the column each time.
+   * carve() only ever REMOVES mass, so an entry can only move downward.
+   */
+  private surfaceY: Uint16Array;
 
   constructor(params: TerrainParams) {
     this.width = params.width;
     this.height = params.height;
     this.jaggedness = params.jaggedness;
     this.mask = new Uint8Array(this.width * this.height);
+    this.surfaceY = new Uint16Array(this.width);
     this.canvas = typeof OffscreenCanvas !== 'undefined'
       ? new OffscreenCanvas(this.width, this.height)
       : (() => { const c = document.createElement('canvas'); c.width = this.width; c.height = this.height; return c; })();
@@ -63,6 +71,7 @@ export class Terrain {
       for (let y = 0; y < this.height; y++) {
         if (this.mask[y * this.width + x]) { surfaceY = y; break; }
       }
+      this.surfaceY[x] = surfaceY < 0 ? this.height : surfaceY;
       if (surfaceY < 0) continue;
       for (let y = surfaceY; y < this.height; y++) {
         const p = (y * this.width + x) * 4;
@@ -102,10 +111,7 @@ export class Terrain {
   /** topmost solid y at column x (or height if column is empty) */
   surfaceAt(x: number): number {
     const xi = Math.max(0, Math.min(this.width - 1, Math.round(x)));
-    for (let y = 0; y < this.height; y++) {
-      if (this.mask[y * this.width + xi]) return y;
-    }
-    return this.height;
+    return this.surfaceY[xi];
   }
 
   /** carve a crater: update mask + rendered canvas, leave a scorched rim */
@@ -140,6 +146,17 @@ export class Terrain {
       }
     }
     ctx.restore();
+
+    // resettle the surface table over the columns this crater touched. carving
+    // only removes mass, so each column's surface can only fall — resume the
+    // scan where it used to sit instead of starting over at the top.
+    const x0 = Math.max(0, c0x * CELL);
+    const x1 = Math.min(this.width - 1, (c1x + 1) * CELL - 1);
+    for (let x = x0; x <= x1; x++) {
+      let y = this.surfaceY[x];
+      while (y < this.height && this.mask[y * this.width + x] === 0) y++;
+      this.surfaceY[x] = y;
+    }
 
     // corrupted residue on surviving edge cells — freed memory, not scorch
     ctx.save();

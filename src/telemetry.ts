@@ -55,6 +55,7 @@ class Telemetry {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
+        keepalive: true, // the pagehide flush must outlive the page
       }).catch(() => this.toLocalStorage(payload));
     } else {
       this.toLocalStorage(payload);

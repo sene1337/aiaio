@@ -6,7 +6,7 @@
 
 import { escapeHtml } from './ui';
 import {
-  LevelEntry, difficulty, getProgress, isCleared, isPerfect, LevelProgress,
+  LevelEntry, difficulty, getProgress, isCleared, isPerfect, LevelProgress, safeGet,
 } from './levels';
 import { CampaignEntry, CampaignManifest } from './campaign';
 import { buildMemoryMap, sessionDate } from './history';
@@ -116,7 +116,7 @@ export class Timeline {
     // cold start: a fresh player lands on the authored fictional campaign;
     // anyone with a forged personal campaign lands on it
     startVeil();
-    const saved = localStorage.getItem('aiaio-track') as TrackId | null;
+    const saved = safeGet('aiaio-track') as TrackId | null;
     this.track = saved ?? (cfg.personal ? 'campaign' : 'fictional');
     window.addEventListener('keydown', (e) => this.onKey(e));
   }
@@ -348,7 +348,7 @@ export class Timeline {
     const frontier = this.flat.findIndex((n) => n.isNext);
     const conquered = this.flat.filter((n) => n.chipClass === 'recovered' || n.chipClass === 'perfect').length;
     const memKey = `aiaio-map-conquered-${this.track}`;
-    const prev = Number(localStorage.getItem(memKey) ?? -1);
+    const prev = Number(safeGet(memKey) ?? -1);
     try { localStorage.setItem(memKey, String(conquered)); } catch { /* storage full */ }
     if (prev >= 0 && conquered > prev && frontier > 0) {
       // start him on the node he just cleared, then walk to the frontier

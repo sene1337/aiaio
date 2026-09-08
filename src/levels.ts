@@ -142,6 +142,16 @@ if (typeof window !== 'undefined') {
   });
 }
 
+/**
+ * Read a localStorage key without ever throwing. Web Storage is disabled
+ * outright in some privacy modes, so an unguarded getItem in a module-scope
+ * singleton or a class-field initializer takes the whole app down before
+ * anything renders. Every read degrades to "not set" instead.
+ */
+export function safeGet(key: string): string | null {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+
 function loadProgress(fresh = false): Record<string, LevelProgress> {
   if (progressCache && !fresh) return progressCache;
   try { progressCache = JSON.parse(localStorage.getItem(LS_PROGRESS) ?? '{}'); } catch { progressCache = {}; }
