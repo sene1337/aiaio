@@ -9,7 +9,8 @@ const exitOnly = campaignOutcome(true, 8, 0, 0);
 assert(exitOnly.survived, 'exit must record survival');
 assert(!exitOnly.recovered, 'an exit without real task work must not recover a session');
 assert(!exitOnly.perfect, 'an exit without real task work must not be perfect');
-assert(computeRank(exitOnly, 0) === 'B', 'exit-only runs remain a B, not campaign credit');
+assert(computeRank(exitOnly, 0) === 'C', 'exit-only runs rank C: survival without work is not a B');
+assert(computeRank(exitOnly, 0.25) === 'B', 'survival with some real work earns a B, still not campaign credit');
 
 const partialRecovery = campaignOutcome(true, 8, 4, 1);
 assert(partialRecovery.recovered, 'half the recorded task units plus a completed task earns recovery');
