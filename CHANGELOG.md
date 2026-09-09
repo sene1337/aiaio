@@ -5,6 +5,18 @@ All notable changes to AIAIO are documented here. Format follows
 [semver](https://semver.org/) (minor = new player-facing capability,
 patch = fixes and copy).
 
+## [2.16.0] — 2026-09-08
+
+### Changed
+- The wall of forgetting always arrives. Under the action-driven engine
+  (token spend, unchanged at 0.16px per token) a slow baseline creep now runs:
+  1/130 of the level width per second (about 19px/s on a short level, capped
+  at 32px/s on long ones), after a 6s grace and a 5s ramp. Walking speed is
+  about 150px/s, so a moving player is never chased by the creep alone; an
+  idle player meets the wall around the 22s mark. It never rubber-bands
+  toward you. Brad's call (option A) after the 2.15.0 pass showed only 13 of
+  205 recorded runs ever died to the wall.
+
 ## [2.15.0] — 2026-09-08
 
 Quality pass driven by three fresh-eyes audits (docs/audits/2026-09-08-*):

@@ -86,7 +86,7 @@ progress and is always labelled Remix.
 
 ### The systems
 
-- **The wall of forgetting is action-driven.** It does NOT creep on a timer.
+- **The wall of forgetting is action-driven.** Token spend is its engine; under that, a slow baseline creep (about 1/130 of the level width per second, after a short grace) guarantees it always arrives. It never rubber-bands toward you.
   Every token you burn becomes wall distance (0.16px per token): firing, working,
   subagent upkeep, damage spew, even walking (reading the transcript is inference
   too, at 1tk per 10px). Stand perfectly still and it stands still with you. Your

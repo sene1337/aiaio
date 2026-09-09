@@ -544,3 +544,21 @@ turns out wrong, append a correction.
   expire+push. (8) Prior audit's spawn-clustering finding not re-verified.
   Worktrees under ../worktrees/aiaio-* removed after merge. Deploy awaits
   Brad; nothing pushed.
+
+## 2026-09-08 · Claude Fable 5.1 · v2.16.0 the wall always arrives (option A)
+
+- What: baseline wall creep in Run.stepWall (run.ts): min(32, width/130)
+  px/s after a 6s grace, ramping over 5s, capped at the level end. Token
+  spend remains the main engine and the only source of surges. README wall
+  paragraph updated.
+- Why: Brad chose option A from the 2.15.0 report. Telemetry showed the
+  wall was nearly absent as a threat (13 wall deaths in 205 runs; a
+  cautious walk cleared a level with the wall 2500px behind).
+- Verified: tsc, build, tests. In-pane probes on the 2484px opening level:
+  idle player killed by the wall at 36.4s (wall reaches x=60 at about 22s);
+  walking bot exits at 15.9s with min gap 320px (wall moved 471px: 330 from
+  tokens, ~140 from creep); working bot completes the task and exits at
+  22.8s, min gap 320px. Firing dominates, as Brad asked.
+- Open: retune WALL_CREEP_PER_WIDTH / WALL_CREEP_MAX from real playtests;
+  the qa telemetry 'death' reason split is the signal to watch (wall share
+  should rise from 6% but stay well under 'killed').

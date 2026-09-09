@@ -36,8 +36,19 @@ export const RUN_COST = {
 export const ZAP_BURST = 8;
 export const ZAP_THINK_SECS = 2.2;
 
-/** the wall advances ONLY from token spend: px of forgetting per token burned */
+/** the wall's main engine: px of forgetting per token burned */
 export const PX_PER_TOKEN = 0.16;
+/**
+ * baseline creep so the wall always arrives: a fraction of the level width
+ * per second (2484px level ≈ 19px/s, 6000px ≈ 46px/s), well under walking
+ * speed, so firing still decides the chase. Starts after a grace period and
+ * ramps in over WALL_CREEP_RAMP_S.
+ */
+export const WALL_CREEP_PER_WIDTH = 1 / 130;
+/** long levels stay fair: creep never exceeds this many px/s */
+export const WALL_CREEP_MAX = 32;
+export const WALL_CREEP_GRACE_S = 6;
+export const WALL_CREEP_RAMP_S = 5;
 /** how fast owed wall-advance glides in (px/s) — surges feel like being chased */
 export const WALL_GLIDE = 150;
 
@@ -1051,11 +1062,15 @@ export class Run {
   }
 
   private stepWall(dt: number): void {
-    // action-driven: the wall ONLY advances on owed distance from token burn.
-    // no idle creep, no rubber-band — your token bill is the storm.
+    // action-driven first: owed distance from token burn glides in fast.
+    // under it, a slow baseline creep so the wall always arrives; no
+    // rubber-band toward the player, ever.
     const step = Math.min(this.wallOwed, WALL_GLIDE * dt);
     this.wallX += step;
     this.wallOwed -= step;
+    const ramp = Math.max(0, Math.min(1, (this.time - WALL_CREEP_GRACE_S) / WALL_CREEP_RAMP_S));
+    const creep = Math.min(WALL_CREEP_MAX, this.terrain.width * WALL_CREEP_PER_WIDTH);
+    this.wallX = Math.min(this.terrain.width, this.wallX + creep * ramp * dt);
 
     // the wall eats undone tasks
     for (const s of this.stations) {
